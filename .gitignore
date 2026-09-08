@@ -1,0 +1,20 @@
+# .NET 构建产物
+bin/
+obj/
+publish/
+out/
+
+# 安装包产物（保留中文语言文件）
+installer/*.exe
+
+# IDE / 工具
+.vs/
+.idea/
+*.user
+*.suo
+.trae/
+.vscode/
+
+# 系统文件
+Thumbs.db
+.DS_Store

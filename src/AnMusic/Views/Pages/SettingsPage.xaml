@@ -1,0 +1,294 @@
+<UserControl x:Class="AnMusic.Views.Pages.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:AnMusic.Converters"
+             mc:Ignorable="d"
+             Background="{DynamicResource BgContentAlpha}"
+             d:DesignHeight="500" d:DesignWidth="600">
+    <UserControl.Resources>
+        <converters:PathToImageConverter x:Key="PathToImageConv"/>
+        <converters:StringNotEmptyToVisibilityConverter x:Key="StrNotEmptyToVis"/>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,20,0,8"/>
+        </Style>
+        <Style x:Key="SettingLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgNormal}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="SettingDesc" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgMuted}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style x:Key="PageButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource BgControl}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource RoundedButtonTemplate}"/>
+        </Style>
+        <Style x:Key="PageCombo" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
+            <Setter Property="MaxDropDownHeight" Value="200"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- 主框：主题色底，圆角 -->
+                            <Border x:Name="Bd" Background="{DynamicResource BgControl}"
+                                    CornerRadius="6" BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"/>
+                            <!-- 选中项文字 -->
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              IsHitTestVisible="False"
+                                              Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                                              TextBlock.Foreground="{DynamicResource FgPrimary}"
+                                              TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                            <!-- 下拉箭头 -->
+                            <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="{DynamicResource FgSecondary}"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
+                                  IsHitTestVisible="False"/>
+                            <!-- 命中区：整框点击展开 -->
+                            <ToggleButton Focusable="False" ClickMode="Press" Background="Transparent"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <!-- 下拉弹层 -->
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border Background="{DynamicResource BgPanel}" CornerRadius="6"
+                                        BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                        Margin="0,2,0,8" MinWidth="{TemplateBinding ActualWidth}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter Margin="2"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="{DynamicResource FgNormal}"/>
+                        <Setter Property="FontSize" Value="13"/>
+                        <Setter Property="Padding" Value="10,7"/>
+                        <Setter Property="SnapsToDevicePixels" Value="True"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent"
+                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
+
+            <TextBlock Text="设置" Foreground="{DynamicResource FgPrimary}"
+                       FontSize="22" FontWeight="Bold"/>
+
+            <!-- 外观 -->
+            <TextBlock Text="外观" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="主题" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="切换应用深色 / 浅色外观" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1" Width="120" Style="{StaticResource PageCombo}"
+                          SelectedIndex="{Binding ThemeIndex}">
+                    <ComboBoxItem Content="深色"/>
+                    <ComboBoxItem Content="浅色"/>
+                </ComboBox>
+            </Grid>
+
+            <!-- 音乐库 -->
+            <TextBlock Text="音乐库" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource SettingLabel}"
+                               TextTrimming="CharacterEllipsis" Text="{Binding MusicDirectory, FallbackValue=音乐文件夹}"/>
+                    <TextBlock Text="启动时自动扫描该目录" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="浏览..." Style="{StaticResource PageButton}"
+                        Command="{Binding BrowseMusicDirectoryCommand}"/>
+            </Grid>
+
+            <!-- 播放 -->
+            <TextBlock Text="播放" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="160"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="默认音量" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="启动时使用的音量" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DefaultVolume, StringFormat={}{0:P0}}"
+                               Foreground="{DynamicResource FgSecondary}" FontSize="11"
+                               HorizontalAlignment="Right"/>
+                    <Slider Minimum="0" Maximum="1" Value="{Binding DefaultVolume}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 背景图片 -->
+            <TextBlock Text="背景图片" Style="{StaticResource SectionTitle}"/>
+            <!-- 预览缩略图：即时查看设置效果 -->
+            <Border CornerRadius="6" Margin="0,0,0,8" MaxWidth="220" HorizontalAlignment="Left"
+                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                    Visibility="{Binding BackgroundImagePath, Converter={StaticResource StrNotEmptyToVis}}">
+                <Image Source="{Binding BackgroundImagePath, Converter={StaticResource PathToImageConv}}"
+                       MaxHeight="120" Stretch="Uniform"/>
+            </Border>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource SettingLabel}"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding BackgroundImagePath, FallbackValue=（未设置，使用默认背景）}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="不透明度" Style="{StaticResource SettingDesc}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Slider Minimum="0" Maximum="1" Value="{Binding BackgroundOpacity}"
+                                Width="120" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="选择图片..." Style="{StaticResource PageButton}"
+                            Command="{Binding BrowseBackgroundCommand}" Margin="0,0,6,0"/>
+                    <Button Content="清除" Style="{StaticResource PageButton}"
+                            Command="{Binding ClearBackgroundCommand}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 音乐源 -->
+            <TextBlock Text="音乐源" Style="{StaticResource SectionTitle}"/>
+            <ItemsControl ItemsSource="{Binding RegisteredSources}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <TextBlock Text="• " Foreground="{DynamicResource Accent}" FontSize="13"/>
+                            <TextBlock Text="{Binding}" Foreground="{DynamicResource FgNormal}" FontSize="13"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Content="🧹 清理B站音频缓存" HorizontalAlignment="Left"
+                    Background="{DynamicResource BgControl}" Foreground="{DynamicResource FgPrimary}"
+                    BorderThickness="0" Padding="12,6" FontSize="13" Cursor="Hand"
+                    Margin="0,8,0,0" Command="{Binding ClearAudioCacheCommand}"/>
+
+            <!-- 歌词 -->
+            <TextBlock Text="歌词" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="在线歌词 (LRCLIB)" Style="{StaticResource SettingLabel}"/>
+                        <TextBlock Text="默认关闭。启用后本地歌词缺失时，自动从 LRCLIB 开源歌词库（免费、无需密钥）搜索歌词。" Style="{StaticResource SettingDesc}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                          IsChecked="{Binding EnableOnlineLyrics}"/>
+            </Grid>
+
+            <!-- 歌词字号 -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="160"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="歌词字号" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="调整歌词页正文字体大小" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding LyricFontSize, StringFormat={}{0:F0} px}"
+                               Foreground="{DynamicResource FgSecondary}" FontSize="11"
+                               HorizontalAlignment="Right"/>
+                    <Slider Minimum="12" Maximum="24" Value="{Binding LyricFontSize}"
+                            IsSnapToTickEnabled="True" TickFrequency="1"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 歌词颜色 -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="歌词颜色" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="歌词正文文字颜色，当前行保持主题强调色" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1" Width="120" Style="{StaticResource PageCombo}"
+                          SelectedIndex="{Binding LyricColorIndex}">
+                    <ComboBoxItem Content="跟随主题"/>
+                    <ComboBoxItem Content="白色"/>
+                    <ComboBoxItem Content="黑色"/>
+                    <ComboBoxItem Content="粉色"/>
+                    <ComboBoxItem Content="蓝色"/>
+                    <ComboBoxItem Content="绿色"/>
+                </ComboBox>
+            </Grid>
+
+            <!-- 状态 -->
+            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource FgMuted}"
+                       FontSize="11" Margin="0,24,0,0"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

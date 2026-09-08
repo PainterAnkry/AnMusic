@@ -1,0 +1,85 @@
+<UserControl x:Class="AnMusic.Views.Controls.LyricView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="400" d:DesignWidth="300"
+             Background="Transparent">
+    <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Text="{Binding StatusText}"
+                   Foreground="{DynamicResource FgMuted}" FontSize="12"
+                   HorizontalAlignment="Center" Margin="0,12,0,8"/>
+
+        <ListBox x:Name="LyricListBox"
+                 ItemsSource="{Binding Lines}"
+                 SelectedIndex="{Binding CurrentIndex, Mode=OneWay}"
+                 Background="Transparent" BorderThickness="0"
+                 Padding="20,8"
+                 FontSize="{Binding LyricFontSize}"
+                 Foreground="{Binding LyricForeground}"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                 VirtualizingPanel.IsVirtualizing="False"
+                 SelectionChanged="LyricListBox_SelectionChanged"
+                 PreviewMouseLeftButtonUp="LyricListBox_PreviewMouseLeftButtonUp">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Padding" Value="4,6"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                    <Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}"
+                                                  TextBlock.TextAlignment="Center"/>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="TextBlock.FontWeight" Value="Bold"/>
+                            <Setter Property="TextBlock.Foreground" Value="{DynamicResource Accent}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="TextBlock.Foreground" Value="{DynamicResource FgSidebar}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <!-- 字号/颜色由 ListBox 继承（可设置），当前行经容器样式覆盖为强调色 -->
+                        <TextBlock Text="{Binding Text}"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   MaxWidth="320"/>
+                        <!-- 翻译行：有译文时显示在原文下方 -->
+                        <TextBlock Text="{Binding Translation}"
+                                   FontSize="{Binding DataContext.LyricTranslationFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   Opacity="0.8"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   MaxWidth="320"
+                                   Margin="0,2,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Translation}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>
