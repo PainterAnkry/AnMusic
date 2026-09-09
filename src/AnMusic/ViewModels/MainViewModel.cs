@@ -5,6 +5,8 @@ using AnMusic.Models;
 using AnMusic.Services.Playlist;
 using AnMusic.Services.Providers;
 using AnMusic.Services.Providers.Bilibili;
+using AnMusic.Services.Providers.JsPlugin;
+using AnMusic.Services.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -12,10 +14,10 @@ using Microsoft.Win32;
 namespace AnMusic.ViewModels;
 
 /// <summary>搜索来源。</summary>
-public enum SearchSource { All, Local, Bilibili }
+public enum SearchSource { Local, NetEase, QQMusic, Bilibili }
 
 /// <summary>主内容区显示的视图。</summary>
-public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent }
+public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio }
 
 /// <summary>
 /// 主 ViewModel：装配各子 ViewModel，管理歌单、我喜欢、最近播放、搜索与导航。
@@ -27,14 +29,35 @@ public partial class MainViewModel : ObservableObject
     private readonly ProviderRegistry _registry;
     private readonly UserDataStore _store;
     private readonly LocalFileProvider _localFiles;
+    private readonly UserSettingsService _settingsService;
+    private readonly Func<Views.DesktopLyricsWindow> _desktopLyricsWindowFactory;
 
     /// <summary>右键菜单当前曲目（"添加到歌单"子菜单使用）。</summary>
     public Track? PendingMenuTrack { get; set; }
+
+    #region 全局导航（前进/返回）
+
+    /// <summary>导航历史条目：记录视图模式与选中歌单，支持前进/返回。</summary>
+    private sealed class NavEntry
+    {
+        public ViewMode Mode { get; init; }
+        public Playlist? Playlist { get; init; }
+    }
+
+    private readonly Stack<NavEntry> _backStack = new();
+    private readonly Stack<NavEntry> _forwardStack = new();
+    private bool _suppressNavRecord;
+
+    public bool CanGoBack => _backStack.Count > 0;
+    public bool CanGoForward => _forwardStack.Count > 0;
+
+    #endregion
 
     public PlaybackBarViewModel PlaybackBar => _playbackBar;
     public LibraryViewModel Library { get; }
     public LyricViewModel Lyrics { get; }
     public SettingsViewModel Settings { get; }
+    public ListenTogetherViewModel ListenTogether { get; }
 
     public ObservableCollection<Playlist> UserPlaylists { get; } = [];
     public ObservableCollection<Track> Favorites { get; } = [];
@@ -68,23 +91,192 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _searchStatus = "";
 
-    /// <summary>搜索来源：All=全部, Local=仅本地, Bilibili=仅B站。</summary>
+    /// <summary>搜索来源：Local=仅本地, NetEase=网易云, QQMusic=QQ音乐, Bilibili=仅B站。</summary>
     [ObservableProperty]
-    private SearchSource _searchSource = SearchSource.All;
+    private SearchSource _searchSource = SearchSource.Local;
 
     /// <summary>歌词面板是否展开（点击曲目封面切换）。</summary>
     [ObservableProperty]
     private bool _isLyricsOpen;
 
+    /// <summary>桌面歌词窗口是否打开（按钮态联动）。</summary>
+    [ObservableProperty]
+    private bool _isDesktopLyricsOpen;
+
     /// <summary>内容区（标题行/状态条/列表）是否可见：设置页或歌词页打开时整体隐藏，避免下层内容透过半透明页面显示。</summary>
     public bool IsContentAreaVisible => !IsShowingSettings && !IsLyricsOpen;
 
-    partial void OnIsShowingSettingsChanged(bool value) => OnPropertyChanged(nameof(IsContentAreaVisible));
+    /// <summary>当前播放曲目是否已收藏（我喜欢）。</summary>
+    public bool IsCurrentFavorited =>
+        _playbackBar.CurrentTrack is { } t &&
+        Favorites.Any(f => f.Id == t.Id && f.ProviderId == t.ProviderId);
 
-    partial void OnIsLyricsOpenChanged(bool value) => OnPropertyChanged(nameof(IsContentAreaVisible));
+    #region 用户系统
 
-    /// <summary>搜索结果（B 站 + 本地匹配）。</summary>
+    /// <summary>用户昵称（下拉资料面板内编辑，修改即保存）。</summary>
+    public string UserNickname
+    {
+        get => _settingsService.Settings.UserNickname;
+        set
+        {
+            _settingsService.Settings.UserNickname = value;
+            _settingsService.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>用户头像路径。</summary>
+    public string? UserAvatarPath
+    {
+        get => _settingsService.Settings.UserAvatarPath;
+        set
+        {
+            _settingsService.Settings.UserAvatarPath = value;
+            try { _settingsService.Save(); } catch { /* 保存失败不阻断 UI 刷新 */ }
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>按累计听歌小时数计算等级信息（等级、本级起点、下一级所需）。</summary>
+    private static (int Level, double Cur, double Next) GetLevelInfo(double hours) => hours switch
+    {
+        < 0.5 => (1, 0.0, 0.5),
+        < 2 => (2, 0.5, 2.0),
+        < 6 => (3, 2.0, 6.0),
+        < 15 => (4, 6.0, 15.0),
+        < 40 => (5, 15.0, 40.0),
+        _ => (6, 40.0, double.PositiveInfinity)
+    };
+
+    /// <summary>用户等级（1-6），按累计听歌时长计算。</summary>
+    public int UserLevel => GetLevelInfo(_store.TotalListeningSeconds / 3600.0).Level;
+
+    /// <summary>下一级所需听歌时长（小时）。</summary>
+    public string UserLevelProgress
+    {
+        get
+        {
+            var hours = _store.TotalListeningSeconds / 3600.0;
+            var (_, cur, next) = GetLevelInfo(hours);
+            if (double.IsPositiveInfinity(next)) return $"累计 {hours:F1}h · 已满级";
+            return $"{hours:F1}h / {next}h";
+        }
+    }
+
+    /// <summary>经验进度条值（0-100），升到下一级的百分比。</summary>
+    public double UserLevelProgressValue
+    {
+        get
+        {
+            var hours = _store.TotalListeningSeconds / 3600.0;
+            var (_, cur, next) = GetLevelInfo(hours);
+            if (double.IsPositiveInfinity(next)) return 100;
+            return Math.Clamp((hours - cur) / (next - cur) * 100, 0, 100);
+        }
+    }
+
+    /// <summary>累计听歌时长文本。</summary>
+    public string TotalListeningText
+    {
+        get
+        {
+            var ts = TimeSpan.FromSeconds(_store.TotalListeningSeconds);
+            return ts.TotalHours >= 1 ? $"{ts.TotalHours:F1} 小时" : $"{ts.TotalMinutes:F0} 分钟";
+        }
+    }
+
+    /// <summary>选择头像并打开自由裁剪窗口。</summary>
+    [RelayCommand]
+    private void ChangeAvatar()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择头像",
+            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.webp"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        var crop = new Views.AvatarCropWindow(dialog.FileName)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        if (crop.ShowDialog() != true || string.IsNullOrEmpty(crop.CroppedImagePath)) return;
+
+        UserAvatarPath = crop.CroppedImagePath;
+        OnPropertyChanged(nameof(UserAvatarPath));
+    }
+
+    #endregion
+
+    partial void OnIsShowingSettingsChanged(bool value)
+    {
+        // 两个页面互斥：打开设置时收起歌词遮罩
+        if (value && IsLyricsOpen) IsLyricsOpen = false;
+        OnPropertyChanged(nameof(IsContentAreaVisible));
+    }
+
+    partial void OnIsLyricsOpenChanged(bool value)
+    {
+        // 歌词遮罩是半透明的，若设置页仍显示会透过遮罩露出：打开歌词时同步收起设置页
+        if (value && IsShowingSettings) IsShowingSettings = false;
+        OnPropertyChanged(nameof(IsContentAreaVisible));
+    }
+
+    /// <summary>搜索结果（在线源分页时仅展示已“放行”的部分，池见 _searchPool）。</summary>
     public ObservableCollection<Track> SearchResults { get; } = [];
+
+    /// <summary>搜索分页：每批展示条数（首次搜索显示 50 条，之后每次“加载更多”再放行 50 条）。</summary>
+    private const int SearchBatchSize = 50;
+
+    /// <summary>搜索分页：单批拉取的最大页数（页大小由各音源决定，防止页过小时请求过多）。</summary>
+    private const int SearchMaxPagesPerBatch = 12;
+
+    /// <summary>在线搜索结果全量池（按拉取顺序、去重后的全部结果）。</summary>
+    private readonly List<Track> _searchPool = [];
+
+    /// <summary>在线搜索结果去重键（ProviderId:Id）。</summary>
+    private readonly HashSet<string> _seenSearchIds = [];
+
+    /// <summary>当前已放行展示的池内条数（SearchResults 恒等于 _searchPool 前 N 条）。</summary>
+    private int _searchShownCount;
+
+    /// <summary>下一个待请求的页号（从 1 开始）。</summary>
+    private int _searchNextPage = 1;
+
+    /// <summary>当前关键词结果是否已取尽（无更多页可拉）。</summary>
+    private bool _searchEnded = true;
+
+    /// <summary>分页搜索中的在线音源（网易云/QQ 插件或 B 站原生源）。</summary>
+    private IOnlineMusicProvider? _searchProvider;
+
+    /// <summary>分页搜索发起时的来源快照（切换标签不影响进行中的分页）。</summary>
+    private SearchSource _searchActiveSource;
+
+    /// <summary>状态文案中的音源名（网易云/QQ音乐/B站）。</summary>
+    private string _searchLabel = "";
+
+    /// <summary>分页用关键词（加载更多时继续使用）。</summary>
+    private string _searchKeyword = "";
+
+    /// <summary>搜索会话号：新搜索/合集加载使旧的进行中拉取失效。</summary>
+    private int _searchSession;
+
+    /// <summary>是否显示“加载更多”按钮。</summary>
+    [ObservableProperty]
+    private bool _isSearchMoreVisible;
+
+    /// <summary>“加载更多”按钮文案。</summary>
+    [ObservableProperty]
+    private string _searchMoreText = "加载更多";
+
+    /// <summary>排行榜曲目（网易云榜单）。</summary>
+    public ObservableCollection<Track> RankingTracks { get; } = [];
+
+    /// <summary>听歌排行曲目（按播放时长降序）。</summary>
+    public ObservableCollection<Track> ListeningStatsTracks { get; } = [];
+
+    /// <summary>个性电台曲目（基于我喜欢推荐）。</summary>
+    public ObservableCollection<Track> RadioTracks { get; } = [];
 
     /// <summary>内容区标题（跟随视图切换）。</summary>
     public string CurrentViewTitle => ViewMode switch
@@ -93,6 +285,9 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Playlist => SelectedPlaylist?.Name ?? "歌单",
         ViewMode.Favorites => "我喜欢",
         ViewMode.Recent => "最近播放",
+        ViewMode.Ranking => "排行榜",
+        ViewMode.ListeningStats => "听歌排行",
+        ViewMode.Radio => "个性电台",
         _ => "全部音乐"
     };
 
@@ -102,6 +297,9 @@ public partial class MainViewModel : ObservableObject
     public bool IsPlaylistView => ViewMode == ViewMode.Playlist;
     public bool IsFavoritesView => ViewMode == ViewMode.Favorites;
     public bool IsRecentView => ViewMode == ViewMode.Recent;
+    public bool IsRankingView => ViewMode == ViewMode.Ranking;
+    public bool IsListeningStatsView => ViewMode == ViewMode.ListeningStats;
+    public bool IsRadioView => ViewMode == ViewMode.Radio;
 
     /// <summary>当前显示的曲目列表。</summary>
     public System.Collections.IList CurrentTracks => ViewMode switch
@@ -110,12 +308,17 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Playlist => (System.Collections.IList?)SelectedPlaylist?.Tracks ?? Library.Tracks,
         ViewMode.Favorites => (System.Collections.IList)Favorites,
         ViewMode.Recent => (System.Collections.IList)Recent,
+        ViewMode.Ranking => (System.Collections.IList)RankingTracks,
+        ViewMode.ListeningStats => (System.Collections.IList)ListeningStatsTracks,
+        ViewMode.Radio => (System.Collections.IList)RadioTracks,
         _ => Library.Tracks
     };
 
     public MainViewModel(PlaybackBarViewModel playbackBar, LibraryViewModel library, IPlaylistQueue queue,
         LyricViewModel lyrics, SettingsViewModel settings, ProviderRegistry registry, UserDataStore store,
-        LocalFileProvider localFiles)
+        LocalFileProvider localFiles, UserSettingsService settingsService,
+        Func<Views.DesktopLyricsWindow> desktopLyricsWindowFactory,
+        ListenTogetherViewModel listenTogether)
     {
         _playbackBar = playbackBar;
         _queue = queue;
@@ -123,9 +326,51 @@ public partial class MainViewModel : ObservableObject
         Library = library;
         Lyrics = lyrics;
         Settings = settings;
+        ListenTogether = listenTogether;
         _store = store;
         _localFiles = localFiles;
+        _settingsService = settingsService;
+        _desktopLyricsWindowFactory = desktopLyricsWindowFactory;
         LoadUserData();
+
+        // 当前曲目变化或收藏列表变化时，刷新爱心按钮状态
+        _playbackBar.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlaybackBarViewModel.CurrentTrack))
+                OnPropertyChanged(nameof(IsCurrentFavorited));
+            else if (e.PropertyName == nameof(PlaybackBarViewModel.PositionSeconds))
+                RecordPlayTime();
+        };
+        Favorites.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsCurrentFavorited));
+    }
+
+    private double _lastRecordedPosition;
+
+    /// <summary>记录当前曲目的播放时长（每次 PositionSeconds 变化时累加差值）。</summary>
+    private void RecordPlayTime()
+    {
+        if (!_playbackBar.IsPlaying || _playbackBar.CurrentTrack is not { } track) return;
+        var delta = _playbackBar.PositionSeconds - _lastRecordedPosition;
+        if (delta is > 0 and < 5) // 过滤异常跳转（如拖动进度条）
+        {
+            var prevLevel = UserLevel;
+            var key = $"{track.ProviderId}:{track.Id}";
+            _store.PlayStats.TryGetValue(key, out var total);
+            _store.PlayStats[key] = total + delta;
+            _store.TotalListeningSeconds += delta;
+            // 等级变化时通知 UI 更新（资料面板进度条每次播放都刷新）
+            if (UserLevel != prevLevel)
+            {
+                OnPropertyChanged(nameof(UserLevel));
+                OnPropertyChanged(nameof(UserLevelProgress));
+            }
+            OnPropertyChanged(nameof(UserLevelProgressValue));
+            OnPropertyChanged(nameof(TotalListeningText));
+            // 每 30 秒保存一次，避免频繁写盘
+            if ((int)(_store.TotalListeningSeconds / 30) != (int)((_store.TotalListeningSeconds - delta) / 30))
+                _store.Save();
+        }
+        _lastRecordedPosition = _playbackBar.PositionSeconds;
     }
 
     private void LoadUserData()
@@ -179,6 +424,10 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnViewModeChanged(ViewMode value)
     {
+        // 电台视图启用队列自动续播，离开电台视图时取消
+        _playbackBar.AutoRefillHandler = value == ViewMode.Radio ? RadioRefillAsync : null;
+
+        UpdateSearchMoreState();
         OnPropertyChanged(nameof(CurrentTracks));
         OnPropertyChanged(nameof(CurrentViewTitle));
         OnPropertyChanged(nameof(IsAllTracksView));
@@ -186,6 +435,9 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPlaylistView));
         OnPropertyChanged(nameof(IsFavoritesView));
         OnPropertyChanged(nameof(IsRecentView));
+        OnPropertyChanged(nameof(IsRankingView));
+        OnPropertyChanged(nameof(IsListeningStatsView));
+        OnPropertyChanged(nameof(IsRadioView));
     }
 
     partial void OnSelectedPlaylistChanged(Playlist? value)
@@ -194,9 +446,21 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CurrentViewTitle));
     }
 
-    private void SetViewMode(ViewMode mode)
+    /// <summary>切换视图模式，并记录导航历史（前进/返回）。</summary>
+    private void SetViewMode(ViewMode mode, Playlist? playlist = null)
     {
+        // 记录当前状态到返回栈（前进/返回导航时不重复记录）
+        if (!_suppressNavRecord)
+        {
+            _backStack.Push(new NavEntry { Mode = ViewMode, Playlist = SelectedPlaylist });
+            _forwardStack.Clear();
+            OnPropertyChanged(nameof(CanGoBack));
+            OnPropertyChanged(nameof(CanGoForward));
+        }
+
         ViewMode = mode;
+        if (mode == ViewMode.Playlist)
+            SelectedPlaylist = playlist;
         IsShowingSearch = mode == ViewMode.SearchResults;
         IsShowingSettings = false;
     }
@@ -210,6 +474,406 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ShowRecent() => SetViewMode(ViewMode.Recent);
 
+    /// <summary>按关键词（匹配 Id 或 DisplayName）查找已加载的插件音源。</summary>
+    private JsPluginProvider? FindPluginSource(params string[] keywords) =>
+        _registry.OnlineMusicProviders.OfType<JsPluginProvider>()
+            .FirstOrDefault(p => keywords.Any(k =>
+                p.Id.Contains(k, StringComparison.OrdinalIgnoreCase) ||
+                p.DisplayName.Contains(k, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>榜单子列表名（由插件源 getTopLists 动态加载，替代内置网易云 API）。</summary>
+    public ObservableCollection<string> RankingBoardNames { get; } = [];
+
+    /// <summary>榜单 ID 列表（与 RankingBoardNames 顺序对应）。</summary>
+    private List<(string Id, string Title)> _rankingBoards = [];
+
+    /// <summary>当前选中的子榜单名。</summary>
+    [ObservableProperty]
+    private string _selectedRankingBoard = "";
+
+    private readonly Dictionary<string, List<Track>> _rankingCache = new();
+
+    /// <summary>内置网易云官方榜单（插件榜单为 HTML 抓取型受限时的兜底；播放仍走网易插件解析）。</summary>
+    private static readonly IReadOnlyList<(string Id, string Title)> FallbackBoards =
+    [
+        ("19723756", "飙升榜"),
+        ("3779629", "新歌榜"),
+        ("3778678", "热歌榜"),
+        ("2884035", "原创榜")
+    ];
+
+    /// <summary>排行榜：从插件源动态加载榜单列表（优先网易云插件，其次 QQ 插件，受限时回退内置榜单）。</summary>
+    [RelayCommand]
+    private async Task ShowRankingAsync()
+    {
+        SetViewMode(ViewMode.Ranking);
+
+        // 榜单列表已加载过：仅补载当前榜单内容
+        if (_rankingBoards.Count > 0)
+        {
+            if (RankingTracks.Count == 0) await LoadRankingBoardAsync(SelectedRankingBoard);
+            return;
+        }
+
+        var plugin = FindPluginSource("netease", "wy", "网易")
+                     ?? FindPluginSource("qqmusic", "qq", "酷");
+        if (plugin is null)
+        {
+            UseFallbackBoards("排行榜暂不可用（插件源未加载），已切换内置榜单");
+            return;
+        }
+
+        SearchStatus = "正在加载榜单列表...";
+        try
+        {
+            var boards = await plugin.GetTopListsAsync();
+            if (boards.Count == 0) throw new InvalidOperationException("插件源未提供排行榜");
+
+            _rankingBoards = boards.Select(b => (b.Id, b.Title)).ToList();
+            RankingBoardNames.Clear();
+            foreach (var b in _rankingBoards)
+                RankingBoardNames.Add(b.Title);
+
+            SelectedRankingBoard = _rankingBoards[0].Title; // 触发首个榜单加载
+        }
+        catch (Exception ex)
+        {
+            UseFallbackBoards($"插件榜单受限（{ex.Message}），已切换内置榜单");
+        }
+    }
+
+    /// <summary>启用内置网易云榜单兜底。</summary>
+    private void UseFallbackBoards(string status)
+    {
+        _rankingBoards = FallbackBoards.Select(b => (b.Id, b.Title)).ToList();
+        RankingBoardNames.Clear();
+        foreach (var b in _rankingBoards)
+            RankingBoardNames.Add(b.Title);
+        SearchStatus = status;
+
+        var first = _rankingBoards[0].Title;
+        if (SelectedRankingBoard == first)
+            _ = LoadRankingBoardAsync(first); // 同名不会触发属性变更，手动加载
+        else
+            SelectedRankingBoard = first;
+    }
+
+    partial void OnSelectedRankingBoardChanged(string value)
+    {
+        if (!string.IsNullOrEmpty(value)) _ = LoadRankingBoardAsync(value);
+    }
+
+    /// <summary>加载指定子榜单（插件 getTopListDetail，带缓存）。</summary>
+    private async Task LoadRankingBoardAsync(string boardName)
+    {
+        if (string.IsNullOrEmpty(boardName)) return;
+
+        if (_rankingCache.TryGetValue(boardName, out var cached))
+        {
+            RankingTracks.Clear();
+            foreach (var t in cached) RankingTracks.Add(t);
+            SearchStatus = $"{boardName} 共 {cached.Count} 首";
+            return;
+        }
+
+        var board = _rankingBoards.FirstOrDefault(b => b.Title == boardName);
+        if (board.Id is null) return;
+
+        var plugin = FindPluginSource("netease", "wy", "网易")
+                     ?? FindPluginSource("qqmusic", "qq", "酷");
+        if (plugin is null)
+        {
+            SearchStatus = "排行榜暂不可用（插件源未加载）";
+            return;
+        }
+
+        SearchStatus = $"正在加载 {boardName}...";
+        try
+        {
+            var tracks = await plugin.GetTopListDetailAsync(board.Id);
+            if (tracks.Count == 0) throw new InvalidOperationException("插件未返回榜单内容");
+
+            _rankingCache[boardName] = [.. tracks];
+            RankingTracks.Clear();
+            foreach (var t in tracks) RankingTracks.Add(t);
+            SearchStatus = $"{boardName} 共 {tracks.Count} 首";
+        }
+        catch (Exception)
+        {
+            // 插件榜单详情受限（HTML 抓取型）：回退内置网易云榜单 API，播放仍走网易插件解析
+            try
+            {
+                var tracks = await LoadFallbackBoardDetailAsync(board.Id, plugin.Id);
+                _rankingCache[boardName] = [.. tracks];
+                RankingTracks.Clear();
+                foreach (var t in tracks) RankingTracks.Add(t);
+                SearchStatus = $"{boardName} 共 {tracks.Count} 首（内置榜单）";
+            }
+            catch (Exception ex2)
+            {
+                SearchStatus = $"加载{boardName}失败: {ex2.Message}";
+            }
+        }
+    }
+
+    /// <summary>内置网易云榜单详情 API（/api/v6/playlist/detail），曲目 ProviderId 指向网易插件以便播放解析。</summary>
+    private static readonly System.Net.Http.HttpClient _boardHttp = new() { Timeout = TimeSpan.FromSeconds(20) };
+
+    private async Task<List<Track>> LoadFallbackBoardDetailAsync(string boardId, string neteasePluginId)
+    {
+        using var resp = await _boardHttp.GetAsync($"https://music.163.com/api/v6/playlist/detail?id={boardId}&n=100");
+        resp.EnsureSuccessStatusCode();
+        using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+
+        if (!doc.RootElement.TryGetProperty("playlist", out var pl) ||
+            !pl.TryGetProperty("tracks", out var tracks) ||
+            tracks.ValueKind != System.Text.Json.JsonValueKind.Array)
+            throw new InvalidOperationException("内置榜单接口返回异常");
+
+        var list = new List<Track>();
+        foreach (var t in tracks.EnumerateArray())
+        {
+            string Str(string n) => t.TryGetProperty(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String
+                ? e.GetString() ?? "" : "";
+            var id = t.TryGetProperty("id", out var idEl) ? idEl.ToString() : "";
+            if (string.IsNullOrEmpty(id) || id == "null") continue;
+
+            var artist = "";
+            if (t.TryGetProperty("ar", out var ar) && ar.ValueKind == System.Text.Json.JsonValueKind.Array)
+                artist = string.Join("/", ar.EnumerateArray()
+                    .Select(a => a.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "")
+                    .Where(n => n.Length > 0));
+
+            string album = "", cover = "";
+            if (t.TryGetProperty("al", out var al) && al.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                album = al.TryGetProperty("name", out var an) ? an.GetString() ?? "" : "";
+                cover = al.TryGetProperty("picUrl", out var pc) ? pc.GetString() ?? "" : "";
+            }
+
+            var duration = t.TryGetProperty("dt", out var dt) && dt.ValueKind == System.Text.Json.JsonValueKind.Number
+                ? dt.GetDouble() / 1000.0 : 0;
+
+            list.Add(new Track
+            {
+                Id = id,
+                Title = Str("name") is { Length: > 0 } n2 ? n2 : "未知标题",
+                Artist = artist is { Length: > 0 } ? artist : "未知艺术家",
+                Album = album,
+                Duration = TimeSpan.FromSeconds(duration),
+                FilePath = "",
+                ProviderId = neteasePluginId,
+                CoverUrl = cover
+            });
+        }
+        LoadPluginCovers(list);
+        return list;
+    }
+
+    /// <summary>按 ProviderId 找到对应插件并后台下载封面缓存。</summary>
+    private void LoadPluginCovers(List<Track> tracks)
+    {
+        if (tracks.Count == 0) return;
+        var provider = _registry.MusicProviders.FirstOrDefault(p => p.Id == tracks[0].ProviderId);
+        if (provider is Services.Providers.JsPlugin.JsPluginProvider jp)
+            jp.PreloadCovers(tracks);
+    }
+
+    /// <summary>听歌排行：按播放时长统计本地及在线曲目排名。</summary>
+    [RelayCommand]
+    private void ShowListeningStats()
+    {
+        SetViewMode(ViewMode.ListeningStats);
+        ListeningStatsTracks.Clear();
+
+        // 从所有已知曲目中匹配播放统计，按时长降序
+        var allTracks = Library.Tracks.Concat(Favorites).Concat(Recent)
+            .GroupBy(t => $"{t.ProviderId}:{t.Id}")
+            .Select(g => g.First())
+            .ToList();
+
+        var ranked = allTracks
+            .Select(t => new
+            {
+                Track = t,
+                Seconds = _store.PlayStats.TryGetValue($"{t.ProviderId}:{t.Id}", out var s) ? s : 0
+            })
+            .Where(x => x.Seconds > 0)
+            .OrderByDescending(x => x.Seconds)
+            .Take(100)
+            .ToList();
+
+        foreach (var x in ranked)
+            ListeningStatsTracks.Add(x.Track);
+
+        SearchStatus = ranked.Count > 0
+            ? $"共 {ranked.Count} 首，累计 {TimeSpan.FromSeconds(_store.TotalListeningSeconds):hh\\:mm\\:ss}"
+            : "暂无听歌统计";
+    }
+
+    /// <summary>个性电台：基于我喜欢随机生成推荐（不限数量），点击进入自动持续播放。</summary>
+    [RelayCommand]
+    private async Task ShowRadioAsync()
+    {
+        SetViewMode(ViewMode.Radio);
+
+        var tracks = await GenerateRadioTracksAsync();
+        RadioTracks.Clear();
+        foreach (var t in tracks) RadioTracks.Add(t);
+        SearchStatus = $"个性电台已生成 {RadioTracks.Count} 首，自动播放中";
+
+        // 点击进入即自动播放
+        if (RadioTracks.Count > 0)
+        {
+            _queue.SetItems([.. RadioTracks], 0);
+            await _playbackBar.LoadAndPlayAsync(RadioTracks[0]);
+            await Lyrics.LoadLyricsAsync(RadioTracks[0]);
+            RecordRecent(RadioTracks[0]);
+        }
+    }
+
+    /// <summary>
+    /// 生成电台推荐（个性化算法）：以"我喜欢 + 最近播放"为种子统计艺术家偏好，
+    /// 按权重通过插件源搜索相似歌曲、本地曲库同艺术家补充；无种子或在线失败时回退随机榜单。
+    /// </summary>
+    private async Task<List<Track>> GenerateRadioTracksAsync()
+    {
+        var rng = new Random();
+        var result = new List<Track>();
+        var recentKeys = Recent.Take(15).Select(t => $"{t.ProviderId}:{t.Id}").ToHashSet();
+
+        void AddRange(IEnumerable<Track> source)
+        {
+            foreach (var t in source)
+            {
+                var key = $"{t.ProviderId}:{t.Id}";
+                // 去重 + 避免刚听过的歌曲重复推送
+                if (!recentKeys.Contains(key) && result.All(x => x.Id != t.Id || x.ProviderId != t.ProviderId))
+                    result.Add(t);
+            }
+        }
+
+        // ---- 1. 我喜欢优先入列 ----
+        AddRange(Favorites.OrderBy(_ => rng.Next()));
+
+        // ---- 2. 种子曲目（我喜欢 + 最近播放）统计艺术家偏好权重 ----
+        var seeds = Favorites.Concat(Recent).ToList();
+        var artistWeights = seeds
+            .Select(t => SplitFirstArtist(t.Artist))
+            .Where(a => a.Length >= 2)
+            .GroupBy(a => a, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .Take(8)
+            .Select(g => (Artist: g.Key, Weight: g.Count()))
+            .ToList();
+
+        // ---- 3. 本地曲库：偏好艺术家曲目加权在前，其余洗牌少量补充 ----
+        var lib = Library.Tracks.OfType<Track>().ToList();
+        var matched = lib.Where(t =>
+                artistWeights.Any(w => t.Artist?.Contains(w.Artist, StringComparison.OrdinalIgnoreCase) == true))
+            .OrderByDescending(t => artistWeights
+                .Where(w => t.Artist?.Contains(w.Artist, StringComparison.OrdinalIgnoreCase) == true)
+                .Sum(w => w.Weight))
+            .ThenBy(_ => rng.Next());
+        AddRange(matched);
+        AddRange(lib.Where(t => !result.Any(r => r.Id == t.Id && r.ProviderId == t.ProviderId))
+            .OrderBy(_ => rng.Next()).Take(10));
+
+        // ---- 4. 在线相似推荐：按艺术家权重并行搜索（网易插件曲库最全） ----
+        try
+        {
+            var plugin = FindPluginSource("netease", "wy", "网易")
+                         ?? FindPluginSource("qqmusic", "qq", "酷");
+            if (plugin is not null && artistWeights.Count > 0)
+            {
+                var weights = artistWeights;
+                var lists = await Task.WhenAll(weights.Select(async w =>
+                {
+                    try
+                    {
+                        var res = await plugin.SearchAsync(w.Artist);
+                        return (Weight: w.Weight, Tracks: res.Take(12).ToList());
+                    }
+                    catch
+                    {
+                        return (Weight: w.Weight, Tracks: new List<Track>());
+                    }
+                }));
+
+                // 加权随机排序：权重越高（听得越多）越靠前，同时保持随机性
+                var pooled = lists.SelectMany(x => x.Tracks, (x, t) => (Track: t, x.Weight))
+                    .OrderByDescending(x => x.Weight * rng.NextDouble())
+                    .Select(x => x.Track);
+                AddRange(pooled);
+            }
+            else
+            {
+                await AddOnlineBoardTracksAsync(rng, AddRange);
+            }
+        }
+        catch
+        {
+            // 在线推荐失败不影响本地电台内容
+        }
+
+        return result;
+    }
+
+    /// <summary>取首个主艺术家（"A/B" 形式取 A；未知艺术家返回空）。</summary>
+    private static string SplitFirstArtist(string? artist)
+    {
+        if (string.IsNullOrWhiteSpace(artist) || artist.Contains("未知")) return "";
+        return artist.Split('/', '、', ',', '，')[0].Trim();
+    }
+
+    /// <summary>兜底在线推荐：随机拉取一个插件源榜单取 50 首。</summary>
+    private async Task AddOnlineBoardTracksAsync(Random rng, Action<IEnumerable<Track>> addRange)
+    {
+        try
+        {
+            var plugin = FindPluginSource("netease", "wy", "网易")
+                         ?? FindPluginSource("qqmusic", "qq", "酷");
+            if (plugin is not null)
+            {
+                var boards = await plugin.GetTopListsAsync();
+                if (boards.Count > 0)
+                {
+                    var board = boards[rng.Next(boards.Count)];
+                    var online = await plugin.GetTopListDetailAsync(board.Id);
+                    addRange(online.OrderBy(_ => rng.Next()).Take(50));
+                }
+            }
+        }
+        catch
+        {
+            // 在线推荐失败不影响本地电台内容
+        }
+    }
+
+    /// <summary>电台队列播完后的自动续播：把剩余推荐追加入队（我的喜欢循环洗牌），返回是否成功。</summary>
+    private Task<bool> RadioRefillAsync()
+    {
+        if (ViewMode != ViewMode.Radio) return Task.FromResult(false);
+
+        // 从我喜欢重新洗牌取一批没在当前队列里的曲目；全部听过则重新洗牌全部
+        var rng = new Random();
+        var inQueue = _queue.Queue.Select(t => $"{t.ProviderId}:{t.Id}").ToHashSet();
+        var candidates = Favorites
+            .Where(t => !inQueue.Contains($"{t.ProviderId}:{t.Id}"))
+            .OrderBy(_ => rng.Next())
+            .Take(30)
+            .ToList();
+        if (candidates.Count == 0 && Favorites.Count > 0)
+            candidates = Favorites.OrderBy(_ => rng.Next()).Take(30).ToList();
+
+        foreach (var t in candidates)
+        {
+            RadioTracks.Add(t);
+        }
+        _queue.Append(candidates);
+        return Task.FromResult(candidates.Count > 0);
+    }
+
     [RelayCommand]
     private void ShowSettings()
     {
@@ -221,8 +885,93 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ShowSearch() => SetViewMode(ViewMode.SearchResults);
 
+    /// <summary>全局返回：回到上一个视图。</summary>
+    [RelayCommand]
+    private void GoBack()
+    {
+        if (_backStack.Count == 0) return;
+        _forwardStack.Push(new NavEntry { Mode = ViewMode, Playlist = SelectedPlaylist });
+        var prev = _backStack.Pop();
+        _suppressNavRecord = true;
+        try
+        {
+            ViewMode = prev.Mode;
+            SelectedPlaylist = prev.Playlist;
+            IsShowingSearch = prev.Mode == ViewMode.SearchResults;
+            IsShowingSettings = false;
+        }
+        finally
+        {
+            _suppressNavRecord = false;
+        }
+        OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
+    }
+
+    /// <summary>全局前进：前往下一个视图。</summary>
+    [RelayCommand]
+    private void GoForward()
+    {
+        if (_forwardStack.Count == 0) return;
+        _backStack.Push(new NavEntry { Mode = ViewMode, Playlist = SelectedPlaylist });
+        var next = _forwardStack.Pop();
+        _suppressNavRecord = true;
+        try
+        {
+            ViewMode = next.Mode;
+            SelectedPlaylist = next.Playlist;
+            IsShowingSearch = next.Mode == ViewMode.SearchResults;
+            IsShowingSettings = false;
+        }
+        finally
+        {
+            _suppressNavRecord = false;
+        }
+        OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
+    }
+
     [RelayCommand]
     private void ToggleLyrics() => IsLyricsOpen = !IsLyricsOpen;
+
+    /// <summary>桌面歌词窗口实例（运行时按需创建，关闭后置空）。</summary>
+    private Views.DesktopLyricsWindow? _desktopLyricsWindow;
+
+    /// <summary>切换桌面歌词窗口：未开 → 创建并显示；已开 → 关闭。</summary>
+    [RelayCommand]
+    private void ToggleDesktopLyrics()
+    {
+        if (_desktopLyricsWindow is { } w && w.IsLoaded)
+        {
+            w.Close();
+            _desktopLyricsWindow = null;
+            IsDesktopLyricsOpen = false;
+            return;
+        }
+
+        _desktopLyricsWindow = _desktopLyricsWindowFactory();
+        _desktopLyricsWindow.Closed += (_, _) =>
+        {
+            _desktopLyricsWindow = null;
+            IsDesktopLyricsOpen = false;
+        };
+        _desktopLyricsWindow.Show();
+        IsDesktopLyricsOpen = true;
+    }
+
+    /// <summary>桌面歌词窗口被外部关闭（如双击）时由窗口回调，同步按钮状态。</summary>
+    public void NotifyDesktopLyricsClosed()
+    {
+        _desktopLyricsWindow = null;
+        IsDesktopLyricsOpen = false;
+    }
+
+    /// <summary>歌词卡片播放模式：极简界面，仅展示封面、当前歌词行、播放键、进度条。</summary>
+    [ObservableProperty]
+    private bool _isCardMode;
+
+    [RelayCommand]
+    private void ToggleCardMode() => IsCardMode = !IsCardMode;
 
     [RelayCommand]
     private async Task PlayAllCurrentAsync() => await PlayAllAsync();
@@ -234,6 +983,60 @@ public partial class MainViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(keyword)) return;
         SearchText = keyword;
         await SearchAsync();
+    }
+
+    /// <summary>以指定关键词搜索（供歌词页点击歌手/专辑跳转使用）。</summary>
+    public async Task SearchForTextAsync(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        SearchText = text;
+        await SearchAsync();
+    }
+
+    /// <summary>打开 B 站合集（专辑），展示合集内所有视频。</summary>
+    [RelayCommand]
+    private async Task OpenBilibiliCollectionAsync(string? seasonId)
+    {
+        if (string.IsNullOrWhiteSpace(seasonId)) return;
+        if (_registry.Find("bilibili") is not BilibiliMusicProvider bili) return;
+
+        // 合集为一次性全量视图：作废旧搜索分页会话，且不提供“加载更多”
+        _searchSession++;
+        var session = _searchSession;
+        _searchProvider = null;
+        _searchEnded = true;
+        _searchPool.Clear();
+        _seenSearchIds.Clear();
+        _searchShownCount = 0;
+        IsSearchMoreVisible = false;
+        SearchResults.Clear();
+        SetViewMode(ViewMode.SearchResults);
+
+        IsSearching = true;
+        SearchStatus = $"正在加载 B 站合集 {seasonId}...";
+
+        try
+        {
+            var tracks = await bili.GetCollectionVideosAsync(seasonId);
+            if (session != _searchSession) return;
+            foreach (var t in tracks)
+            {
+                _searchPool.Add(t);
+                _seenSearchIds.Add($"{t.ProviderId}:{t.Id}");
+            }
+            SyncSearchShown(tracks.Count);
+            SearchStatus = tracks.Count == 0
+                ? "合集为空或加载失败"
+                : $"合集共 {tracks.Count} 个视频";
+        }
+        catch (Exception ex)
+        {
+            if (session == _searchSession) SearchStatus = $"加载合集失败: {ex.Message}";
+        }
+        finally
+        {
+            if (session == _searchSession) IsSearching = false;
+        }
     }
 
     [RelayCommand]
@@ -262,6 +1065,14 @@ public partial class MainViewModel : ObservableObject
         SaveUserData();
     }
 
+    /// <summary>底部播放栏爱心按钮：收藏/取消收藏当前播放曲目。</summary>
+    [RelayCommand]
+    private void ToggleCurrentFavorite()
+    {
+        if (_playbackBar.CurrentTrack is { } track)
+            ToggleFavorite(track);
+    }
+
     [RelayCommand]
     private void CreatePlaylist()
     {
@@ -283,8 +1094,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void SelectPlaylist(Playlist playlist)
     {
-        SelectedPlaylist = playlist;
-        SetViewMode(ViewMode.Playlist);
+        SetViewMode(ViewMode.Playlist, playlist);
     }
 
     /// <summary>重命名歌单。</summary>
@@ -361,7 +1171,7 @@ public partial class MainViewModel : ObservableObject
         SaveUserData();
     }
 
-    /// <summary>下载在线曲目（当前支持 B 站）为本地 .m4a 文件，方便离线播放。</summary>
+    /// <summary>下载在线曲目为本地文件，网易云/QQ音乐支持选择音质。</summary>
     [RelayCommand]
     private async Task DownloadTrackAsync(Track? track)
     {
@@ -379,18 +1189,32 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // 网易云 / QQ 音乐：弹出音质选择
+        AudioQuality quality = AudioQuality.ExHigh;
+        if (track.ProviderId is "netease" or "qqmusic")
+        {
+            var qualities = await online.GetAvailableQualitiesAsync(track);
+            quality = ShowQualityDialog(qualities);
+            if (quality == AudioQuality.Standard && qualities.Count > 0 && qualities[0] != AudioQuality.Standard)
+                return; // 用户取消
+        }
+
         SearchStatus = $"⬇ 正在下载: {track.Title}";
         try
         {
-            // 先缓冲到音频缓存，再复制为正规文件名保存到音乐目录
-            var cachedPath = await online.ResolveToLocalAsync(track);
+            string cachedPath;
+            if (track.ProviderId is "netease" or "qqmusic")
+                cachedPath = await online.DownloadAsync(track, quality);
+            else
+                cachedPath = await online.ResolveToLocalAsync(track);
 
             var dir = GetDownloadDirectory();
             Directory.CreateDirectory(dir);
-            var targetPath = UniquePath(Path.Combine(dir, SanitizeFileName($"{track.Artist} - {track.Title}") + ".m4a"));
+            var ext = Path.GetExtension(cachedPath);
+            if (string.IsNullOrEmpty(ext)) ext = ".mp3";
+            var targetPath = UniquePath(Path.Combine(dir, SanitizeFileName($"{track.Artist} - {track.Title}") + ext));
             File.Copy(cachedPath, targetPath);
 
-            // 直接加入本地音乐库，无需整库重扫
             if (Library.Tracks.OfType<Track>().All(t => !string.Equals(t.FilePath, targetPath, StringComparison.OrdinalIgnoreCase)))
             {
                 Library.Tracks.Add(new Track
@@ -412,6 +1236,72 @@ public partial class MainViewModel : ObservableObject
             SearchStatus = $"下载失败: {ex.Message}";
             MessageBox.Show($"下载失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>弹出音质选择对话框，返回所选音质；取消返回 Standard（调用方据此判断）。</summary>
+    private static AudioQuality ShowQualityDialog(IReadOnlyList<AudioQuality> qualities)
+    {
+        var names = qualities.Select(q => q switch
+        {
+            AudioQuality.Standard => "标准 (128kbps)",
+            AudioQuality.Higher => "较高 (192kbps)",
+            AudioQuality.ExHigh => "极高 (320kbps)",
+            AudioQuality.Lossless => "无损 (FLAC)",
+            _ => q.ToString()
+        }).ToArray();
+
+        var dialog = new Window
+        {
+            Title = "选择音质",
+            Width = 280,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Background = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("BgPanel")
+        };
+
+        var combo = new System.Windows.Controls.ComboBox
+        {
+            ItemsSource = names,
+            SelectedIndex = 0,
+            Margin = new Thickness(16),
+            Padding = new Thickness(8, 6, 8, 6)
+        };
+
+        var okBtn = new System.Windows.Controls.Button
+        {
+            Content = "确定", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(0, 6, 0, 6)
+        };
+        var cancelBtn = new System.Windows.Controls.Button
+        {
+            Content = "取消", IsCancel = true, Width = 80, Padding = new Thickness(0, 6, 0, 6)
+        };
+
+        var panel = new System.Windows.Controls.StackPanel();
+        panel.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "请选择下载音质",
+            Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("FgPrimary"),
+            Margin = new Thickness(16, 12, 16, 0)
+        });
+        panel.Children.Add(combo);
+        var btnPanel = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, 16, 12)
+        };
+        btnPanel.Children.Add(okBtn);
+        btnPanel.Children.Add(cancelBtn);
+        panel.Children.Add(btnPanel);
+        dialog.Content = panel;
+
+        okBtn.Click += (_, _) => dialog.DialogResult = true;
+
+        if (dialog.ShowDialog() == true && combo.SelectedIndex >= 0)
+            return qualities[combo.SelectedIndex];
+        return AudioQuality.Standard;
     }
 
     /// <summary>下载保存目录：优先用户设置的音乐目录，否则「音乐\AnMusic」。</summary>
@@ -445,18 +1335,14 @@ public partial class MainViewModel : ObservableObject
 
     #endregion
 
-    /// <summary>执行搜索：B 站在线搜索 + 本地库过滤，结果合并展示。</summary>
+    /// <summary>执行搜索：本地直接匹配；网易云/QQ音乐/B站 在线源自动翻页取足一批（默认 50 条），
+    /// 列表底部提供“加载更多”继续分页追加。</summary>
     [RelayCommand]
     private async Task SearchAsync()
     {
         var keyword = SearchText?.Trim();
         if (string.IsNullOrEmpty(keyword))
             return;
-
-        IsSearching = true;
-        SearchStatus = "";
-        SearchResults.Clear();
-        SetViewMode(ViewMode.SearchResults);
 
         // 记录搜索历史（去重置顶，最多 20 条）
         var existing = SearchHistory.FirstOrDefault(h => h == keyword);
@@ -465,58 +1351,234 @@ public partial class MainViewModel : ObservableObject
         while (SearchHistory.Count > 20) SearchHistory.RemoveAt(SearchHistory.Count - 1);
         SaveUserData();
 
+        // 新搜索：重置分页状态（会话号递增，使旧的进行中拉取自动失效）
+        _searchKeyword = keyword;
+        _searchSession++;
+        var session = _searchSession;
+        _searchNextPage = 1;
+        _searchEnded = false;
+        _searchProvider = null;
+        _searchPool.Clear();
+        _seenSearchIds.Clear();
+        _searchShownCount = 0;
+        SearchResults.Clear();
+        IsSearchMoreVisible = false;
+        SearchStatus = "";
+        SetViewMode(ViewMode.SearchResults);
+        IsSearching = true;
+
         try
         {
-            var localCount = 0;
-            var biliCount = 0;
-
-            // 本地库匹配（All 或 Local 时执行）
-            if (SearchSource is SearchSource.All or SearchSource.Local)
+            switch (SearchSource)
             {
-                var localMatches = Library.Tracks.OfType<Track>()
-                    .Where(t => t.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                             || t.Artist.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                foreach (var t in localMatches)
-                    SearchResults.Add(t);
-                localCount = localMatches.Count;
-            }
-
-            // B 站在线搜索（All 或 Bilibili 时执行）
-            if (SearchSource is SearchSource.All or SearchSource.Bilibili)
-            {
-                var biliProvider = _registry.Find("bilibili") as IOnlineMusicProvider;
-                if (biliProvider is not null)
+                case SearchSource.Local:
                 {
-                    try
+                    _searchLabel = "本地库";
+                    _searchEnded = true;
+                    var localMatches = Library.Tracks.OfType<Track>()
+                        .Where(t => t.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                                 || t.Artist.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    foreach (var t in localMatches)
                     {
-                        var online = await biliProvider.SearchAsync(keyword);
-                        foreach (var t in online)
-                            SearchResults.Add(t);
-                        biliCount = online.Count;
+                        _searchPool.Add(t);
+                        _seenSearchIds.Add($"{t.ProviderId}:{t.Id}");
                     }
-                    catch (BilibiliApiException ex)
+                    SyncSearchShown(localMatches.Count);
+                    SearchStatus = localMatches.Count == 0 ? "本地库未找到匹配结果" : $"本地库共 {localMatches.Count} 条";
+                    break;
+                }
+                case SearchSource.NetEase:
+                {
+                    var wy = FindPluginSource("netease", "wy", "网易");
+                    if (wy is null)
                     {
-                        SearchStatus = ex.Message;
+                        _searchEnded = true;
+                        SearchStatus = "网易云插件源未加载（设置→插件管理→重新加载）";
+                        break;
                     }
+                    _searchLabel = "网易云";
+                    _searchProvider = wy;
+                    _searchActiveSource = SearchSource.NetEase;
+                    await LoadSearchPagesAsync(session, SearchBatchSize);
+                    if (session != _searchSession) return;
+                    SyncSearchShown(SearchBatchSize);
+                    UpdateSearchStatusText();
+                    break;
+                }
+                case SearchSource.QQMusic:
+                {
+                    var qq = FindPluginSource("qqmusic", "qq", "酷gou");
+                    if (qq is null)
+                    {
+                        _searchEnded = true;
+                        SearchStatus = "QQ音乐插件源未加载（设置→插件管理→重新加载）";
+                        break;
+                    }
+                    _searchLabel = "QQ音乐";
+                    _searchProvider = qq;
+                    _searchActiveSource = SearchSource.QQMusic;
+                    await LoadSearchPagesAsync(session, SearchBatchSize);
+                    if (session != _searchSession) return;
+                    SyncSearchShown(SearchBatchSize);
+                    UpdateSearchStatusText();
+                    break;
+                }
+                case SearchSource.Bilibili:
+                {
+                    if (_registry.Find("bilibili") is not BilibiliMusicProvider bili)
+                    {
+                        _searchEnded = true;
+                        SearchStatus = "B站源未加载";
+                        break;
+                    }
+                    _searchLabel = "B站";
+                    _searchProvider = bili;
+                    _searchActiveSource = SearchSource.Bilibili;
+                    await LoadSearchPagesAsync(session, SearchBatchSize);
+                    if (session != _searchSession) return;
+                    SyncSearchShown(SearchBatchSize);
+                    UpdateSearchStatusText();
+                    break;
                 }
             }
-
-            // 已有错误信息时保留，否则显示统计
-            if (string.IsNullOrEmpty(SearchStatus))
-            {
-                SearchStatus = SearchResults.Count == 0
-                    ? "未找到匹配结果"
-                    : $"共 {SearchResults.Count} 条（本地 {localCount} + B站 {biliCount}）";
-            }
+            UpdateSearchMoreState();
         }
         catch (Exception ex)
         {
-            SearchStatus = $"搜索失败: {ex.Message}";
+            // 已有部分结果时保留并全部上屏，不判定取尽：保留“加载更多”入口以便重试失败页
+            if (_searchPool.Count == 0)
+            {
+                _searchEnded = true;
+                SearchStatus = $"搜索失败: {ex.Message}";
+            }
+            else
+            {
+                SyncSearchShown(int.MaxValue);
+                SearchStatus = $"{_searchLabel}加载中断: {ex.Message}（已显示 {_searchShownCount} 条，可点击「加载更多」重试）";
+            }
+            UpdateSearchMoreState();
         }
         finally
         {
-            IsSearching = false;
+            if (session == _searchSession) IsSearching = false;
         }
+    }
+
+    /// <summary>“加载更多”：继续按当前音源分页拉取并放行一批（默认再 +50 条）。</summary>
+    [RelayCommand]
+    private async Task LoadMoreSearchResultsAsync()
+    {
+        if (IsSearching || _searchEnded || _searchProvider is null) return;
+
+        var session = _searchSession;
+        IsSearching = true;
+        SearchMoreText = "正在加载…";
+        SearchStatus = $"{_searchLabel}正在加载更多…";
+        try
+        {
+            await LoadSearchPagesAsync(session, _searchShownCount + SearchBatchSize);
+            if (session != _searchSession) return;
+            SyncSearchShown(_searchShownCount + SearchBatchSize);
+            UpdateSearchStatusText();
+        }
+        catch (Exception ex)
+        {
+            if (session == _searchSession)
+            {
+                if (_searchPool.Count == 0)
+                    SearchStatus = $"加载失败: {ex.Message}";
+                else
+                {
+                    SyncSearchShown(int.MaxValue);
+                    SearchStatus = $"{_searchLabel}加载中断: {ex.Message}（已显示 {_searchShownCount} 条，可再次点击「加载更多」重试）";
+                }
+            }
+        }
+        finally
+        {
+            if (session == _searchSession)
+            {
+                SearchMoreText = "加载更多";
+                UpdateSearchMoreState();
+                IsSearching = false;
+            }
+        }
+    }
+
+    /// <summary>逐页拉取在线搜索结果直到池中达到 targetShown 条（取尽或达到单批页数上限时停止）。
+    /// 任一页失败向上抛出，由调用方决定展示策略（失败页号未前进，可重试）。</summary>
+    private async Task LoadSearchPagesAsync(int session, int targetShown)
+    {
+        var source = _searchActiveSource;
+        var pages = 0;
+        while (!_searchEnded && session == _searchSession && _searchPool.Count < targetShown &&
+               pages++ < SearchMaxPagesPerBatch)
+        {
+            var batch = await FetchSearchPageAsync(source, _searchNextPage);
+
+            if (session != _searchSession) return;
+            _searchNextPage++;
+            if (batch.Count == 0)
+            {
+                _searchEnded = true;
+                break;
+            }
+
+            var added = 0;
+            foreach (var t in batch)
+            {
+                var key = $"{t.ProviderId}:{t.Id}";
+                if (!_seenSearchIds.Add(key)) continue;
+                added++;
+                _searchPool.Add(t);
+            }
+            // 整页均为重复（如源的分页不稳定或已到尾部）：继续翻页只会重复请求，判定取尽
+            if (added == 0)
+            {
+                _searchEnded = true;
+                break;
+            }
+        }
+    }
+
+    /// <summary>按当前音源拉取指定页（第 1 页起）。</summary>
+    private Task<IReadOnlyList<Track>> FetchSearchPageAsync(SearchSource source, int page) => source switch
+    {
+        SearchSource.NetEase or SearchSource.QQMusic =>
+            ((JsPluginProvider)_searchProvider!).SearchPageAsync(_searchKeyword, page),
+        SearchSource.Bilibili =>
+            ((BilibiliMusicProvider)_searchProvider!).SearchPageAsync(_searchKeyword, page),
+        _ => Task.FromResult<IReadOnlyList<Track>>([])
+    };
+
+    /// <summary>让 SearchResults 与池前 N 条对齐（放行/回收）。</summary>
+    private void SyncSearchShown(int targetShown)
+    {
+        var want = Math.Min(targetShown, _searchPool.Count);
+        while (SearchResults.Count < want)
+            SearchResults.Add(_searchPool[SearchResults.Count]);
+        while (SearchResults.Count > want)
+            SearchResults.RemoveAt(SearchResults.Count - 1);
+        _searchShownCount = want;
+    }
+
+    /// <summary>刷新“加载更多”按钮可见性（仅在线分页进行中/未取尽时显示）。</summary>
+    private void UpdateSearchMoreState() =>
+        IsSearchMoreVisible = ViewMode == ViewMode.SearchResults && !_searchEnded &&
+                              SearchResults.Count > 0 && _searchProvider is not null;
+
+    /// <summary>按当前展示条数刷新状态栏文案。</summary>
+    private void UpdateSearchStatusText()
+    {
+        var n = SearchResults.Count;
+        if (n == 0)
+        {
+            if (_searchEnded) SearchStatus = $"{_searchLabel}未找到匹配结果";
+            return;
+        }
+        SearchStatus = _searchEnded
+            ? $"{_searchLabel}共 {n} 条"
+            : $"{_searchLabel}已显示 {n} 条，可点击下方「加载更多」继续";
     }
 }

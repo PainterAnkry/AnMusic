@@ -25,6 +25,12 @@ public sealed class UserDataStore
     public List<Track> Recent { get; set; } = [];
     public List<string> SearchHistory { get; set; } = [];
 
+    /// <summary>听歌统计：曲目 Id → 累计播放秒数。</summary>
+    public Dictionary<string, double> PlayStats { get; set; } = [];
+
+    /// <summary>累计听歌总时长（秒），用于等级计算。</summary>
+    public double TotalListeningSeconds { get; set; }
+
     /// <summary>从磁盘加载（损坏或不存在时返回空实例）。</summary>
     public static UserDataStore Load()
     {

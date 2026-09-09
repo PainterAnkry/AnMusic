@@ -52,6 +52,32 @@ public partial class LyricViewModel : ObservableObject
     [ObservableProperty]
     private int _lyricColorIndex;
 
+    /// <summary>歌词搜索关键词。</summary>
+    [ObservableProperty]
+    private string _searchText = "";
+
+    /// <summary>当前歌词行文本（供桌面歌词窗口绑定，无歌词时为空串）。</summary>
+    public string CurrentLineText
+    {
+        get
+        {
+            var idx = CurrentIndex;
+            if (idx < 0 || idx >= Lines.Count) return "";
+            return Lines[idx].Text ?? "";
+        }
+    }
+
+    /// <summary>当前歌词行译文（供桌面歌词窗口绑定，无译文时为空串）。</summary>
+    public string CurrentLineTranslation
+    {
+        get
+        {
+            var idx = CurrentIndex;
+            if (idx < 0 || idx >= Lines.Count) return "";
+            return Lines[idx].Translation ?? "";
+        }
+    }
+
     /// <summary>歌词正文画刷：0=跟随主题，其余为固定色。</summary>
     public Brush LyricForeground
     {
@@ -78,6 +104,12 @@ public partial class LyricViewModel : ObservableObject
 
     partial void OnLyricFontSizeChanged(double value) => OnPropertyChanged(nameof(LyricTranslationFontSize));
     partial void OnLyricColorIndexChanged(int value) => OnPropertyChanged(nameof(LyricForeground));
+
+    partial void OnCurrentIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(CurrentLineText));
+        OnPropertyChanged(nameof(CurrentLineTranslation));
+    }
 
     /// <summary>从用户设置同步歌词样式（切歌/加载时刷新）。</summary>
     private void RefreshLyricStyle()
@@ -113,6 +145,8 @@ public partial class LyricViewModel : ObservableObject
     public async Task LoadLyricsAsync(Track track)
     {
         RefreshLyricStyle();
+        _trackTitle = track.Title;
+        _trackArtist = track.Artist;
         Lines.Clear();
         CurrentIndex = -1;
         _document = null;
@@ -167,6 +201,113 @@ public partial class LyricViewModel : ObservableObject
     {
         if (!IsSynced) return;
         _engine.Seek(line.Time);
+    }
+
+    /// <summary>切换歌词字号（14 → 18 → 22 → 14）。</summary>
+    [RelayCommand]
+    private void ToggleFontSize()
+    {
+        var next = LyricFontSize switch
+        {
+            < 16 => 18,
+            < 20 => 22,
+            _ => 14
+        };
+        LyricFontSize = next;
+        _settingsService.Update(s => s.LyricFontSize = next);
+    }
+
+    /// <summary>循环切换歌词颜色（0=跟随主题 → 1=白 → 2=黑 → 3=粉 → 4=蓝 → 5=绿）。</summary>
+    [RelayCommand]
+    private void CycleColor()
+    {
+        var next = (LyricColorIndex + 1) % 6;
+        LyricColorIndex = next;
+        _settingsService.Update(s => s.LyricColorIndex = next);
+    }
+
+    /// <summary>当前曲目（手动歌词搜索时判断命中是否属于当前播放歌曲）。</summary>
+    private string _trackTitle = "";
+    private string _trackArtist = "";
+
+    /// <summary>搜索歌词（回车触发）：按输入的歌名/“歌名 - 歌手”在线匹配歌词。</summary>
+    [RelayCommand]
+    private async Task SearchLyricsByNameAsync()
+    {
+        var query = SearchText?.Trim();
+        if (string.IsNullOrEmpty(query))
+            return;
+
+        if (_onlineLyricProvider is not LrclibLyricProvider lrclib)
+        {
+            StatusText = "歌词搜索源不可用（LRCLIB 在线歌词未启用）";
+            return;
+        }
+
+        // 支持 “歌名 - 歌手” 格式（其它输入整体作为歌名模糊匹配）
+        var dash = query.LastIndexOf(" - ", StringComparison.Ordinal);
+        var title = dash > 0 ? query[..dash].Trim() : query;
+        var artist = dash > 0 ? query[(dash + 3)..].Trim() : null;
+
+        StatusText = $"正在搜索“{query}”的歌词…";
+        try
+        {
+            var hit = await lrclib.SearchBestAsync(title, artist);
+            if (hit is null)
+            {
+                StatusText = $"未找到“{query}”的歌词";
+                return;
+            }
+
+            var doc = _parser.Parse(hit.Lrc);
+            if (doc is null || doc.Lines.Count == 0)
+            {
+                StatusText = $"“{query}”暂无可用歌词";
+                return;
+            }
+
+            // 命中是否属于当前播放曲目（歌名+歌手宽松匹配都通过才视为同步装载）
+            var isCurrent = _trackTitle.Length > 0
+                && NameEquals(hit.Title, _trackTitle)
+                && (hit.Artist.Length == 0 || NameEquals(hit.Artist, _trackArtist));
+
+            Lines.Clear();
+            CurrentIndex = -1;
+            IsTranslated = false;
+            _translations = null;
+            HasLyrics = true;
+
+            if (isCurrent)
+            {
+                // 与自动加载一致：跟随播放进度、可点击行跳转
+                _document = doc;
+                IsSynced = doc.IsSynced;
+                StatusText = doc.IsSynced ? "在线歌词 (LRCLIB)" : "纯文本歌词（无时间戳）";
+            }
+            else
+            {
+                // 预览其他歌曲的歌词：不绑定播放进度，行点击不跳转播放
+                _document = null;
+                IsSynced = false;
+                StatusText = $"预览歌词：{hit.Title} - {hit.Artist}（非当前播放歌曲）";
+            }
+            foreach (var line in doc.Lines)
+                Lines.Add(line);
+        }
+        catch
+        {
+            StatusText = "歌词搜索失败（网络异常）";
+        }
+    }
+
+    /// <summary>忽略大小写的宽松名称比较（允许括号版本/前后缀差异）。</summary>
+    private static bool NameEquals(string a, string b)
+    {
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            return false;
+        a = a.Trim().ToLowerInvariant();
+        b = b.Trim().ToLowerInvariant();
+        return a == b || (a.Length >= 3 && (a.Contains(b) || b.Contains(a)));
     }
 
     /// <summary>切换歌词翻译显示（机器翻译为中文，双行对照）。</summary>

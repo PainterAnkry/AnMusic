@@ -1,0 +1,97 @@
+<UserControl x:Class="AnMusic.Views.Controls.ListenTogetherPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Background="{DynamicResource BgPanel}"
+             d:DesignHeight="400" d:DesignWidth="380">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <Style x:Key="LtBtn" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource RoundedButtonTemplate}"/>
+        </Style>
+        <Style x:Key="LtBtnOutline" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource BgControl}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource RoundedButtonTemplate}"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border CornerRadius="8" Padding="24,20" MaxWidth="380">
+        <StackPanel>
+            <DockPanel Margin="0,0,0,16">
+                <TextBlock Text="🎧 在线一起听" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource FgPrimary}" VerticalAlignment="Center"/>
+                <Button DockPanel.Dock="Right" Content="✕" Width="28" Height="28"
+                        Style="{StaticResource LtBtnOutline}" FontSize="14"
+                        HorizontalAlignment="Right" ToolTip="关闭"
+                        Command="{Binding TogglePanelCommand}"/>
+            </DockPanel>
+
+            <!-- 未连接 -->
+            <StackPanel Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVis}}">
+                <Button Content="创建房间" Style="{StaticResource LtBtn}"
+                        Command="{Binding CreateRoomCommand}" Margin="0,0,0,12"
+                        HorizontalAlignment="Stretch"/>
+                <TextBlock Text="或通过邀请链接加入" Foreground="{DynamicResource FgMuted}"
+                           FontSize="12" Margin="0,4,0,6"/>
+                <TextBox Text="{Binding JoinLinkInput, UpdateSourceTrigger=PropertyChanged}"
+                         Background="{DynamicResource BgControl}" BorderBrush="{DynamicResource BorderSubtle}"
+                         Foreground="{DynamicResource FgPrimary}" FontSize="12" Padding="8,6"
+                         ToolTip="粘贴邀请链接"/>
+                <Button Content="加入房间" Style="{StaticResource LtBtnOutline}"
+                        Command="{Binding JoinRoomCommand}" Margin="0,8,0,0"
+                        HorizontalAlignment="Stretch"/>
+            </StackPanel>
+
+            <!-- 房主模式 -->
+            <StackPanel Visibility="{Binding IsHost, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="邀请链接" Foreground="{DynamicResource FgSecondary}"
+                           FontSize="12" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding InviteLink, Mode=OneWay}" IsReadOnly="True"
+                         Background="{DynamicResource BgControl}" BorderBrush="{DynamicResource BorderSubtle}"
+                         Foreground="{DynamicResource FgPrimary}" FontSize="11" Padding="8,6"
+                         TextWrapping="Wrap"/>
+                <Button Content="📋 复制链接" Style="{StaticResource LtBtnOutline}"
+                        Command="{Binding CopyLinkCommand}" Margin="0,8,0,12"
+                        HorizontalAlignment="Stretch"/>
+                <TextBlock Text="{Binding MemberCountText}" Foreground="{DynamicResource FgSecondary}"
+                           FontSize="12" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding MembersText}" Foreground="{DynamicResource FgNormal}"
+                           FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                <Button Content="关闭房间" Style="{StaticResource LtBtnOutline}"
+                        Command="{Binding DisconnectCommand}"
+                        HorizontalAlignment="Stretch"/>
+            </StackPanel>
+
+            <!-- 成员模式 -->
+            <StackPanel Visibility="{Binding IsClient, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="已连接到房间" Foreground="{DynamicResource Accent}"
+                           FontSize="13" FontWeight="Medium" Margin="0,0,0,8"/>
+                <TextBlock Text="{Binding MemberCountText}" Foreground="{DynamicResource FgSecondary}"
+                           FontSize="12" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding MembersText}" Foreground="{DynamicResource FgNormal}"
+                           FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                <Button Content="离开房间" Style="{StaticResource LtBtnOutline}"
+                        Command="{Binding DisconnectCommand}"
+                        HorizontalAlignment="Stretch"/>
+            </StackPanel>
+
+            <!-- 状态提示 -->
+            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource FgMuted}"
+                       FontSize="11" Margin="0,16,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+    </Border>
+</UserControl>

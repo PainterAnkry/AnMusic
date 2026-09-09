@@ -25,6 +25,10 @@ public partial class PlaybackBarViewModel : ObservableObject
     [ObservableProperty]
     private string _currentArtist = "";
 
+    /// <summary>当前播放的曲目（用于收藏状态判断等）。</summary>
+    [ObservableProperty]
+    private Track? _currentTrack;
+
     [ObservableProperty]
     private string? _coverPath;
 
@@ -136,6 +140,20 @@ public partial class PlaybackBarViewModel : ObservableObject
         _engine.PlaybackFailed += OnPlaybackFailed;
     }
 
+    /// <summary>队列播完且无下一首时的自动补充回调（个性电台无限续播）；返回 true 表示已追加新曲目。</summary>
+    public Func<Task<bool>>? AutoRefillHandler { get; set; }
+
+    /// <summary>用户主动 Seek（拖动进度条 / 点击进度条）时触发，参数为目标秒数。</summary>
+    /// <remarks>供"在线一起听"房主端转发 seek 指令使用；不会因自然播放进度推进而触发。</remarks>
+    public event Action<double>? Seeked;
+
+    /// <summary>当前曲目被替换（LoadAndPlayAsync 加载新曲目）时触发；供"在线一起听"房主端转发 changeTrack 使用。</summary>
+    public event Action<Track>? TrackChanged;
+
+    /// <summary>播放状态切换（play ↔ pause）时触发；供"在线一起听"房主端转发 play/pause 使用。</summary>
+    /// <remarks>仅在外部主动切换（用户点击或远程指令回放）时触发，IsPlaying 属性变化即代表一次状态切换。</remarks>
+    public event Action<bool>? PlayStateChanged;
+
     /// <summary>从队列播放指定索引的曲目。</summary>
     public async Task PlayFromQueueAsync()
     {
@@ -172,12 +190,14 @@ public partial class PlaybackBarViewModel : ObservableObject
 
             await _engine.LoadAsync(track);
             IsLoaded = true;
+            CurrentTrack = track;
             CurrentTitle = track.Title;
             CurrentArtist = track.Artist;
             CoverPath = track.CoverKey;
             DurationSeconds = _engine.Duration.TotalSeconds;
             PositionSeconds = 0;
             RefreshUpNext();
+            TrackChanged?.Invoke(track);
             _engine.Play();
         }
         catch (Exception ex)
@@ -228,6 +248,7 @@ public partial class PlaybackBarViewModel : ObservableObject
         var target = TimeSpan.FromSeconds(Math.Clamp(targetSeconds, 0, DurationSeconds));
         _engine.Seek(target);
         PositionSeconds = target.TotalSeconds;
+        Seeked?.Invoke(target.TotalSeconds);
     }
 
     /// <summary>点击进度条直接跳转（不改变拖动状态，便于抓着滑块继续拖动）。</summary>
@@ -237,11 +258,24 @@ public partial class PlaybackBarViewModel : ObservableObject
         var target = TimeSpan.FromSeconds(Math.Clamp(targetSeconds, 0, DurationSeconds));
         _engine.Seek(target);
         PositionSeconds = target.TotalSeconds;
+        Seeked?.Invoke(target.TotalSeconds);
     }
 
     private async void OnTrackEnded(object? sender, Track track)
     {
         var next = _queue.MoveNext();
+
+        // 队列播完且电台续播回调就绪：先补充一批推荐曲目再继续
+        if (next is null && AutoRefillHandler is { } refill)
+        {
+            try
+            {
+                if (await refill())
+                    next = _queue.MoveNext();
+            }
+            catch { /* 补充失败则按无下一首处理 */ }
+        }
+
         if (next is not null)
         {
             await Application.Current.Dispatcher.InvokeAsync(async () =>
@@ -259,7 +293,13 @@ public partial class PlaybackBarViewModel : ObservableObject
 
     private void OnStateChanged(object? sender, PlaybackState state)
     {
-        Application.Current?.Dispatcher.Invoke(() => IsPlaying = state == PlaybackState.Playing);
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            var wasPlaying = IsPlaying;
+            IsPlaying = state == PlaybackState.Playing;
+            if (wasPlaying != IsPlaying)
+                PlayStateChanged?.Invoke(IsPlaying);
+        });
     }
 
     private void OnPositionChanged(object? sender, TimeSpan position)

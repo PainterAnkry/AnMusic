@@ -71,6 +71,75 @@ public sealed class LrclibLyricProvider : IOnlineLyricProvider, ILyricProvider
         return string.IsNullOrEmpty(lrc) ? null : _parser.Parse(lrc);
     }
 
+    /// <summary>模糊搜索的歌词命中项（元数据供展示/判断是否匹配当前曲目）。</summary>
+    public sealed record LyricSearchHit(string Title, string Artist, string Lrc);
+
+    /// <summary>按用户输入搜索歌词（手动歌词搜索）：返回最佳命中，优先含时间戳的同步歌词。
+    /// 建议输入“歌名”或“歌名 - 歌手”，title/artist 由调用方拆分后传入。</summary>
+    public async Task<LyricSearchHit?> SearchBestAsync(string title, string? artist = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return null;
+        title = title.Trim();
+        artist = artist?.Trim();
+
+        // 有歌手时双字段搜索更精确；仅歌名时用 q 模糊匹配（跨 歌名/歌手）
+        var url = string.IsNullOrEmpty(artist)
+            ? $"{BaseUrl}/api/search?q={Uri.EscapeDataString(title)}"
+            : $"{BaseUrl}/api/search?track_name={Uri.EscapeDataString(title)}&artist_name={Uri.EscapeDataString(artist)}";
+
+        using var resp = await _http.GetAsync(url, ct);
+        if (!resp.IsSuccessStatusCode)
+            return null;
+        var items = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement[]>(cancellationToken: ct);
+        if (items is not { Length: > 0 })
+            return null;
+
+        // 评分选最优：同步歌词优先；歌名/歌手越接近分数越高
+        LyricSearchHit? best = null;
+        var bestScore = int.MinValue;
+        foreach (var item in items)
+        {
+            if (item.ValueKind != System.Text.Json.JsonValueKind.Object)
+                continue;
+            var hitTitle = GetString(item, "trackName");
+            var hitArtist = GetString(item, "artistName");
+            if (hitTitle.Length == 0)
+                continue;
+
+            var synced = ExtractSynced(item);
+            var plain = ExtractPlain(item);
+            if (string.IsNullOrEmpty(synced) && string.IsNullOrEmpty(plain))
+                continue; // 无歌词文本的条目直接跳过
+
+            var score = 0;
+            if (!string.IsNullOrEmpty(synced)) score += 2;
+            var t = title.ToLowerInvariant();
+            var ht = hitTitle.ToLowerInvariant();
+            if (ht == t) score += 3;
+            else if (ht.Contains(t) || t.Contains(ht)) score += 1;
+            if (!string.IsNullOrEmpty(artist))
+            {
+                var a = artist.ToLowerInvariant();
+                var ha = hitArtist.ToLowerInvariant();
+                if (ha == a) score += 2;
+                else if (ha.Contains(a) || a.Contains(ha)) score += 1;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = new LyricSearchHit(hitTitle, hitArtist, !string.IsNullOrEmpty(synced) ? synced! : plain!);
+            }
+        }
+        return best;
+    }
+
+    private static string GetString(System.Text.Json.JsonElement el, string name) =>
+        el.TryGetProperty(name, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String
+            ? p.GetString() ?? ""
+            : "";
+
     private async Task<System.Text.Json.JsonElement?> TryGetJsonAsync(string url, CancellationToken ct)
     {
         try

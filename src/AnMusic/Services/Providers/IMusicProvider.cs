@@ -2,6 +2,19 @@ using AnMusic.Models;
 
 namespace AnMusic.Services.Providers;
 
+/// <summary>音频音质等级。</summary>
+public enum AudioQuality
+{
+    /// <summary>标准 128kbps。</summary>
+    Standard = 128000,
+    /// <summary>较高 192kbps。</summary>
+    Higher = 192000,
+    /// <summary>极高 320kbps。</summary>
+    ExHigh = 320000,
+    /// <summary>无损 FLAC。</summary>
+    Lossless = 999000
+}
+
 /// <summary>
 /// 音乐源提供者抽象（可插拔架构）。
 /// 本地文件、在线 API 均实现此接口，通过 DI 注册。
@@ -23,4 +36,10 @@ public interface IOnlineMusicProvider : IMusicProvider
 {
     /// <summary>将在线曲目解析/缓冲为本地文件并返回路径（已缓存则直接复用）。</summary>
     Task<string> ResolveToLocalAsync(Track track, CancellationToken ct = default);
+
+    /// <summary>获取曲目可选音质列表。</summary>
+    Task<IReadOnlyList<AudioQuality>> GetAvailableQualitiesAsync(Track track, CancellationToken ct = default);
+
+    /// <summary>按指定音质下载并返回本地路径。</summary>
+    Task<string> DownloadAsync(Track track, AudioQuality quality, CancellationToken ct = default);
 }

@@ -79,8 +79,38 @@ public sealed class BoolToLoadingTextConverter : IValueConverter
 }
 
 /// <summary>
+/// bool → Accent 色 / FgSecondary 色（用于翻译按钮高亮）。
+/// </summary>
+public sealed class BoolToAccentConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is bool b && b)
+            return System.Windows.Application.Current.TryFindResource("Accent") as System.Windows.Media.Brush
+                   ?? System.Windows.Media.Brushes.Blue;
+        return System.Windows.Application.Current.TryFindResource("FgSecondary") as System.Windows.Media.Brush
+               ?? System.Windows.Media.Brushes.Gray;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
 /// string 路径 → BitmapImage（用于封面图绑定）。
 /// </summary>
+/// <summary>字符串非空 → Collapsed（用于有头像时隐藏默认占位图标，避免双层叠加）。</summary>
+public sealed class StringNotEmptyToCollapsedConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is string s && !string.IsNullOrEmpty(s)
+            ? System.Windows.Visibility.Collapsed
+            : System.Windows.Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 public sealed class PathToImageConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -90,7 +120,14 @@ public sealed class PathToImageConverter : IValueConverter
 
         try
         {
-            return new System.Windows.Media.Imaging.BitmapImage(new Uri(path));
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+            bmp.UriSource = new Uri(path);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
         }
         catch
         {

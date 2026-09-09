@@ -16,6 +16,7 @@ public class SearchSourceToCheckedConverter : IValueConverter
         => value is bool b && b ? Target : (object)Binding.DoNothing;
 }
 
-public sealed class SrcAllCheckedConverter : SearchSourceToCheckedConverter { public SrcAllCheckedConverter() => Target = SearchSource.All; }
 public sealed class SrcLocalCheckedConverter : SearchSourceToCheckedConverter { public SrcLocalCheckedConverter() => Target = SearchSource.Local; }
+public sealed class SrcNeteaseCheckedConverter : SearchSourceToCheckedConverter { public SrcNeteaseCheckedConverter() => Target = SearchSource.NetEase; }
+public sealed class SrcQQCheckedConverter : SearchSourceToCheckedConverter { public SrcQQCheckedConverter() => Target = SearchSource.QQMusic; }
 public sealed class SrcBiliCheckedConverter : SearchSourceToCheckedConverter { public SrcBiliCheckedConverter() => Target = SearchSource.Bilibili; }

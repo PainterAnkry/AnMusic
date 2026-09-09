@@ -24,5 +24,8 @@ public interface IPlaylistQueue
     /// <summary>把曲目插到当前曲目之后（"下一首播放"）。</summary>
     void InsertNext(Track track);
 
+    /// <summary>把一批曲目追加到队列末尾（个性电台自动续播）。</summary>
+    void Append(IEnumerable<Track> tracks);
+
     event EventHandler? CurrentChanged;
 }

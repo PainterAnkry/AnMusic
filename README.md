@@ -1,53 +1,49 @@
 # AnMusic 🎵
 
-一款基于 WPF 的桌面音乐播放器，支持本地音乐库管理与 B 站在线音乐搜索、播放与下载。
+一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v2.0.0**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-2.0.0-orange)
 
 ## 功能特性
 
 ### 音乐播放
 - 本地音频播放（mp3 / flac / wav / m4a / aac / wma / ogg），基于 NAudio 3.1
-- B 站视频音频搜索、在线播放（自动缓冲到本地）与**下载到本地**（重名自动编号，下载后可直接入库播放）
-- 进度条支持**点击跳转**与拖动微调
-- 四态播放模式一键切换：**顺序播放 → 列表循环 → 单曲循环 → 随机播放**
-- "播放列表"面板：实时预览接下来 5 首待播曲目（按当前模式计算）
-- 全局媒体键（播放/暂停、上一首、下一首、停止），后台也可控制
-- 音量记忆、窗口位置与尺寸记忆
-
-### 歌单与曲库
-- 本地音乐库自动扫描，读取标签元数据与内嵌封面
-- 歌单：创建 / 重命名 / 删除 / **批量导入**本地音频文件（自动读取标签与封面，去重）
-- 曲目右键菜单：播放、下一首播放、加入/移出我喜欢、下载、添加到歌单、从歌单中删除
-- "我喜欢"收藏（本地与 B 站曲目均支持）、最近播放记录
-- 搜索历史下拉、按来源筛选（全部 / 本地 / B 站）
+- **多音源在线搜索**：网易云、QQ音乐、B站（插件源可继续扩展），自动缓冲到本地后播放
+- 搜索结果分页展示：每批 **50 条**，点击**「加载更多」**继续翻页，跨页自动去重
+- **音源插件（MusicFree 兼容）**：把 `.js` 插件放进插件目录即接入（内置 axios、crypto-js、dayjs、jsencrypt 等宿主库，支持插件清单自动下载）
+- 排行榜（热歌/新歌等榜单）、个性电台（按“我喜欢”自动推荐续播）、听歌排行
+- 进度条**点击即精确跳转**（点哪播哪、线性映射无偏差），按住可拖动微调
+- 四态播放模式：**顺序 → 列表循环 → 单曲循环 → 随机**
+- “播放列表”面板实时预览接下来 5 首；**在线一起听**（创建房间/邀请链接加入，同步播放）
+- 在线歌曲**下载到本地**（重名自动编号）；全局媒体键；音量/窗口状态记忆
 
 ### 歌词
-- 自动匹配歌词：LRCLIB 在线歌词库 + 本地同名 `.lrc` 文件
-- 逐行同步滚动高亮
-- **歌词翻译**：必应翻译优先（国内直连），Google 接口自动兜底，原文译文双行对照
-- 歌词字号（12–24px）与颜色（跟随主题 / 白 / 黑 / 粉 / 蓝 / 绿）自定义
+- 自动匹配：本地同名 `.lrc` + LRCLIB 在线歌词库
+- **手动歌词搜索**：输入歌名（支持 `歌名 - 歌手`）在线匹配，命中当前播放曲目即同步装载，其他歌曲以预览展示
+- **桌面歌词**：独立置顶悬浮窗（可拖动/置顶/隐藏）；歌词卡片播放模式
+- 逐行同步高亮；**歌词翻译**（译文对照）；字号/颜色自定义
 
-### 音效
-- 10 段图形均衡器（基于 `NAudio.Effects.GraphicEqualizer`）
-- 预设音效一键应用，增益状态跨歌曲保留
+### 用户与歌单
+- 用户中心：**圆形头像自由裁剪上传**、昵称编辑、听歌等级/经验成长
+- 歌单：创建/重命名/删除/批量导入；“我喜欢”、最近播放、搜索历史
+- 曲目右键菜单：播放、下一首播放、收藏、下载、加入歌单等
 
-### 界面
-- 深色 / 浅色主题切换（科技蓝强调色）
-- 自定义背景图片 + 不透明度调节，设置页/歌词页/内容区统一半透明蒙层
-- 无边框圆角窗口（Win11 DWM 原生圆角），自绘标题栏（齿轮设置按钮）
-- 全局圆角按钮风格
+### 音效与界面
+- 10 段图形均衡器 + 预设
+- 深/浅主题 + 强调色方案、动态壁纸粒子、自定义背景图与透明度
+- 无边框圆角窗口（Win11 DWM 原生圆角）、自绘标题栏
+- 设置页内置**检查更新**（对比 GitHub Releases）
 
 ## 技术栈
 
 | 组件 | 说明 |
 |---|---|
-| .NET 10 (LTS) | 运行时 |
+| .NET 10 | 运行时 |
 | WPF + MVVM | UI 框架，CommunityToolkit.Mvvm 源生成器 |
-| NAudio 3.1 | 音频引擎与均衡器（`NAudio.Effects`） |
+| NAudio 3.1 | 音频引擎与均衡器 |
+| Jint 4 | JS 音源插件宿主（MusicFree 兼容子集） |
 | TagLibSharp | 音频元数据与封面读取 |
-| MaterialDesignThemes | 部分控件样式 |
-| Microsoft.Extensions.DependencyInjection | 依赖注入 |
 | Inno Setup 6 | 安装包制作 |
 
 ## 快速开始
@@ -59,7 +55,7 @@
 ### 从源码运行
 
 ```bash
-git clone <仓库地址>
+git clone https://github.com/PainterAnkry/AnMusic.git
 cd AnMusic
 dotnet run --project src/AnMusic/AnMusic.csproj
 ```
@@ -75,7 +71,7 @@ dotnet publish src/AnMusic/AnMusic.csproj -c Release -r win-x64 \
   -o publish
 ```
 
-产物：`publish/AnMusic.exe`（约 75 MB，免安装，可拷贝到任意 Windows 机器运行）
+产物：`publish/AnMusic.exe`（约 80 MB，免安装，可直接运行，便携版即此文件）
 
 ### 制作安装包
 
@@ -89,6 +85,15 @@ dotnet publish src/AnMusic/AnMusic.csproj -c Release -r win-x64 \
 
 产物：`installer/AnMusic-Setup-<版本>.exe`，按用户安装无需管理员权限，卸载时保留用户数据。
 
+## 音源插件（MusicFree 兼容）
+
+1. 打开设置 → 音源插件 →「📂 插件文件夹」，把社区 `.js` 音源插件放入
+2. 点击「🔄 重新加载」即可在搜索来源中看到新音源
+3. 也可以在 `plugins.json` 清单里声明远程插件地址，应用启动时自动下载
+
+插件需实现 MusicFree 协议函数：`search(keyword, page, type)`、`getMediaSource(musicItem, quality)` 等。
+引擎为插件提供了 `require('axios')`、`crypto-js`、`dayjs`、`big-integer`、`jsencrypt`、`he`、`qs` 等宿主模块。
+
 ## 项目结构
 
 ```
@@ -98,22 +103,17 @@ AnMusic/
 ├── publish/                      # 发布输出目录
 └── src/AnMusic/
     ├── Models/                   # 数据模型（Track、Playlist、Lyric…）
-    ├── ViewModels/               # MVVM 视图模型
-    │   ├── MainViewModel.cs      # 主视图状态/搜索/歌单管理
-    │   ├── PlaybackBarViewModel  # 播放控制/进度/音量/播放模式
-    │   ├── LyricViewModel.cs     # 歌词加载/同步/翻译
-    │   └── SettingsViewModel.cs  # 主题/背景图/歌词样式设置
-    ├── Views/                    # 页面与控件
-    │   ├── Pages/                # 设置页等
-    │   └── Controls/             # 歌词页 LyricView 等
+    ├── ViewModels/               # MVVM 视图模型（主视图/播放控制/歌词/设置/一起听）
+    ├── Views/                    # 页面与控件（设置页、桌面歌词、头像裁剪等）
     ├── Services/
     │   ├── Audio/                # NAudio 引擎封装、均衡器
-    │   ├── Providers/            # 本地文件 / B站 API Provider
+    │   ├── Providers/            # B站/插件(Jint)/封面缓存等 Provider
     │   ├── Playlist/             # 播放队列、用户数据持久化
     │   ├── Lyrics/               # LRCLIB/本地歌词、翻译服务
+    │   ├── ListenTogether/       # 在线一起听（房间同步）
     │   └── Settings/             # 用户设置
-    ├── Converters/               # 值转换器（含 ContextMenu 绑定代理）
-    └── Themes/                   # 深色/浅色主题资源字典
+    ├── Converters/               # 值转换器
+    └── Assets/                   # 图标与插件宿主内置 JS 库
 ```
 
 ## 数据存储
@@ -122,15 +122,15 @@ AnMusic/
 |---|---|
 | 用户数据（歌单、我喜欢、最近播放、搜索历史） | `%LocalAppData%\AnMusic\userdata.json` |
 | 应用设置（主题、背景图、音量、窗口状态等） | `%LocalAppData%\AnMusic\settings.json` |
-| 在线音频缓存 / 下载目录 | 设置页可配置，默认 `音乐\AnMusic` |
+| 音源插件目录 / 封面与音频缓存 | `%AppData%\AnMusic\plugins`、`%LocalAppData%\AnMusic\covers` |
 
 卸载应用不会删除以上数据。
 
 ## 常见问题
 
-- **B 站搜索报 412 / 搜不到？** 已内置浏览器请求头与 Cookie 处理；若仍失败多为 B 站风控临时拦截，稍后重试即可。
-- **歌词翻译失败？** 优先走必应翻译（国内可用），失败时自动切 Google；请确认网络可访问 `cn.bing.com` 或 `translate.google.com`。
-- **B 站下载的文件没有封面/标签？** B 站音频为 fMP4 流格式，程序已做文件名回退解析（`歌手 - 标题.m4a`）。
+- **在线源搜索/播放失败？** 在线能力依赖第三方公开接口与插件网关，偶发风控或超时请稍后重试；插件源加载失败可在设置 → 音源插件 → 重新加载并查看 `plugins/load-errors.log`。
+- **歌词翻译失败？** 自动在必应/Google 接口间兜底，请确认网络可访问。
+- **B 站音频下载后没有封面/标签？** B 站音频为 fMP4 流格式，程序已做文件名回退解析（`歌手 - 标题.m4a`）。
 
 ## License
 

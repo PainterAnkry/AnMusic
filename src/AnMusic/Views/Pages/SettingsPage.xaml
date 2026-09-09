@@ -147,6 +147,27 @@
                 </ComboBox>
             </Grid>
 
+            <!-- 强调色 -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="强调色" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="选择主题强调色方案" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1" Width="120" Style="{StaticResource PageCombo}"
+                          SelectedIndex="{Binding AccentColorIndex}">
+                    <ComboBoxItem Content="科技蓝"/>
+                    <ComboBoxItem Content="暗夜紫"/>
+                    <ComboBoxItem Content="森林绿"/>
+                    <ComboBoxItem Content="日落橙"/>
+                    <ComboBoxItem Content="玫瑰红"/>
+                    <ComboBoxItem Content="海洋青"/>
+                </ComboBox>
+            </Grid>
+
             <!-- 音乐库 -->
             <TextBlock Text="音乐库" Style="{StaticResource SectionTitle}"/>
             <Grid>
@@ -178,7 +199,7 @@
                     <TextBlock Text="{Binding DefaultVolume, StringFormat={}{0:P0}}"
                                Foreground="{DynamicResource FgSecondary}" FontSize="11"
                                HorizontalAlignment="Right"/>
-                    <Slider Minimum="0" Maximum="1" Value="{Binding DefaultVolume}"/>
+                    <Slider Minimum="0" Maximum="1" Value="{Binding DefaultVolume}" IsMoveToPointEnabled="True"/>
                 </StackPanel>
             </Grid>
 
@@ -201,9 +222,9 @@
                                TextTrimming="CharacterEllipsis"
                                Text="{Binding BackgroundImagePath, FallbackValue=（未设置，使用默认背景）}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                        <TextBlock Text="不透明度" Style="{StaticResource SettingDesc}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="不透明度" Foreground="{DynamicResource FgSecondary}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Slider Minimum="0" Maximum="1" Value="{Binding BackgroundOpacity}"
-                                Width="120" VerticalAlignment="Center"/>
+                                Width="120" VerticalAlignment="Center" IsMoveToPointEnabled="True"/>
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -212,6 +233,24 @@
                     <Button Content="清除" Style="{StaticResource PageButton}"
                             Command="{Binding ClearBackgroundCommand}"/>
                 </StackPanel>
+            </Grid>
+
+            <!-- 动态壁纸 -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="动态壁纸" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="在背景层渲染粒子动画（鼠标跟随/星河），颜色跟随主题强调色" Style="{StaticResource SettingDesc}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1" Width="140" Style="{StaticResource PageCombo}"
+                          SelectedIndex="{Binding WallpaperIndex}">
+                    <ComboBoxItem Content="关闭"/>
+                    <ComboBoxItem Content="鼠标跟随"/>
+                    <ComboBoxItem Content="星河"/>
+                </ComboBox>
             </Grid>
 
             <!-- 音乐源 -->
@@ -226,6 +265,40 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- 音源插件（外部 .js） -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="音源插件 (.js)" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="把音乐源 .js 插件文件放入 %AppData%\AnMusic\plugins 即可接入新音源（MusicFree 兼容子集）"
+                               Style="{StaticResource SettingDesc}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="📂 插件文件夹" Style="{StaticResource PageButton}"
+                            Command="{Binding OpenPluginFolderCommand}" Margin="0,0,6,0"/>
+                    <Button Content="🔄 重新加载" Style="{StaticResource PageButton}"
+                            Command="{Binding ReloadPluginsAsyncCommand}"/>
+                </StackPanel>
+            </Grid>
+            <ItemsControl ItemsSource="{Binding JsPlugins}" Margin="0,6,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="10,6" Margin="0,0,0,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🧩 " FontSize="13"/>
+                                <TextBlock Text="{Binding DisplayName}" Foreground="{DynamicResource FgNormal}" FontSize="13"/>
+                                <TextBlock Text="{Binding Version, StringFormat=  v{0}}" Foreground="{DynamicResource FgMuted}" FontSize="11"/>
+                                <TextBlock Text="{Binding FileName, StringFormat=  ({0})}" Foreground="{DynamicResource FgMuted}" FontSize="11"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <Button Content="🧹 清理B站音频缓存" HorizontalAlignment="Left"
                     Background="{DynamicResource BgControl}" Foreground="{DynamicResource FgPrimary}"
                     BorderThickness="0" Padding="12,6" FontSize="13" Cursor="Hand"
@@ -261,7 +334,7 @@
                                Foreground="{DynamicResource FgSecondary}" FontSize="11"
                                HorizontalAlignment="Right"/>
                     <Slider Minimum="12" Maximum="24" Value="{Binding LyricFontSize}"
-                            IsSnapToTickEnabled="True" TickFrequency="1"/>
+                            IsSnapToTickEnabled="True" TickFrequency="1" IsMoveToPointEnabled="True"/>
                 </StackPanel>
             </Grid>
 
@@ -283,6 +356,93 @@
                     <ComboBoxItem Content="粉色"/>
                     <ComboBoxItem Content="蓝色"/>
                     <ComboBoxItem Content="绿色"/>
+                </ComboBox>
+            </Grid>
+
+            <!-- 关于 -->
+            <TextBlock Text="关于" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="当前版本" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="AnMusic 开源音乐播放器" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}"
+                               Foreground="{DynamicResource FgSecondary}" FontSize="12" VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <Button Content="{Binding UpdateCheckText}" Style="{StaticResource PageButton}"
+                            Command="{Binding CheckForUpdatesCommand}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 用户协议（点击查看） -->
+            <TextBlock Text="用户协议" Style="{StaticResource SectionTitle}"/>
+            <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="12,8">
+                <Grid>
+                    <TextBlock Text="使用本软件即表示您同意《用户协议》，点击右侧按钮查看全文。"
+                               Foreground="{DynamicResource FgSecondary}" FontSize="11"
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <Button Content="查看" Style="{StaticResource PageButton}"
+                            Command="{Binding ShowAgreementCommand}"
+                            HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- 免责声明（点击查看） -->
+            <TextBlock Text="免责声明" Style="{StaticResource SectionTitle}"/>
+            <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="12,8">
+                <Grid>
+                    <TextBlock Text="本软件按&quot;现状&quot;提供，点击右侧按钮查看完整免责声明。"
+                               Foreground="{DynamicResource FgSecondary}" FontSize="11"
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <Button Content="查看" Style="{StaticResource PageButton}"
+                            Command="{Binding ShowDisclaimerCommand}"
+                            HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- 联系作者 -->
+            <TextBlock Text="联系作者" Style="{StaticResource SectionTitle}"/>
+            <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="12,10">
+                <StackPanel>
+                    <Grid Margin="0,0,0,6">
+                        <TextBlock Text="邮箱：835176240@qq.com" Style="{StaticResource SettingLabel}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="发邮件" Style="{StaticResource PageButton}"
+                                    Command="{Binding SendEmailCommand}" Margin="0,0,6,0"/>
+                            <Button Content="复制" Style="{StaticResource PageButton}"
+                                    Command="{Binding CopyEmailCommand}"/>
+                        </StackPanel>
+                    </Grid>
+                    <Grid>
+                        <TextBlock Text="交流QQ群：348061212" Style="{StaticResource SettingLabel}"/>
+                        <Button Content="复制群号" Style="{StaticResource PageButton}"
+                                Command="{Binding CopyQQGroupCommand}"
+                                HorizontalAlignment="Right"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 关闭行为 -->
+            <TextBlock Text="关闭行为" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="关闭窗口时" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="选择关闭窗口时的默认行为" Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <ComboBox Grid.Column="1" Width="120" Style="{StaticResource PageCombo}"
+                          SelectedIndex="{Binding CloseBehaviorIndex}">
+                    <ComboBoxItem Content="每次询问"/>
+                    <ComboBoxItem Content="后台运行"/>
+                    <ComboBoxItem Content="直接关闭"/>
                 </ComboBox>
             </Grid>
 

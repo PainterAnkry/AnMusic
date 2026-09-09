@@ -6,15 +6,27 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
+  <!-- 插件宿主内置 JS 库（require('crypto-js') 等宿主模块） -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Plugins\crypto-js.min.js" />
+    <EmbeddedResource Include="Assets\Plugins\dayjs.min.js" />
+    <EmbeddedResource Include="Assets\Plugins\big-integer.min.js" />
+    <EmbeddedResource Include="Assets\Plugins\jsencrypt.min.js" />
+    <EmbeddedResource Include="Assets\Plugins\he.min.js" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Jint" Version="4.16.1" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.158" />

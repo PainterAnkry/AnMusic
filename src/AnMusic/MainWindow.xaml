@@ -21,16 +21,19 @@
     </WindowChrome.WindowChrome>
     <Window.Resources>
         <converters:PathToImageConverter x:Key="PathToImageConv"/>
+        <converters:StringNotEmptyToCollapsedConverter x:Key="StrNotEmptyToCollapsed"/>
         <converters:SecondsToTextConverter x:Key="SecondsToTextConv"/>
         <converters:TimeSpanToTextConverter x:Key="TimeSpanToTextConv"/>
         <converters:BoolToPlayTextConverter x:Key="BoolToPlayText"/>
         <converters:BoolToLoadingTextConverter x:Key="BoolToLoadingText"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
         <converters:StringNotEmptyToVisibilityConverter x:Key="StrNotEmptyToVis"/>
-        <converters:SrcAllCheckedConverter x:Key="SrcAllCk"/>
         <converters:SrcLocalCheckedConverter x:Key="SrcLocalCk"/>
+        <converters:SrcNeteaseCheckedConverter x:Key="SrcNeteaseCk"/>
+        <converters:SrcQQCheckedConverter x:Key="SrcQQCk"/>
         <converters:SrcBiliCheckedConverter x:Key="SrcBiliCk"/>
         <converters:AllFalseToVisibilityConverter x:Key="AllFalseToVis"/>
+        <converters:BoolToAccentConverter x:Key="BoolToAccent"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- ContextMenu/Popup 不在窗口视觉树中，AncestorType 绑定失效；经代理访问 MainViewModel 命令 -->
         <converters:BindingProxy x:Key="VmProxy" Data="{Binding}"/>
@@ -185,32 +188,55 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-        <!-- 搜索来源切换单选：自定义模板保证圆圈与文字对齐，选中为蓝色实心 -->
-        <Style x:Key="SrcRadio" TargetType="RadioButton">
+        <!-- 搜索来源筛选标签（搜索框正下方横向标签栏）：选中项高亮 -->
+        <Style x:Key="SrcTab" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Margin" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border Background="Transparent" Padding="10,4">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}">
-                                <Ellipse x:Name="ring" Width="11" Height="11"
-                                         Stroke="{DynamicResource FgMuted}" StrokeThickness="1.5"
-                                         Fill="Transparent" VerticalAlignment="Center"/>
-                                <ContentPresenter Margin="5,0,0,0" VerticalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"
-                                                  TextBlock.FontSize="{TemplateBinding FontSize}"/>
-                            </StackPanel>
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="12" Padding="12,4">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"
+                                              TextBlock.FontSize="{TemplateBinding FontSize}"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource BgControl}"/>
+                            </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="ring" Property="Fill" Value="{DynamicResource Accent}"/>
-                                <Setter TargetName="ring" Property="Stroke" Value="{DynamicResource Accent}"/>
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentSoft}"/>
                                 <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- 排行榜子榜单标签（与音源标签同款交互） -->
+        <Style x:Key="BoardTab" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="12" Padding="12,4" Margin="0,0,6,0">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"
+                                              TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource BgControl}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -221,11 +247,44 @@
 
     <!-- 根 Grid：自定义背景图 + 主布局 -->
     <Grid x:Name="RootGrid" PreviewMouseLeftButtonDown="CloseHistoryPopupIfOutside">
-        <!-- 背景图片层（设置页可选，默认隐藏） -->
+        <!-- 背景图片层（设置页可选，默认隐藏）：当动态壁纸关闭时显示 -->
         <Image Stretch="UniformToFill" IsHitTestVisible="False"
                Source="{Binding Settings.BackgroundImagePath, Converter={StaticResource PathToImageConv}}"
-               Opacity="{Binding Settings.BackgroundOpacity}"
-               Visibility="{Binding Settings.BackgroundImagePath, Converter={StaticResource StrNotEmptyToVis}}"/>
+               Opacity="{Binding Settings.BackgroundOpacity}">
+            <Image.Style>
+                <Style TargetType="Image">
+                    <Setter Property="Visibility" Value="{Binding Settings.BackgroundImagePath, Converter={StaticResource StrNotEmptyToVis}}"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Settings.WallpaperIndex}" Value="1">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Settings.WallpaperIndex}" Value="2">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Image.Style>
+        </Image>
+
+        <!-- 动态壁纸层：WallpaperIndex>0 时显示，模式 = WallpaperIndex（1=鼠标跟随, 2=星河） -->
+        <controls:ParticleBackground IsHitTestVisible="False">
+            <controls:ParticleBackground.Style>
+                <Style TargetType="controls:ParticleBackground">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Setter Property="Mode" Value="1"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Settings.WallpaperIndex}" Value="1">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Setter Property="Mode" Value="1"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Settings.WallpaperIndex}" Value="2">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Setter Property="Mode" Value="2"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </controls:ParticleBackground.Style>
+        </controls:ParticleBackground>
 
         <DockPanel>
         <!-- 自定义标题栏：左标题区（可拖动），右 齿轮设置 + 最小化/最大化/关闭 -->
@@ -238,6 +297,80 @@
                                VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <!-- 用户入口：仅头像，点击展开资料下拉面板（昵称/等级/经验在面板内查看与修改） -->
+                    <Button x:Name="UserButton" Click="UserButton_Click" Style="{StaticResource CaptionBtn}"
+                            Width="44" Height="34" ToolTip="个人资料">
+                        <Grid Width="24" Height="24" VerticalAlignment="Center">
+                            <TextBlock Text="👤" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource FgSecondary}"
+                                       Visibility="{Binding UserAvatarPath, Converter={StaticResource StrNotEmptyToCollapsed}}"/>
+                            <!-- 双层：内层头像圆（精确填满居中），外层描边圆不叠压图像 -->
+                            <Ellipse Width="21" Height="21" StrokeThickness="0">
+                                <Ellipse.Fill>
+                                    <!-- UniformToFill 等比放大并居中：非方形图片也不会拉伸/偏移 -->
+                                    <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center">
+                                        <ImageBrush.ImageSource>
+                                            <Binding Path="UserAvatarPath" Converter="{StaticResource PathToImageConv}"/>
+                                        </ImageBrush.ImageSource>
+                                    </ImageBrush>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <Ellipse Width="24" Height="24" Stroke="{DynamicResource Accent}" StrokeThickness="1" Fill="Transparent"/>
+                        </Grid>
+                    </Button>
+                    <!-- 用户资料下拉面板：头像裁剪 + 昵称编辑 + 等级/经验进度 -->
+                    <Popup x:Name="UserPopup" PlacementTarget="{Binding ElementName=UserButton}" Placement="Bottom"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource BgPanel}" CornerRadius="10"
+                                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                Width="240" Margin="0,4,8,8" Padding="16,14">
+                            <StackPanel>
+                                <Border Width="64" Height="64" CornerRadius="32" Cursor="Hand"
+                                        Background="{DynamicResource BgControl}" HorizontalAlignment="Center"
+                                        MouseLeftButtonDown="PopupAvatar_Click" ToolTip="点击更换头像（支持自由裁剪）">
+                                    <Grid>
+                                        <TextBlock Text="👤" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Visibility="{Binding UserAvatarPath, Converter={StaticResource StrNotEmptyToCollapsed}}"/>
+                                        <!-- 头像圆：显式尺寸填满圆框（UniformToFill 等比居中），PNG 四角透明与圆框一致 -->
+                                        <Ellipse Width="58" Height="58">
+                                            <Ellipse.Fill>
+                                                <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center">
+                                                    <ImageBrush.ImageSource>
+                                                        <Binding Path="UserAvatarPath" Converter="{StaticResource PathToImageConv}"/>
+                                                    </ImageBrush.ImageSource>
+                                                </ImageBrush>
+                                            </Ellipse.Fill>
+                                        </Ellipse>
+                                    </Grid>
+                                </Border>
+                                <TextBlock Text="点击头像更换（支持裁剪）" FontSize="10"
+                                           Foreground="{DynamicResource FgMuted}"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                <TextBlock Text="昵称" FontSize="11" Foreground="{DynamicResource FgMuted}" Margin="0,12,0,4"/>
+                                <TextBox Text="{Binding UserNickname, UpdateSourceTrigger=LostFocus}" FontSize="12"
+                                         Background="{DynamicResource BgControl}" Foreground="{DynamicResource FgPrimary}"
+                                         BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                         Padding="8,6" ToolTip="修改后自动保存"/>
+                                <DockPanel Margin="0,14,0,4">
+                                    <Border DockPanel.Dock="Right" Background="{DynamicResource Accent}" CornerRadius="6" Padding="5,1">
+                                        <TextBlock Text="{Binding UserLevel, StringFormat=Lv.{0}}"
+                                                   Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                    </Border>
+                                    <TextBlock Text="听歌等级" FontSize="11" Foreground="{DynamicResource FgMuted}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+                                <ProgressBar Height="6" Minimum="0" Maximum="100"
+                                             Value="{Binding UserLevelProgressValue, Mode=OneWay}"
+                                             Foreground="{DynamicResource Accent}"
+                                             Background="{DynamicResource BgControl}" BorderThickness="0"/>
+                                <TextBlock Text="{Binding UserLevelProgress}" FontSize="10"
+                                           Foreground="{DynamicResource FgMuted}" Margin="0,4,0,0"/>
+                                <TextBlock Text="{Binding TotalListeningText, StringFormat=累计听歌 {0}}" FontSize="10"
+                                           Foreground="{DynamicResource FgMuted}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                     <Button Style="{StaticResource CaptionBtn}" Click="SettingsButton_Click" ToolTip="设置">
                         <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
                     </Button>
@@ -351,25 +484,47 @@
                             </Border>
                         </Popup>
                     </StackPanel>
-                    <!-- 进度条 -->
+                    <!-- 进度条 + 爱心收藏 -->
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding PlaybackBar.PositionSeconds, Converter={StaticResource SecondsToTextConv}}"
+                        <!-- 爱心收藏：空心未收藏 / 实心已收藏，点击切换 -->
+                        <Button Grid.Column="0" Command="{Binding ToggleCurrentFavoriteCommand}"
+                                Style="{StaticResource PlayerBtn}" Margin="0,0,8,0"
+                                ToolTip="加入/移出我喜欢" FontSize="16" VerticalAlignment="Center">
+                            <Button.Content>
+                                <TextBlock FontFamily="Segoe MDL2 Assets">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="&#xE006;"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCurrentFavorited}" Value="True">
+                                                    <Setter Property="Text" Value="&#xEB51;"/>
+                                                    <Setter Property="Foreground" Value="#E91E63"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button.Content>
+                        </Button>
+                        <TextBlock Grid.Column="1" Text="{Binding PlaybackBar.PositionSeconds, Converter={StaticResource SecondsToTextConv}}"
                                    Foreground="{DynamicResource FgSecondary}" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Slider Grid.Column="1" x:Name="ProgressSlider"
+                        <Slider Grid.Column="2" x:Name="ProgressSlider"
                                 Minimum="0" Maximum="{Binding PlaybackBar.DurationSeconds}"
                                 Value="{Binding PlaybackBar.PositionSeconds}"
-                                IsMoveToPointEnabled="True"
                                 PreviewMouseLeftButtonDown="ProgressSlider_PreviewMouseLeftButtonDown"
+                                PreviewMouseMove="ProgressSlider_PreviewMouseMove"
                                 PreviewMouseLeftButtonUp="ProgressSlider_PreviewMouseLeftButtonUp"
                                 Thumb.DragStarted="ProgressSlider_DragStarted"
                                 Thumb.DragCompleted="ProgressSlider_DragCompleted"
                                 VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding PlaybackBar.DurationSeconds, Converter={StaticResource SecondsToTextConv}}"
+                        <TextBlock Grid.Column="3" Text="{Binding PlaybackBar.DurationSeconds, Converter={StaticResource SecondsToTextConv}}"
                                    Foreground="{DynamicResource FgSecondary}" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
                     </Grid>
                 </StackPanel>
@@ -381,11 +536,35 @@
                     <TextBlock Text="🔊" Foreground="{DynamicResource FgSecondary}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     <Slider Width="80" Minimum="0" Maximum="1"
                             Value="{Binding PlaybackBar.Volume}"
+                            IsMoveToPointEnabled="True"
                             VerticalAlignment="Center"/>
+                    <!-- 桌词：打开/关闭桌面歌词窗口（独立置顶悬浮窗） -->
+                    <Button Content="桌词" Command="{Binding ToggleDesktopLyricsCommand}"
+                            FontSize="11"
+                            Margin="8,0,0,0" ToolTip="桌面歌词">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource PlayerBtn}">
+                                <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDesktopLyricsOpen}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                     <!-- 词：弹出/收起歌词页 -->
                     <Button Content="词" Command="{Binding ToggleLyricsCommand}"
                             Style="{StaticResource PlayerBtn}" FontSize="13"
                             Margin="8,0,0,0" ToolTip="歌词"/>
+                    <!-- 在线一起听 -->
+                    <Button x:Name="ListenTogetherBtn" Content="🎧" Click="ListenTogetherButton_Click"
+                            Style="{StaticResource PlayerBtn}" FontSize="14"
+                            Margin="8,0,0,0" ToolTip="在线一起听"/>
+                    <Popup x:Name="ListenTogetherPopup" PlacementTarget="{Binding ElementName=ListenTogetherBtn}"
+                           Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <controls:ListenTogetherPanel DataContext="{Binding ListenTogether}"/>
+                    </Popup>
                 </StackPanel>
             </Grid>
         </Border>
@@ -400,86 +579,83 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 左：品牌 + 返回/打开文件夹 -->
+                <!-- 左：品牌 + 全局前进/返回导航 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="AnMusic" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource Accent}"
                                VerticalAlignment="Center" Margin="0,0,16,0"/>
-                    <!-- 设置页或搜索页时显示返回按钮 -->
-                    <Button Content="← 返回音乐库" Command="{Binding ShowAllTracksCommand}"
-                            Style="{StaticResource BtnStyle}"
-                            Visibility="{Binding IsShowingSettings, Converter={StaticResource BoolToVis}}"/>
-                    <Button Content="← 返回音乐库" Command="{Binding ShowAllTracksCommand}"
-                            Style="{StaticResource BtnStyle}"
-                            Visibility="{Binding IsShowingSearch, Converter={StaticResource BoolToVis}}"/>
-                    <!-- 设置页和搜索页都关闭时显示打开文件夹 -->
-                    <Button Content="📂 打开文件夹" Command="{Binding Library.SelectDirectoryCommand}"
-                            Style="{StaticResource BtnStyle}">
-                        <Button.Visibility>
-                            <MultiBinding Converter="{StaticResource AllFalseToVis}">
-                                <Binding Path="IsShowingSettings"/>
-                                <Binding Path="IsShowingSearch"/>
-                            </MultiBinding>
-                        </Button.Visibility>
+                    <!-- 全局返回按钮 -->
+                    <Button Command="{Binding GoBackCommand}" Style="{StaticResource PlayerBtn}"
+                            Width="32" Height="32" FontSize="14" ToolTip="返回"
+                            IsEnabled="{Binding CanGoBack}">
+                        <TextBlock Text="&#xE72B;" FontFamily="Segoe MDL2 Assets"/>
+                    </Button>
+                    <!-- 全局前进按钮 -->
+                    <Button Command="{Binding GoForwardCommand}" Style="{StaticResource PlayerBtn}"
+                            Width="32" Height="32" FontSize="14" ToolTip="前进" Margin="6,0,0,0"
+                            IsEnabled="{Binding CanGoForward}">
+                        <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets"/>
                     </Button>
                 </StackPanel>
 
-                <!-- 中：来源切换 + 搜索框 -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- 来源切换（UniformGrid 等宽，圆圈与文字对齐） -->
-                    <Border Background="{DynamicResource BgControl}" CornerRadius="14" Padding="2" Margin="0,0,8,0">
-                        <UniformGrid Columns="3">
-                            <RadioButton Content="全部" GroupName="Src" Style="{StaticResource SrcRadio}"
-                                         IsChecked="{Binding SearchSource, Converter={StaticResource SrcAllCk}, Mode=TwoWay}"/>
-                            <RadioButton Content="本地" GroupName="Src" Style="{StaticResource SrcRadio}"
-                                         IsChecked="{Binding SearchSource, Converter={StaticResource SrcLocalCk}, Mode=TwoWay}"/>
-                            <RadioButton Content="B站" GroupName="Src" Style="{StaticResource SrcRadio}"
-                                         IsChecked="{Binding SearchSource, Converter={StaticResource SrcBiliCk}, Mode=TwoWay}"/>
-                        </UniformGrid>
-                    </Border>
-                    <!-- 搜索框 -->
-                    <Border x:Name="SearchBoxBorder" Background="{DynamicResource BgControl}"
-                            CornerRadius="20" Padding="14,6" MinWidth="260">
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="🔍" Style="{StaticResource SearchBtn}"
-                                    FontSize="14" Margin="4,0,0,0"
-                                    Command="{Binding SearchCommand}" ToolTip="搜索"/>
-                            <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     Background="Transparent" BorderThickness="0"
-                                     Foreground="{DynamicResource FgPrimary}"
-                                     VerticalContentAlignment="Center" FontSize="13"
-                                     KeyDown="SearchTextBox_KeyDown"
-                                     GotKeyboardFocus="SearchBox_GotFocus"
-                                     ToolTip="输入关键词，回车搜索"/>
-                        </DockPanel>
-                    </Border>
-                    <!-- 搜索历史（聚焦搜索框时下拉，点击外部关闭） -->
-                    <Popup x:Name="HistoryPopup" PlacementTarget="{Binding ElementName=SearchBoxBorder}" Placement="Bottom"
-                           StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
-                        <Border Background="{DynamicResource BgPanel}" CornerRadius="8"
-                                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                                Margin="0,2,0,8" Width="260" Padding="6"
-                                Visibility="{Binding ElementName=HistoryList, Path=HasItems, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <ItemsControl x:Name="HistoryList" ItemsSource="{Binding SearchHistory}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Button HorizontalContentAlignment="Left"
-                                                    Style="{StaticResource SearchBtn}" Padding="10,6" FontSize="12"
-                                                    Click="HistoryItem_Click">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="🕘 " Margin="0,0,4,0"/>
-                                                    <TextBlock Text="{Binding}"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <Button Content="清空搜索历史" Style="{StaticResource SearchBtn}" Padding="10,6"
-                                        FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource FgMuted}"
-                                        Click="ClearHistory_Click"/>
-                            </StackPanel>
+                <!-- 中：搜索框（正下方为音源筛选标签栏） -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <!-- 搜索框 -->
+                        <Border x:Name="SearchBoxBorder" Background="{DynamicResource BgControl}"
+                                CornerRadius="20" Padding="14,6" MinWidth="260">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="🔍" Style="{StaticResource SearchBtn}"
+                                        FontSize="14" Margin="4,0,0,0"
+                                        Command="{Binding SearchCommand}" ToolTip="搜索"/>
+                                <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource FgPrimary}"
+                                         VerticalContentAlignment="Center" FontSize="13"
+                                         KeyDown="SearchTextBox_KeyDown"
+                                         GotKeyboardFocus="SearchBox_GotFocus"
+                                         ToolTip="输入关键词，回车搜索"/>
+                            </DockPanel>
                         </Border>
-                    </Popup>
+                        <!-- 搜索历史（聚焦搜索框时下拉，点击外部关闭） -->
+                        <Popup x:Name="HistoryPopup" PlacementTarget="{Binding ElementName=SearchBoxBorder}" Placement="Bottom"
+                               StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
+                            <Border Background="{DynamicResource BgPanel}" CornerRadius="8"
+                                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                    Margin="0,2,0,8" Width="260" Padding="6"
+                                    Visibility="{Binding ElementName=HistoryList, Path=HasItems, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <ItemsControl x:Name="HistoryList" ItemsSource="{Binding SearchHistory}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button HorizontalContentAlignment="Left"
+                                                        Style="{StaticResource SearchBtn}" Padding="10,6" FontSize="12"
+                                                        Click="HistoryItem_Click">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="🕘 " Margin="0,0,4,0"/>
+                                                        <TextBlock Text="{Binding}"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Content="清空搜索历史" Style="{StaticResource SearchBtn}" Padding="10,6"
+                                            FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource FgMuted}"
+                                            Click="ClearHistory_Click"/>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </StackPanel>
+                    <!-- 音源筛选标签栏：本地 / 网易云 / QQ音乐 / B站（选中高亮） -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+                        <RadioButton Content="本地" GroupName="Src" Style="{StaticResource SrcTab}"
+                                     IsChecked="{Binding SearchSource, Converter={StaticResource SrcLocalCk}, Mode=TwoWay}"/>
+                        <RadioButton Content="网易云" GroupName="Src" Style="{StaticResource SrcTab}"
+                                     IsChecked="{Binding SearchSource, Converter={StaticResource SrcNeteaseCk}, Mode=TwoWay}"/>
+                        <RadioButton Content="QQ音乐" GroupName="Src" Style="{StaticResource SrcTab}"
+                                     IsChecked="{Binding SearchSource, Converter={StaticResource SrcQQCk}, Mode=TwoWay}"/>
+                        <RadioButton Content="B站" GroupName="Src" Style="{StaticResource SrcTab}"
+                                     IsChecked="{Binding SearchSource, Converter={StaticResource SrcBiliCk}, Mode=TwoWay}"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- 右：状态 + 设置 -->
@@ -550,61 +726,113 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                    <!-- 导航项（顶部） -->
+                    <!-- 导航项：上组 = 发现（排行榜/听歌排行/个性电台） -->
                     <StackPanel>
-                        <Button Command="{Binding ShowSearchCommand}"
-                                Visibility="{Binding IsSearchView, Converter={StaticResource BoolToVis}}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
-                                    <Setter Property="Content" Value="🔍  搜索结果"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsSearchView}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
-                                            <Setter Property="FontWeight" Value="Bold"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Command="{Binding ShowAllTracksCommand}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
-                                    <Setter Property="Content" Value="🎵  全部音乐"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAllTracksView}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
-                                            <Setter Property="FontWeight" Value="Bold"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Command="{Binding ShowRecentCommand}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
-                                    <Setter Property="Content" Value="🕐  最近播放"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsRecentView}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
-                                            <Setter Property="FontWeight" Value="Bold"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Command="{Binding ShowFavoritesCommand}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
-                                    <Setter Property="Content" Value="❤  我喜欢"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsFavoritesView}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
-                                            <Setter Property="FontWeight" Value="Bold"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                        <Border Background="{DynamicResource BgMainAlpha}" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                Padding="4" Margin="0,0,0,10">
+                            <StackPanel>
+                                <Button Command="{Binding ShowRankingCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="🏆  排行榜"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRankingView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Command="{Binding ShowListeningStatsCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="📊  听歌排行"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsListeningStatsView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Command="{Binding ShowRadioCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="📻  个性电台"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRadioView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                        <!-- 下组 = 我的音乐（搜索结果/全部音乐/最近播放/我喜欢） -->
+                        <Border Background="{DynamicResource BgMainAlpha}" CornerRadius="8"
+                                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                Padding="4">
+                            <StackPanel>
+                                <Button Command="{Binding ShowSearchCommand}"
+                                        Visibility="{Binding IsSearchView, Converter={StaticResource BoolToVis}}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="🔍  搜索结果"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSearchView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Command="{Binding ShowAllTracksCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="🎵  全部音乐"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAllTracksView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Command="{Binding ShowRecentCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="🕐  最近播放"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRecentView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Command="{Binding ShowFavoritesCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
+                                            <Setter Property="Content" Value="❤  我喜欢"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsFavoritesView}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </DockPanel>
             </Border>
@@ -615,14 +843,20 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- 视图标题栏：与下方状态条、曲目列表同用蒙底无缝拼成大框 -->
-                <Border Grid.Row="0" Background="{DynamicResource BgMainAlpha}" Padding="16,10">
+                <!-- 视图标题栏：不透明背景，避免左右缝隙透出底层背景图 -->
+                <Border Grid.Row="0" Background="{DynamicResource BgPanel}" Padding="16,10">
                     <DockPanel>
-                        <Button DockPanel.Dock="Right" Content="▶ 播放全部"
-                                Command="{Binding PlayAllCurrentCommand}" Style="{StaticResource BtnStyle}"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="📂 打开文件夹" Command="{Binding Library.SelectDirectoryCommand}"
+                                    Style="{StaticResource BtnStyle}" Margin="0,0,8,0"/>
+                            <Button Content="▶ 播放全部"
+                                    Command="{Binding PlayAllCurrentCommand}" Style="{StaticResource BtnStyle}"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding CurrentViewTitle}" FontSize="18" FontWeight="Bold"
                                        Foreground="{DynamicResource FgPrimary}" VerticalAlignment="Center"/>
@@ -632,13 +866,30 @@
                     </DockPanel>
                 </Border>
 
+                <!-- 排行榜子榜单切换行（仅排行榜视图显示） -->
+                <Border Grid.Row="1" Background="{DynamicResource BgPanel}" Padding="16,2"
+                        Visibility="{Binding IsRankingView, Converter={StaticResource BoolToVis}}">
+                    <ListBox ItemsSource="{Binding RankingBoardNames}"
+                             SelectedItem="{Binding SelectedRankingBoard, Mode=TwoWay}"
+                             Background="Transparent" BorderThickness="0" Margin="0,4,0,6">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource BoardTab}"/>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+                </Border>
+
                 <!-- 搜索状态条 -->
-                <Border Grid.Row="1" Padding="12,5" Background="{DynamicResource AccentSoft}">
+                <Border Grid.Row="2" Padding="12,5" Background="{DynamicResource AccentSoft}">
                     <TextBlock Text="{Binding SearchStatus}" Foreground="{DynamicResource FgSecondary}" FontSize="12"
                                Visibility="{Binding SearchStatus, Converter={StaticResource StrNotEmptyToVis}}"/>
                 </Border>
 
-                <ListView Grid.Row="2" x:Name="TrackList"
+                <ListView Grid.Row="3" x:Name="TrackList"
                           ItemsSource="{Binding CurrentTracks}"
                           Background="{DynamicResource BgMainAlpha}" BorderThickness="0"
                           ItemContainerStyle="{StaticResource TrackListStyle}"
@@ -701,6 +952,17 @@
                 </ListView.View>
                 </ListView>
 
+                <!-- 搜索分页：结果超过一批时显示“加载更多”（网易云/QQ音乐/B站） -->
+                <Border Grid.Row="4" Padding="0,8,0,10"
+                        Background="{DynamicResource BgMainAlpha}"
+                        Visibility="{Binding IsSearchMoreVisible, Converter={StaticResource BoolToVis}}">
+                    <Button Command="{Binding LoadMoreSearchResultsCommand}"
+                            Content="{Binding SearchMoreText}"
+                            Style="{StaticResource BtnStyle}" Padding="30,7" Cursor="Hand"
+                            HorizontalAlignment="Center"
+                            ToolTip="继续加载更多搜索结果"/>
+                </Border>
+
             </Grid>
 
             <!-- 设置覆盖层：独立于内容区（内容区已隐藏），蒙层后只有背景图 -->
@@ -711,32 +973,161 @@
             <Border Grid.Column="1" Background="{DynamicResource BgMainAlpha}"
                     Visibility="{Binding IsLyricsOpen, Converter={StaticResource BoolToVis}}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,12,0">
-                        <Button Command="{Binding Lyrics.ToggleTranslationCommand}"
-                                Background="Transparent" BorderThickness="0" FontSize="13" FontWeight="Bold"
-                                Foreground="{DynamicResource FgSecondary}" Cursor="Hand" Padding="10,2"
-                                ToolTip="翻译歌词（中译文）">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Lyrics.IsTranslated}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            译
-                        </Button>
-                        <Button Content="✕ 收起歌词"
-                                Background="Transparent" Foreground="{DynamicResource FgSecondary}"
-                                BorderThickness="0" FontSize="12" Cursor="Hand" Margin="12,0,0,0"
-                                ToolTip="关闭歌词"
-                                Command="{Binding ToggleLyricsCommand}"/>
-                    </StackPanel>
+                    <!-- 顶部：曲目信息 + 工具栏 -->
+                    <Border DockPanel.Dock="Top" Background="{DynamicResource BgPanel}" Padding="16,12"
+                            BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- 左：封面 + 曲名/作者/专辑（可点击跳转） -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Border CornerRadius="6" Width="48" Height="48" Background="{DynamicResource BgControl}"
+                                        Margin="0,0,12,0">
+                                    <Grid>
+                                        <TextBlock Text="🎵" FontSize="20" Foreground="{DynamicResource FgMuted}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Image Width="44" Height="44" Stretch="Uniform">
+                                            <Image.Source>
+                                                <Binding Path="PlaybackBar.CoverPath" Converter="{StaticResource PathToImageConv}"/>
+                                            </Image.Source>
+                                        </Image>
+                                    </Grid>
+                                </Border>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding PlaybackBar.CurrentTitle}" Foreground="{DynamicResource FgPrimary}"
+                                               FontSize="16" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <TextBlock Text="歌手：" Foreground="{DynamicResource FgMuted}" FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding PlaybackBar.CurrentArtist}" Foreground="{DynamicResource Accent}"
+                                                   FontSize="12" Cursor="Hand" TextDecorations="Underline"
+                                                   MouseLeftButtonDown="LyricArtist_Click"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="120" VerticalAlignment="Center"/>
+                                        <TextBlock Text="  专辑：" Foreground="{DynamicResource FgMuted}" FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding PlaybackBar.CurrentTrack.Album}" Foreground="{DynamicResource Accent}"
+                                                   FontSize="12" Cursor="Hand" TextDecorations="Underline"
+                                                   MouseLeftButtonDown="LyricAlbum_Click"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="120" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                            <!-- 右：工具栏（字体大小/颜色/翻译/搜索/关闭） -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- 歌词搜索框 -->
+                                <Border Background="{DynamicResource BgControl}" CornerRadius="12" Padding="8,2" Margin="0,0,8,0">
+                                    <DockPanel Width="140">
+                                        <TextBlock DockPanel.Dock="Right" Text="🔍" Foreground="{DynamicResource FgMuted}"
+                                                   FontSize="11" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                        <Grid>
+                                            <!-- 占位提示：文本为空时显示 -->
+                                            <TextBlock Text="搜索歌词" Foreground="{DynamicResource FgMuted}"
+                                                       FontSize="11" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Lyrics.SearchText}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBox Text="{Binding Lyrics.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                                     Background="Transparent" BorderThickness="0"
+                                                     Foreground="{DynamicResource FgPrimary}" FontSize="11"
+                                                     VerticalContentAlignment="Center"
+                                                     ToolTip="输入歌名搜索歌词（如 Ref:rain - Aimer），回车匹配"
+                                                     KeyDown="LyricSearch_KeyDown"/>
+                                        </Grid>
+                                    </DockPanel>
+                                </Border>
+                                <!-- 字体大小 T 按钮 -->
+                                <Button Command="{Binding Lyrics.ToggleFontSizeCommand}"
+                                        Style="{StaticResource PlayerBtn}" Width="32" Height="32"
+                                        FontSize="13" FontWeight="Bold" ToolTip="切换歌词字号"
+                                        Content="T"/>
+                                <!-- 字体颜色按钮 -->
+                                <Button Command="{Binding Lyrics.CycleColorCommand}"
+                                        Style="{StaticResource PlayerBtn}" Width="32" Height="32" Margin="6,0,0,0"
+                                        ToolTip="切换歌词颜色">
+                                    <TextBlock Text="🎨" FontSize="14"/>
+                                </Button>
+                                <!-- 翻译按钮 -->
+                                <Button Command="{Binding Lyrics.ToggleTranslationCommand}"
+                                        Style="{StaticResource PlayerBtn}" Width="32" Height="32" Margin="6,0,0,0"
+                                        FontSize="13" FontWeight="Bold" ToolTip="翻译歌词（中译文）"
+                                        Content="译"
+                                        Foreground="{Binding Lyrics.IsTranslated, Converter={StaticResource BoolToAccent}}"/>
+                                <!-- 收起歌词 -->
+                                <Button Content="✕" Command="{Binding ToggleLyricsCommand}"
+                                        Style="{StaticResource PlayerBtn}" Width="32" Height="32" Margin="6,0,0,0"
+                                        ToolTip="关闭歌词"/>
+                                <!-- 卡片播放模式 -->
+                                <Button Content="🎛" Command="{Binding ToggleCardModeCommand}"
+                                        Style="{StaticResource PlayerBtn}" Width="32" Height="32" Margin="6,0,0,0"
+                                        ToolTip="卡片播放模式"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                     <controls:LyricView DataContext="{Binding Lyrics}" Margin="12,0,12,12"/>
                 </DockPanel>
             </Border>
         </Grid>
         </DockPanel>
+
+        <!-- 歌词卡片播放模式：极简界面，仅封面+歌词行+播放键+进度条 -->
+        <Grid Visibility="{Binding IsCardMode, Converter={StaticResource BoolToVis}}">
+            <Border Background="#E0000000"/>
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="500">
+                <!-- 封面（大圆） -->
+                <Border Width="200" Height="200" CornerRadius="100" ClipToBounds="True"
+                        HorizontalAlignment="Center" Margin="0,0,0,24">
+                    <Grid>
+                        <TextBlock Text="🎵" FontSize="80" Foreground="#444"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Image Source="{Binding PlaybackBar.CoverPath, Converter={StaticResource PathToImageConv}}"
+                               Stretch="Uniform"/>
+                    </Grid>
+                </Border>
+                <!-- 当前歌词行 -->
+                <TextBlock Text="{Binding Lyrics.CurrentLineText}"
+                           Foreground="White" FontSize="18" FontWeight="Medium"
+                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="400"
+                           Margin="0,0,0,24"/>
+                <!-- 进度条 -->
+                <Grid Width="400" Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding PlaybackBar.PositionSeconds, Converter={StaticResource SecondsToTextConv}}"
+                               Foreground="#99FFFFFF" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Slider Grid.Column="1" Minimum="0" Maximum="{Binding PlaybackBar.DurationSeconds}"
+                            Value="{Binding PlaybackBar.PositionSeconds}"
+                            PreviewMouseLeftButtonDown="ProgressSlider_PreviewMouseLeftButtonDown"
+                            PreviewMouseMove="ProgressSlider_PreviewMouseMove"
+                            PreviewMouseLeftButtonUp="ProgressSlider_PreviewMouseLeftButtonUp"
+                            Thumb.DragStarted="ProgressSlider_DragStarted"
+                            Thumb.DragCompleted="ProgressSlider_DragCompleted"
+                            VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{Binding PlaybackBar.DurationSeconds, Converter={StaticResource SecondsToTextConv}}"
+                               Foreground="#99FFFFFF" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </Grid>
+                <!-- 播放/暂停 -->
+                <Button Content="{Binding PlaybackBar.IsPlaying, Converter={StaticResource BoolToPlayText}}"
+                        Command="{Binding PlaybackBar.PlayPauseCommand}"
+                        Width="56" Height="56" FontSize="24"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource PlayPrimaryBtn}"/>
+            </StackPanel>
+            <!-- 退出卡片模式 -->
+            <Button Content="✕" Command="{Binding ToggleCardModeCommand}"
+                    Style="{StaticResource PlayerBtn}" Width="32" Height="32"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,16,16,0" ToolTip="退出卡片模式"/>
+        </Grid>
     </Grid>
 </Window>

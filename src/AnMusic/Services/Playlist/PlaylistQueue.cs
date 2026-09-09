@@ -198,6 +198,15 @@ public sealed class PlaylistQueue : IPlaylistQueue
         if (_shuffle) RegenerateShuffleOrder();
     }
 
+    /// <summary>把一批曲目追加到队列末尾；随机模式下重建洗牌顺序。</summary>
+    public void Append(IEnumerable<Track> tracks)
+    {
+        var added = tracks as ICollection<Track> ?? tracks.ToList();
+        if (added.Count == 0) return;
+        _items.AddRange(added);
+        if (_shuffle) RegenerateShuffleOrder();
+    }
+
     private void RegenerateShuffleOrder()
     {
         var indices = Enumerable.Range(0, _items.Count).ToList();

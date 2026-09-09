@@ -204,6 +204,43 @@ public sealed class BilibiliApiClient
         return destPath;
     }
 
+    /// <summary>获取合集（专辑）视频列表，返回该合集内所有视频。</summary>
+    public async Task<IReadOnlyList<BiliVideo>> GetCollectionVideosAsync(string seasonId, CancellationToken ct = default)
+    {
+        var videos = new List<BiliVideo>();
+        var page = 1;
+        while (true)
+        {
+            var data = await GetDataAsync(
+                $"/x/polymer/web-space/seasons_archives_list?season_id={Uri.EscapeDataString(seasonId)}&sort_reverse=false&page_num={page}&page_size=30", ct);
+
+            if (!data.TryGetProperty("archives", out var archives) || archives.ValueKind != JsonValueKind.Array)
+                break;
+
+            foreach (var item in archives.EnumerateArray())
+            {
+                if (!item.TryGetProperty("bvid", out var bvidEl)) continue;
+                var bvid = bvidEl.GetString() ?? "";
+                if (bvid.Length == 0) continue;
+
+                var title = CleanTitle(item.TryGetProperty("title", out var t) ? t.GetString() : null);
+                var author = item.TryGetProperty("owner", out var o) && o.TryGetProperty("name", out var n)
+                    ? n.GetString() ?? "" : "";
+                var length = ParseLength(item.TryGetProperty("duration", out var l) ? l.GetInt32().ToString() : null);
+                var cover = item.TryGetProperty("cover", out var p) ? p.GetString() : null;
+
+                videos.Add(new BiliVideo(bvid, title, author, length, cover ?? ""));
+            }
+
+            // 检查是否有下一页
+            if (!data.TryGetProperty("page", out var pageInfo) ||
+                !pageInfo.TryGetProperty("page_num", out var pn) || pn.GetInt32() >= pageInfo.GetProperty("total_page").GetInt32())
+                break;
+            page++;
+        }
+        return videos;
+    }
+
     /// <summary>清理音频缓存目录。</summary>
     public static void ClearAudioCache()
     {

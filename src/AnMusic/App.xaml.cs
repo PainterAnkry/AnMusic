@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using AnMusic.Services.Audio;
@@ -6,6 +7,9 @@ using AnMusic.Services.Metadata;
 using AnMusic.Services.Playlist;
 using AnMusic.Services.Providers;
 using AnMusic.Services.Providers.Bilibili;
+using AnMusic.Services.Providers.JsPlugin;
+using AnMusic.Services.Providers.NetEase;
+using AnMusic.Services.Providers.QQMusic;
 using AnMusic.Services.Settings;
 using AnMusic.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,9 +31,16 @@ public partial class App : Application
         ConfigureServices(services);
         _serviceProvider = services.BuildServiceProvider();
 
-        // 应用已保存的主题
+        // 应用已保存的主题与强调色
         var settings = _serviceProvider.GetRequiredService<UserSettingsService>().Settings;
         ThemeService.Apply(settings.Theme != "Light");
+        ThemeService.ApplyAccent(settings.AccentColorIndex);
+
+        // 加载外部 .js 音源插件（含 plugins.json 清单远程下载）并注册进 ProviderRegistry。
+        // 注意：必须异步执行——UI 线程同步等待会与 await 的 SynchronizationContext 死锁。
+        var registry = _serviceProvider.GetRequiredService<ProviderRegistry>();
+        var pluginLoader = _serviceProvider.GetRequiredService<JsPluginLoader>();
+        _ = LoadPluginsAsync(registry, pluginLoader);
 
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
         mainWindow.Show();
@@ -38,6 +49,23 @@ public partial class App : Application
         if (settings.MusicDirectory is { Length: > 0 } musicDir && Directory.Exists(musicDir))
         {
             _ = _serviceProvider.GetRequiredService<LibraryViewModel>().ScanDirectoryAsync(musicDir);
+        }
+    }
+
+    /// <summary>后台加载插件并注册（下载远程清单插件 + 扫描本地 .js）。</summary>
+    private static async Task LoadPluginsAsync(ProviderRegistry registry, JsPluginLoader pluginLoader)
+    {
+        try
+        {
+            var errors = await pluginLoader.LoadAllAsync();
+            foreach (var err in errors)
+                Trace.WriteLine($"[JsPlugin] {err}");
+            foreach (var plugin in pluginLoader.Plugins)
+                registry.Register(plugin);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[JsPlugin] 插件加载异常: {ex.Message}");
         }
     }
 
@@ -66,13 +94,17 @@ public partial class App : Application
         // B 站在线音乐源（仅音频缓存播放，遵循 B 站用户协议）
         services.AddSingleton<BilibiliApiClient>();
         services.AddSingleton<BilibiliMusicProvider>();
-        // 必须同时注册为 IMusicProvider，ProviderRegistry 才能按 Id 聚合到它
         services.AddSingleton<IMusicProvider>(sp => sp.GetRequiredService<BilibiliMusicProvider>());
         services.AddSingleton<IOnlineMusicProvider>(sp => sp.GetRequiredService<BilibiliMusicProvider>());
+
+        // 网易云 / QQ 音乐已改为外部 .js 插件源（plugins.json 清单自动下载），不再注册内置实现
 
         // 第三方实现注册进 DI（IMusicProvider / IOnlineMusicProvider / IOnlineLyricProvider）
         // 后会自动被 ProviderRegistry 聚合，无需改动其他代码。
         services.AddSingleton<ProviderRegistry>();
+
+        // 外部 .js 音源插件加载器（%AppData%\AnMusic\plugins\*.js）
+        services.AddSingleton<JsPluginLoader>();
 
         // ViewModels
         services.AddSingleton<PlaybackBarViewModel>();
@@ -80,10 +112,14 @@ public partial class App : Application
         services.AddSingleton<LyricViewModel>();
         services.AddSingleton<EqualizerViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<ListenTogetherViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // 窗口
         services.AddSingleton<MainWindow>();
+        // 桌面歌词窗口：用工厂模式每次解析新建实例（关闭后无法复用同一实例）
+        services.AddTransient<Views.DesktopLyricsWindow>();
+        services.AddSingleton<Func<Views.DesktopLyricsWindow>>(sp => () => sp.GetRequiredService<Views.DesktopLyricsWindow>());
     }
 
     protected override void OnExit(ExitEventArgs e)

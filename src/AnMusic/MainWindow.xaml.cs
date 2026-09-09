@@ -36,6 +36,11 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(ApplyBackgroundTransparency);
         };
         ApplyBackgroundTransparency();
+
+        // "在线一起听" 面板内的 ✕ 按钮请求关闭弹窗
+        _viewModel.ListenTogether.PanelToggleRequested += () =>
+            Dispatcher.BeginInvoke(() => ListenTogetherPopup.IsOpen = false);
+
     }
 
     #region 自定义背景图时面板半透明
@@ -318,30 +323,70 @@ public partial class MainWindow : Window
 
     private void ProgressSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
-        _viewModel.PlaybackBar.EndDrag(ProgressSlider.Value);
+        if (sender is System.Windows.Controls.Slider s)
+            _viewModel.PlaybackBar.EndDrag(s.Value);
+        else
+            _viewModel.PlaybackBar.EndDrag(ProgressSlider.Value);
     }
 
-    /// <summary>点击进度条任意位置直接切换进度（配合 IsMoveToPointEnabled）。</summary>
+    /// <summary>
+    /// 进度条按下：抓住滑块时交给 Thumb 自带拖拽；点击轨道时立即按点击位置线性映射跳转并进入拖动状态，
+    /// 松手时 EndDrag 收尾（拖动过则 Seek 到最后预览位置，未拖动则与按下位置一致）。
+    /// 注意不能依赖 Slider.IsMoveToPointEnabled：它由 Slider 的类处理程序实现，会在本实例处理程序
+    /// 之前把事件标记为 Handled，只移动滑块外观而不触发播放器 Seek——正是"点击轨道无法跳转"的原因。
+    /// </summary>
     private void ProgressSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var bar = _viewModel.PlaybackBar;
 
-        // 抓住滑块 → 走常规拖动流程
+        // 抓住滑块 → 交给 Thumb 拖拽（不拦截事件，确保 Thumb 自身捕获鼠标后正常拖动）
         if (e.OriginalSource is DependencyObject src && IsOverThumb(src))
         {
             bar.BeginDrag();
             return;
         }
 
-        // 点击轨道 → 立即跳转到点击位置（MoveToPoint 随后把滑块移到该处，可继续拖动）
-        if (sender is System.Windows.Controls.Slider s)
+        // 点击轨道：无已加载曲目时不拦截，保持控件默认行为
+        if (sender is not System.Windows.Controls.Slider s || !bar.IsLoaded) return;
+
+        // 值由点击位置线性映射得出（不含滑块宽度补偿/当前值推算），点击即定位播放
+        var target = GetTrackValueAt(s, e);
+        s.SetCurrentValue(System.Windows.Controls.Primitives.RangeBase.ValueProperty, target);
+        bar.SeekTo(target);
+        bar.BeginDrag();
+        s.CaptureMouse(); // 按住可从点击处继续拖动，在滑块外松开也能正常收尾
+        e.Handled = true; // 阻止 RepeatButton 按 LargeChange 级进并二次捕获鼠标
+    }
+
+    /// <summary>按住进度条拖动时实时预览位置（真实 Seek 在 MouseUp 统一收尾）。</summary>
+    private void ProgressSlider_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+        if (sender is not System.Windows.Controls.Slider s || !s.IsMouseCaptured) return;
+        var bar = _viewModel.PlaybackBar;
+        if (!bar.IsLoaded) return;
+        // 更新滑块与时间文本（绑定推送），引擎在 MouseUp 的 EndDrag 统一 Seek
+        bar.PositionSeconds = GetTrackValueAt(s, e);
+    }
+
+    /// <summary>按点击位置线性映射进度值：点击轨道 60% 处即跳转到总时长 60%，
+    /// 不做滑块宽度/当前值相关的推算，保证“点哪播哪”无累计偏差。</summary>
+    private static double GetTrackValueAt(System.Windows.Controls.Slider slider, MouseEventArgs e)
+    {
+        double ratio;
+        if (slider.Template?.FindName("PART_Track", slider) is System.Windows.Controls.Primitives.Track track &&
+            track.ActualWidth > 0)
         {
-            var p = e.GetPosition(s);
-            var ratio = Math.Clamp(p.X / Math.Max(1.0, s.ActualWidth), 0, 1);
-            var target = s.Minimum + ratio * (s.Maximum - s.Minimum);
-            bar.BeginDrag();
-            bar.SeekTo(target);
+            var x = e.GetPosition(track).X;
+            ratio = Math.Clamp(x / track.ActualWidth, 0, 1);
         }
+        else
+        {
+            // 兜底：模板不可用时按控件宽度线性映射
+            var p = e.GetPosition(slider);
+            ratio = Math.Clamp(p.X / Math.Max(1.0, slider.ActualWidth), 0, 1);
+        }
+        return slider.Minimum + ratio * (slider.Maximum - slider.Minimum);
     }
 
     /// <summary>命中点是否在滑块（Thumb）内。</summary>
@@ -357,7 +402,15 @@ public partial class MainWindow : Window
 
     private void ProgressSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        _viewModel.PlaybackBar.EndDrag(ProgressSlider.Value);
+        if (sender is System.Windows.Controls.Slider s)
+        {
+            if (s.IsMouseCaptured) s.ReleaseMouseCapture();
+            _viewModel.PlaybackBar.EndDrag(s.Value);
+        }
+        else
+        {
+            _viewModel.PlaybackBar.EndDrag(ProgressSlider.Value);
+        }
     }
 
     private void SearchTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -384,6 +437,25 @@ public partial class MainWindow : Window
         _viewModel.ShowSettingsCommand.Execute(null);
     }
 
+    /// <summary>在线一起听：切换面板弹窗。</summary>
+    private void ListenTogetherButton_Click(object sender, RoutedEventArgs e)
+    {
+        ListenTogetherPopup.IsOpen = !ListenTogetherPopup.IsOpen;
+    }
+
+    /// <summary>用户按钮：切换资料下拉面板（昵称/等级/经验在面板内查看与修改）。</summary>
+    private void UserButton_Click(object sender, RoutedEventArgs e)
+    {
+        UserPopup.IsOpen = !UserPopup.IsOpen;
+    }
+
+    /// <summary>资料面板头像：选择图片并打开自由裁剪窗口。</summary>
+    private void PopupAvatar_Click(object sender, MouseButtonEventArgs e)
+    {
+        UserPopup.IsOpen = false;
+        _viewModel.ChangeAvatarCommand.Execute(null);
+    }
+
     /// <summary>播放列表按钮：打开时刷新"接下来播放"，再次点击关闭。</summary>
     private void UpNextButton_Click(object sender, RoutedEventArgs e)
     {
@@ -401,6 +473,36 @@ public partial class MainWindow : Window
     {
         _viewModel.ToggleLyricsCommand.Execute(null);
         e.Handled = true;
+    }
+
+    /// <summary>歌词页点击歌手名 → 搜索该歌手。</summary>
+    private async void LyricArtist_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (_viewModel.PlaybackBar.CurrentArtist is { Length: > 0 } artist)
+        {
+            _viewModel.ToggleLyricsCommand.Execute(null); // 收起歌词
+            await _viewModel.SearchForTextAsync(artist);
+        }
+    }
+
+    /// <summary>歌词页点击专辑名 → 搜索该专辑。</summary>
+    private async void LyricAlbum_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (_viewModel.PlaybackBar.CurrentTrack?.Album is { Length: > 0 } album)
+        {
+            _viewModel.ToggleLyricsCommand.Execute(null); // 收起歌词
+            await _viewModel.SearchForTextAsync(album);
+        }
+    }
+
+    /// <summary>歌词搜索框回车 → 按输入的歌名在线匹配歌词（支持“歌名 - 歌手”）。</summary>
+    private void LyricSearch_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            _viewModel.Lyrics.SearchLyricsByNameCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     // Win11 DWM 圆角窗口属性
@@ -442,9 +544,65 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
+    private System.Windows.Forms.NotifyIcon? _trayIcon;
+
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        var behavior = _settingsService.Settings.CloseBehavior;
+
+        if (behavior == 0) // 每次询问
+        {
+            var result = MessageBox.Show(
+                "是要后台运行还是直接关闭程序？\n\n选择后台运行：程序将最小化到系统托盘，继续播放音乐。\n选择直接关闭：退出程序。\n\n可在设置中修改默认行为。",
+                "关闭确认", MessageBoxButton.YesNoCancel, MessageBoxImage.Question,
+                MessageBoxResult.Yes);
+            if (result == MessageBoxResult.Cancel)
+            {
+                e.Cancel = true;
+                return;
+            }
+            behavior = result == MessageBoxResult.Yes ? 1 : 2;
+            // 记住选择
+            _settingsService.Update(s => s.CloseBehavior = behavior);
+        }
+
+        if (behavior == 1) // 后台运行
+        {
+            e.Cancel = true;
+            this.Hide();
+            EnsureTrayIcon();
+            _trayIcon!.Visible = true;
+            _trayIcon.ShowBalloonTip(2000, "AnMusic", "正在后台运行，双击托盘图标恢复", System.Windows.Forms.ToolTipIcon.Info);
+            return;
+        }
+
+        // 直接关闭
         SaveWindowBounds();
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+        }
         base.OnClosing(e);
+    }
+
+    /// <summary>创建系统托盘图标（双击恢复窗口）。</summary>
+    private void EnsureTrayIcon()
+    {
+        if (_trayIcon is not null) return;
+        _trayIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(
+                Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location),
+            Text = "AnMusic",
+            Visible = false
+        };
+        _trayIcon.DoubleClick += (_, _) =>
+        {
+            this.Show();
+            this.WindowState = WindowState.Normal;
+            this.Activate();
+            _trayIcon.Visible = false;
+        };
     }
 }

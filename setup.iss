@@ -2,7 +2,7 @@
 ; 按用户安装：无需管理员权限，安装到 %LocalAppData%\Programs\AnMusic
 
 #define MyAppName "AnMusic"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppExeName "AnMusic.exe"
 #define MyAppPublisher "AnMusic"
 
