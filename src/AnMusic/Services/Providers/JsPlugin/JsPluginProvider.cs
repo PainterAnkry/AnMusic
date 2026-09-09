@@ -80,7 +80,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             var module = { exports: {} };
             var exports = module.exports;
             var console = { log: function(){}, warn: function(){}, error: function(){}, info: function(){} };
-            var environment = { os: 'anmusic-desktop', version: '2.0.0', platform: 'windows' };
+            var environment = { os: 'anmusic-desktop', version: '2.0.1', platform: 'windows' };
             var env = environment;
             var window = globalThis, self = globalThis, navigator = { userAgent: 'AnMusic/1.0' };
             var performance = { now: function(){ return Date.now(); } };

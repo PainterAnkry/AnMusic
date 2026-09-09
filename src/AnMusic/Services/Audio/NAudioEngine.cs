@@ -23,6 +23,9 @@ public sealed class NAudioEngine : IAudioEngine
     private bool _isMuted;
     private bool _isDisposing;
 
+    /// <summary>是否正在执行手动停止（区分"自然播完"与"用户主动停止"，避免播完不切歌）。</summary>
+    private bool _manualStop;
+
     public Track? CurrentTrack { get; private set; }
 
     public PlaybackState State => _state;
@@ -166,6 +169,7 @@ public sealed class NAudioEngine : IAudioEngine
     public void Play()
     {
         if (_waveOut is null) return;
+        _manualStop = false; // 清除可能残留的手动停止标记，保证之后自然播完可被识别
         _waveOut.Play();
         SetState(PlaybackState.Playing);
         _positionTimer.Start();
@@ -183,6 +187,7 @@ public sealed class NAudioEngine : IAudioEngine
     {
         if (_waveOut is null) return;
         _positionTimer.Stop();
+        _manualStop = true; // Stop() 会触发 PlaybackStopped，需标记为手动停止
         _waveOut.Stop();
         if (_audioFileReader is not null)
             _audioFileReader.CurrentTime = TimeSpan.Zero;
@@ -217,10 +222,14 @@ public sealed class NAudioEngine : IAudioEngine
     {
         _positionTimer.Stop();
 
-        // 区分"自然播完"与"手动停止"
-        bool reachedEnd = !_isDisposing && (
-            (_audioFileReader is not null && _audioFileReader.Position >= _audioFileReader.Length)
-            || (_mfReader is not null && _mfReader.Position >= _mfReader.Length));
+        // 判断是否手动停止：Stop() 调用会先置位 _manualStop。
+        // 自然播完时 WaveOut 同样触发 PlaybackStopped，此时 _manualStop 为 false。
+        // 不能用"Position >= Length"判断播完——mp3/flac/m4a 等压缩格式末帧/尾数据
+        // 常使 Position 略小于 Length，导致播完后被误判为手动停止而不触发 TrackEnded。
+        var manualStop = _manualStop;
+        _manualStop = false;
+        if (_isDisposing)
+            return;
 
         if (e.Exception is not null)
         {
@@ -229,9 +238,9 @@ public sealed class NAudioEngine : IAudioEngine
             return;
         }
 
-        if (reachedEnd && CurrentTrack is not null)
+        if (!manualStop && CurrentTrack is not null)
         {
-            // 重置位置，触发 TrackEnded
+            // 自然播完：重置位置，触发 TrackEnded（由上层切歌/循环/随机）
             if (_audioFileReader is not null)
                 _audioFileReader.CurrentTime = TimeSpan.Zero;
             else if (_mfReader is not null)
@@ -239,7 +248,7 @@ public sealed class NAudioEngine : IAudioEngine
             SetState(PlaybackState.Stopped);
             TrackEnded?.Invoke(this, CurrentTrack);
         }
-        else if (!_isDisposing)
+        else
         {
             SetState(PlaybackState.Stopped);
         }

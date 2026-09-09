@@ -89,7 +89,7 @@ public sealed class LocalFileProvider : IMusicProvider
     private static IEnumerable<string> EnumerateAudioFiles(string rootDir)
     {
         var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { ".mp3", ".flac", ".wav", ".m4a", ".aac", ".wma", ".ogg" };
+            { ".mp3", ".flac", ".wav", ".m4a", ".m4s", ".aac", ".wma", ".ogg" };
 
         var enumOptions = new EnumerationOptions
         {

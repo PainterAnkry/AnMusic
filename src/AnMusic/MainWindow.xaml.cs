@@ -183,7 +183,7 @@ public partial class MainWindow : Window
                 if (bar.NextCommand.CanExecute(null)) bar.NextCommand.Execute(null);
                 break;
             case HOTKEY_ID_STOP:
-                if (bar.IsLoaded) bar.PlayPauseCommand.Execute(null);
+                if (bar.PlayPauseCommand.CanExecute(null)) bar.PlayPauseCommand.Execute(null);
                 break;
         }
         return IntPtr.Zero;

@@ -70,7 +70,7 @@ public partial class SettingsViewModel : ObservableObject
     private string _updateCheckText = "检查更新";
 
     /// <summary>当前版本号。</summary>
-    public string CurrentVersion => "2.0.0";
+    public string CurrentVersion => "2.0.1";
 
     /// <summary>用户协议文本。</summary>
     public string UserAgreement => """

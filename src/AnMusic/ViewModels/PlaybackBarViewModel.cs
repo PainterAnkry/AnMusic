@@ -211,9 +211,15 @@ public partial class PlaybackBarViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void PlayPause()
+    private async Task PlayPause()
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded)
+        {
+            // 播完停止（队列尽头）后按播放：重播当前曲目
+            if (_queue.Current is { } last)
+                await LoadAndPlayAsync(last);
+            return;
+        }
         if (_engine.State == PlaybackState.Playing)
             _engine.Pause();
         else
@@ -263,31 +269,38 @@ public partial class PlaybackBarViewModel : ObservableObject
 
     private async void OnTrackEnded(object? sender, Track track)
     {
-        var next = _queue.MoveNext();
-
-        // 队列播完且电台续播回调就绪：先补充一批推荐曲目再继续
-        if (next is null && AutoRefillHandler is { } refill)
+        try
         {
-            try
-            {
-                if (await refill())
-                    next = _queue.MoveNext();
-            }
-            catch { /* 补充失败则按无下一首处理 */ }
-        }
-
-        if (next is not null)
-        {
+            // 队列与状态更新统一回到 UI 线程执行（TrackEnded 由播放回调线程触发）
             await Application.Current.Dispatcher.InvokeAsync(async () =>
-                await LoadAndPlayAsync(next));
-        }
-        else
-        {
-            Application.Current.Dispatcher.Invoke(() =>
             {
-                PositionSeconds = 0;
-                IsPlaying = false;
+                var next = _queue.MoveNext();
+
+                // 队列播完且电台续播回调就绪：先补充一批推荐曲目再继续
+                if (next is null && AutoRefillHandler is { } refill)
+                {
+                    try
+                    {
+                        if (await refill())
+                            next = _queue.MoveNext();
+                    }
+                    catch { /* 补充失败则按无下一首处理 */ }
+                }
+
+                if (next is not null)
+                    await LoadAndPlayAsync(next);
+                else
+                {
+                    PositionSeconds = 0;
+                    IsPlaying = false;
+                    IsLoaded = false; // 队列已尽：下次按播放时重新加载当前曲目
+                }
             });
+        }
+        catch (Exception ex)
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+                MessageBox.Show($"自动切歌失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error));
         }
     }
 
