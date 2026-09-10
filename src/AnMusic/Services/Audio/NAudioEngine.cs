@@ -74,6 +74,16 @@ public sealed class NAudioEngine : IAudioEngine
 
     public WaveFormat? WaveFormat => _audioFileReader?.WaveFormat ?? _mfReader?.WaveFormat;
 
+    /// <inheritdoc />
+    public string? FormatDescription
+    {
+        get
+        {
+            var wf = WaveFormat;
+            return wf is null ? null : $"{wf.SampleRate} Hz / {wf.Channels}ch";
+        }
+    }
+
     private void ApplyVolume()
     {
         var vol = _isMuted ? 0f : _volume;

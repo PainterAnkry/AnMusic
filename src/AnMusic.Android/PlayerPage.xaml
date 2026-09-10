@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:AnMusic.Models;assembly=AnMusic.Core"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.PlayerPage"
+             x:DataType="vm:PlayerViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource AmBg}">
+
+    <ContentPage.Resources>
+        <conv:HasValueConverter x:Key="HasValue" />
+        <conv:InvertBoolConverter x:Key="InvertBool" />
+        <conv:DurationConverter x:Key="Duration" />
+    </ContentPage.Resources>
+
+    <!-- ══════════════════════════════════════════════════════════
+         播放详情页三视图：
+           CoverView  封面（默认）
+           LyricView  歌词
+           QueueView  当前播放队列
+         顶部与底部控制条常驻，中间区域切换。
+         ══════════════════════════════════════════════════════════ -->
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="Auto,*,Auto,Auto"
+              ColumnSpacing="2"
+              Padding="8,8,8,0">
+
+            <Button Grid.Column="0"
+                    Text="⌄"
+                    Style="{StaticResource AmIconButton}"
+                    FontSize="24"
+                    Clicked="OnCloseClicked" />
+
+            <VerticalStackLayout Grid.Column="1"
+                                 Spacing="1"
+                                 VerticalOptions="Center">
+                <Label Text="{Binding Title}"
+                       Style="{StaticResource AmTitleText}"
+                       FontSize="15"
+                       HorizontalTextAlignment="Center"
+                       FontAttributes="Bold" />
+                <Label Text="{Binding PlayStateText}"
+                       Style="{StaticResource AmCaptionText}"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+
+            <Button Grid.Column="2"
+                    x:Name="FavoriteButton"
+                    Text="♡"
+                    Style="{StaticResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnFavoriteClicked" />
+
+            <Button Grid.Column="3"
+                    Text="⋯"
+                    Style="{StaticResource AmIconButton}"
+                    FontSize="19"
+                    Clicked="OnMoreClicked" />
+        </Grid>
+
+        <!-- ══ 中间可切换区域 ══ -->
+        <Grid Grid.Row="1" Padding="20,8">
+
+            <!-- ── ① 封面视图 ── -->
+            <VerticalStackLayout x:Name="CoverView"
+                                 Spacing="18"
+                                 VerticalOptions="Center">
+
+                <Border WidthRequest="290"
+                        HeightRequest="290"
+                        HorizontalOptions="Center"
+                        BackgroundColor="{StaticResource AmCoverPlaceholder}"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 16">
+                    <Grid>
+                        <!-- 无封面时的占位音符 -->
+                        <Label Text="♪"
+                               FontSize="76"
+                               TextColor="#FFFFFF"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               IsVisible="{Binding CoverPath, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+
+                        <Image x:Name="CoverImage"
+                               Source="{Binding CoverPath}"
+                               Aspect="AspectFill"
+                               WidthRequest="290"
+                               HeightRequest="290"
+                               IsVisible="{Binding CoverPath, Converter={StaticResource HasValue}}" />
+                    </Grid>
+                </Border>
+
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{Binding Title}"
+                           FontSize="19"
+                           FontAttributes="Bold"
+                           TextColor="{StaticResource AmTextPrimary}"
+                           HorizontalTextAlignment="Center"
+                           LineBreakMode="TailTruncation" />
+                    <Label Text="{Binding Artist}"
+                           FontSize="13"
+                           TextColor="{StaticResource AmTextSecondary}"
+                           HorizontalTextAlignment="Center"
+                           LineBreakMode="TailTruncation" />
+                </VerticalStackLayout>
+
+                <!-- 切到歌词 -->
+                <Button Text="查看歌词 ⌃"
+                        Style="{StaticResource AmOutlineButton}"
+                        HorizontalOptions="Center"
+                        Clicked="OnShowLyricsClicked" />
+            </VerticalStackLayout>
+
+            <!-- ── ② 歌词视图 ── -->
+            <Grid x:Name="LyricView" IsVisible="False" RowDefinitions="*,Auto">
+
+                <Label Text="{Binding LyricStatus}"
+                       Style="{StaticResource AmCaptionText}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center"
+                       IsVisible="{Binding HasLyrics, Converter={StaticResource InvertBool}}" />
+
+                <CollectionView x:Name="LyricList"
+                                ItemsSource="{Binding LyricLines}"
+                                SelectionMode="None"
+                                VerticalOptions="Center"
+                                VerticalScrollBarVisibility="Never">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:LyricLine">
+                            <VerticalStackLayout Padding="16,9" Spacing="3">
+                                <Label Text="{Binding Text}"
+                                       TextColor="{StaticResource AmTextTertiary}"
+                                       FontSize="15"
+                                       HorizontalTextAlignment="Center" />
+                                <Label Text="{Binding Translation}"
+                                       TextColor="{StaticResource AmTextTertiary}"
+                                       FontSize="12"
+                                       HorizontalTextAlignment="Center"
+                                       IsVisible="{Binding Translation, Converter={StaticResource HasValue}}" />
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <Button Grid.Row="1"
+                        Text="⌄ 收起歌词"
+                        Style="{StaticResource AmOutlineButton}"
+                        HorizontalOptions="Center"
+                        Margin="0,8,0,0"
+                        Clicked="OnHideLyricsClicked" />
+            </Grid>
+
+            <!-- ── ③ 播放队列视图 ── -->
+            <Grid x:Name="QueueView" IsVisible="False" RowDefinitions="Auto,*,Auto">
+
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Padding="0,0,0,8">
+                    <Label Grid.Column="0"
+                           Text="当前播放"
+                           Style="{StaticResource AmSectionTitle}" />
+                    <Label Grid.Column="2"
+                           Text="{Binding QueueCountText}"
+                           Style="{StaticResource AmCaptionText}"
+                           VerticalOptions="Center" />
+                </Grid>
+
+                <CollectionView Grid.Row="1"
+                                x:Name="QueueList"
+                                ItemsSource="{Binding Queue}"
+                                SelectionMode="None">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Track">
+                            <Grid Padding="0,9" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnQueueItemTapped" />
+                                </Grid.GestureRecognizers>
+
+                                <Border Grid.Column="0"
+                                        WidthRequest="40" HeightRequest="40"
+                                        BackgroundColor="{StaticResource AmCoverPlaceholder}"
+                                        StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6">
+                                    <Grid>
+                                        <Label Text="♪"
+                                               FontSize="16"
+                                               TextColor="#FFFFFF"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+                                        <Image Source="{Binding CoverKey}"
+                                               Aspect="AspectFill"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}}" />
+                                    </Grid>
+                                </Border>
+
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                    <Label Text="{Binding Artist}" Style="{StaticResource AmSubText}" />
+                                </VerticalStackLayout>
+
+                                <Label Grid.Column="2"
+                                       Text="{Binding Duration, Converter={StaticResource Duration}}"
+                                       Style="{StaticResource AmCaptionText}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <Button Grid.Row="2"
+                        Text="⌄ 收起列表"
+                        Style="{StaticResource AmOutlineButton}"
+                        HorizontalOptions="Center"
+                        Margin="0,8,0,0"
+                        Clicked="OnHideQueueClicked" />
+            </Grid>
+        </Grid>
+
+        <!-- ══ 底部：进度 + 控制 ══ -->
+        <VerticalStackLayout Grid.Row="2" Padding="24,4,24,16" Spacing="6">
+
+            <!-- 进度条 -->
+            <Slider x:Name="ProgressSlider"
+                    Minimum="0"
+                    Maximum="{Binding DurationForSlider}"
+                    Value="{Binding PositionSeconds}"
+                    Style="{StaticResource AmProgress}"
+                    DragStarted="OnSeekDragStarted"
+                    DragCompleted="OnSeekDragCompleted" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Label Grid.Column="0"
+                       Text="{Binding PositionText}"
+                       Style="{StaticResource AmCaptionText}" />
+                <Label Grid.Column="2"
+                       Text="{Binding DurationText}"
+                       Style="{StaticResource AmCaptionText}" />
+            </Grid>
+
+            <!--
+                控制行：五个控件全部在同一行。
+                上一版把「播放模式 + 上一首 + 播放暂停」放在一行、
+                「音量 + 下一首」放在另一行，导致前进/后退视觉上不在同一行。
+                现在统一为：模式 / 上一首 / 播放暂停 / 下一首 / 队列 单行五列。
+            -->
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,*"
+                  ColumnSpacing="6"
+                  Margin="0,10,0,0">
+
+                <Button Grid.Column="0"
+                        Text="{Binding PlayModeIcon}"
+                        Command="{Binding CyclePlayModeCommand}"
+                        Style="{StaticResource AmIconButton}"
+                        FontSize="18"
+                        HorizontalOptions="Center"
+                        TextColor="{StaticResource AmTextSecondary}" />
+
+                <Button Grid.Column="1"
+                        Text="⏮"
+                        Command="{Binding PreviousCommand}"
+                        Style="{StaticResource AmIconButton}"
+                        FontSize="28"
+                        WidthRequest="56"
+                        HeightRequest="56"
+                        TextColor="{StaticResource AmTextPrimary}"
+                        VerticalOptions="Center" />
+
+                <Button Grid.Column="2"
+                        Text="{Binding PlayPauseIcon}"
+                        Command="{Binding PlayPauseCommand}"
+                        FontSize="26"
+                        WidthRequest="66"
+                        HeightRequest="66"
+                        CornerRadius="33"
+                        Padding="0"
+                        BackgroundColor="{StaticResource AmPrimary}"
+                        TextColor="#FFFFFF"
+                        VerticalOptions="Center" />
+
+                <Button Grid.Column="3"
+                        Text="⏭"
+                        Command="{Binding NextCommand}"
+                        Style="{StaticResource AmIconButton}"
+                        FontSize="28"
+                        WidthRequest="56"
+                        HeightRequest="56"
+                        TextColor="{StaticResource AmTextPrimary}"
+                        VerticalOptions="Center" />
+
+                <Button Grid.Column="4"
+                        Text="☰"
+                        Style="{StaticResource AmIconButton}"
+                        FontSize="19"
+                        HorizontalOptions="Center"
+                        TextColor="{StaticResource AmTextSecondary}"
+                        Clicked="OnShowQueueClicked" />
+            </Grid>
+
+            <!-- 音量（次要操作，收在下面一行） -->
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2,0,0">
+                <Label Grid.Column="0"
+                       Text="🔊"
+                       FontSize="14"
+                       TextColor="{StaticResource AmTextTertiary}"
+                       VerticalOptions="Center" />
+                <Slider Grid.Column="1"
+                        Minimum="0" Maximum="1"
+                        Value="{Binding Volume}"
+                        Style="{StaticResource AmProgress}" />
+            </Grid>
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

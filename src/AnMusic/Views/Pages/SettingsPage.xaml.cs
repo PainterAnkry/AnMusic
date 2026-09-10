@@ -176,14 +176,14 @@ public partial class SettingsPage : UserControl
             }
         }
 
-        // 分类内没有分区（理论上不会发生）时兜底：全部显示，避免空白页
+        // 分类内没有分区（理论上不会发生）：明确提示，而不是把所有分类都摊开
         if (!searching && visibleCount == 0)
         {
-            foreach (var child in RootPanel.Children)
-            {
-                if (child is FrameworkElement fe && fe.Tag is string t && t.StartsWith("sec:", StringComparison.Ordinal))
-                    fe.Visibility = Visibility.Visible;
-            }
+            EmptyCategoryHint.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            EmptyCategoryHint.Visibility = Visibility.Collapsed;
         }
 
         if (searching) firstMatch?.BringIntoView();

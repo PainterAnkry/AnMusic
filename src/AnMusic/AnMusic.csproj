@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- 版本号唯一来源：运行时通过程序集读取（见 SettingsViewModel.CurrentVersion） -->
-    <Version>3.1.0</Version>
+    <Version>3.2.0</Version>
     <Product>AnMusic</Product>
     <AssemblyTitle>AnMusic</AssemblyTitle>
     <Company>PainterAnkry</Company>
@@ -24,23 +24,17 @@
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
-  <!-- 插件宿主内置 JS 库（require('crypto-js') 等宿主模块） -->
+  <!-- 平台无关业务逻辑（模型/音源/歌词/队列/设置）统一放在 Core，供桌面端与安卓端复用 -->
   <ItemGroup>
-    <EmbeddedResource Include="Assets\Plugins\crypto-js.min.js" />
-    <EmbeddedResource Include="Assets\Plugins\dayjs.min.js" />
-    <EmbeddedResource Include="Assets\Plugins\big-integer.min.js" />
-    <EmbeddedResource Include="Assets\Plugins\jsencrypt.min.js" />
-    <EmbeddedResource Include="Assets\Plugins\he.min.js" />
+    <ProjectReference Include="..\AnMusic.Core\AnMusic.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Jint" Version="4.16.1" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.158" />
     <PackageReference Include="NAudio" Version="3.1.0" />
-    <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
 
 </Project>

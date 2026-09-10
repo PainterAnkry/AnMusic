@@ -6,8 +6,14 @@ out/
 
 # 安装包产物（保留中文语言文件）
 installer/*.exe
+installer/*.apk
+installer/*.idsig
 # 根目录临时打包文件
 /AnMusic-Portable-*.exe
+
+# 安卓签名密钥（切勿入库）
+*.keystore
+*.jks
 
 # IDE / 工具
 .vs/

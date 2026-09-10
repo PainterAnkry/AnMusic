@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- 仅安卓：桌面端由 WPF 工程承担，这里不需要 iOS/Mac/Windows 目标以免拉入额外工作负载 -->
+		<TargetFramework>net10.0-android</TargetFramework>
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>AnMusic.Android</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<!-- 显示名与包名 -->
+		<ApplicationTitle>AnMusic</ApplicationTitle>
+		<ApplicationId>com.painterankry.anmusic</ApplicationId>
+
+		<!-- 版本号与桌面端保持一致（桌面端版本号唯一来源为 AnMusic.csproj） -->
+		<ApplicationDisplayVersion>3.1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>3</ApplicationVersion>
+
+		<SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
+
+		<!-- 用本机的 Android SDK（沙箱 shell 不继承系统环境变量，故显式指定） -->
+		<AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == ''">C:\Users\Ankry\AndroidTools\android-sdk</AndroidSdkDirectory>
+		<JavaSdkDirectory Condition="'$(JavaSdkDirectory)' == ''">C:\Users\Ankry\AndroidTools\jdk\jdk-17.0.13+11</JavaSdkDirectory>
+
+		<!-- Debug 构建直接把程序集留进 APK，便于真机排查 -->
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- App 图标 / 启动图：沿用桌面端的紫色主题 -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#EC4141" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#EC4141" BaseSize="128,128" />
+
+		<MauiImage Include="Resources\Images\*" />
+
+		<MauiFont Include="Resources\Fonts\*" />
+
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+		<!-- MVVM 源生成器：与桌面端同一套 [ObservableProperty]/[RelayCommand] 写法 -->
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- 与桌面端共用同一份业务逻辑 -->
+		<ProjectReference Include="..\AnMusic.Core\AnMusic.Core.csproj" />
+	</ItemGroup>
+
+</Project>

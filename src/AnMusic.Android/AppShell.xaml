@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="AnMusic.Android.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:AnMusic.Android"
+    Title="AnMusic"
+    FlyoutBehavior="Disabled"
+    Shell.BackgroundColor="{StaticResource AmSurface}"
+    Shell.ForegroundColor="{StaticResource AmPrimary}"
+    Shell.TitleColor="{StaticResource AmTextPrimary}">
+
+    <!--
+        单页 Shell：播放器以底部迷你条 + 上滑详情页的形式呈现，贴近手机音乐 App 习惯。
+        其余页面（搜索 / 设置）以模态页打开，因此这里不配置多标签。
+        后续接入「发现 / 云村」等一级页面时，在此追加 ShellContent 即可。
+    -->
+    <ShellContent
+        Title="我的"
+        ContentTemplate="{DataTemplate local:MainPage}"
+        Route="MainPage" />
+
+</Shell>

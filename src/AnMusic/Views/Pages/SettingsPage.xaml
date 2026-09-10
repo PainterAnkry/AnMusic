@@ -326,7 +326,7 @@
             <!-- 快捷键 -->
             <!-- ===== 分区：Shortcuts ===== -->
             </StackPanel>
-            <StackPanel Tag="sec:播放" x:Name="Section_Shortcuts">
+            <StackPanel Tag="sec:快捷键" x:Name="Section_Shortcuts">
             <TextBlock Text="快捷键" Style="{StaticResource SectionTitle}"/>
             <CheckBox IsChecked="{Binding ShortcutsEnabled}" Content="启用键盘快捷键"
                       Foreground="{DynamicResource FgNormal}" FontSize="12.5" Cursor="Hand"/>
@@ -679,6 +679,12 @@
             </StackPanel>
         </StackPanel>
         </ScrollViewer>
+
+        <!-- 该分类暂时没有设置项时的提示（正常不会出现） -->
+        <TextBlock x:Name="EmptyCategoryHint" Grid.Row="1" Text="该分类暂时没有设置项"
+                   Foreground="{DynamicResource FgMuted}" FontSize="12"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Visibility="Collapsed"/>
         </Grid>
     </Grid>
 </UserControl>

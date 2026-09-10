@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/AnMusic.Core/AnMusic.Core.csproj" />
     <Project Path="src/AnMusic/AnMusic.csproj" />
+    <Project Path="src/AnMusic.Android/AnMusic.Android.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AnMusic.Tests/AnMusic.Tests.csproj" />

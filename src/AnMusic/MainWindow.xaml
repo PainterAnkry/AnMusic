@@ -68,6 +68,12 @@
                                 </Style>
                             </MenuItem.ItemContainerStyle>
                         </MenuItem>
+                        <MenuItem Header="👤  查看歌手（搜索）"
+                                  Command="{Binding Data.SearchForTextCommand, Source={StaticResource VmProxy}}"
+                                  CommandParameter="{Binding Artist}"/>
+                        <MenuItem Header="💿  查看专辑（搜索）"
+                                  Command="{Binding Data.SearchForTextCommand, Source={StaticResource VmProxy}}"
+                                  CommandParameter="{Binding Album}"/>
                         <MenuItem Header="➖  从歌单中删除"
                                   Command="{Binding Data.RemoveTrackFromPlaylistCommand, Source={StaticResource VmProxy}}"
                                   CommandParameter="{Binding}"
@@ -1267,40 +1273,82 @@
                         <GridViewColumn Width="250">
                             <GridViewColumn.Header>
                                 <Button Content="标题" Tag="Title" Click="TrackHeaderButton_Click"
-                                        Style="{StaticResource HeaderSortBtn}"/>
+                                        Style="{StaticResource HeaderSortBtn}"
+                                        ToolTip="点击切换：升序 → 降序 → 取消排序"/>
                             </GridViewColumn.Header>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}" TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}" TextTrimming="CharacterEllipsis"/>
+                                        <!-- 听歌排行视图的统计行：播放次数 + 累计时长 -->
+                                        <TextBlock Text="{Binding ListenStatText}" Foreground="{DynamicResource FgMuted}"
+                                                   FontSize="10.5" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                                   Visibility="{Binding ListenStatText, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                    </StackPanel>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Width="150">
                             <GridViewColumn.Header>
                                 <Button Content="艺术家" Tag="Artist" Click="TrackHeaderButton_Click"
-                                        Style="{StaticResource HeaderSortBtn}"/>
+                                        Style="{StaticResource HeaderSortBtn}"
+                                        ToolTip="点击切换：升序 → 降序 → 取消排序"/>
                             </GridViewColumn.Header>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Artist}" Foreground="{DynamicResource FgSecondary}" TextTrimming="CharacterEllipsis"/>
+                                    <!-- 点击歌手名 = 搜索该歌手 -->
+                                    <TextBlock Text="{Binding Artist}" TextTrimming="CharacterEllipsis"
+                                               Tag="Artist" Cursor="Hand"
+                                               MouseLeftButtonDown="CellSearch_Click"
+                                               ToolTip="点击搜索该歌手">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                        <Setter Property="TextDecorations" Value="Underline"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Width="185">
                             <GridViewColumn.Header>
                                 <Button Content="专辑" Tag="Album" Click="TrackHeaderButton_Click"
-                                        Style="{StaticResource HeaderSortBtn}"/>
+                                        Style="{StaticResource HeaderSortBtn}"
+                                        ToolTip="点击切换：升序 → 降序 → 取消排序"/>
                             </GridViewColumn.Header>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Album}" Foreground="{DynamicResource FgSecondary}" TextTrimming="CharacterEllipsis"/>
+                                    <!-- 点击专辑名 = 搜索该专辑 -->
+                                    <TextBlock Text="{Binding Album}" TextTrimming="CharacterEllipsis"
+                                               Tag="Album" Cursor="Hand"
+                                               MouseLeftButtonDown="CellSearch_Click"
+                                               ToolTip="点击搜索该专辑">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                        <Setter Property="TextDecorations" Value="Underline"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
                         <GridViewColumn Width="66">
                             <GridViewColumn.Header>
                                 <Button Content="时长" Tag="Duration" Click="TrackHeaderButton_Click"
-                                        Style="{StaticResource HeaderSortBtn}"/>
+                                        Style="{StaticResource HeaderSortBtn}"
+                                        ToolTip="点击切换：升序 → 降序 → 取消排序"/>
                             </GridViewColumn.Header>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>

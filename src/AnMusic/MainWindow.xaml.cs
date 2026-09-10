@@ -289,42 +289,73 @@ public partial class MainWindow : Window
     /// <summary>列表数据源切换（切页面/重扫/搜索）：复位排序指示，并把过滤词应用到新列表。</summary>
     private void OnTrackListItemsSourceChanged(object? sender, EventArgs e)
     {
-        _trackSortField = null;
-        _trackSortDescending = false;
+        // 切换视图（全部音乐/歌单/搜索结果…）后保留用户的列排序，重新应用到新视图上
+        ApplySort();
         UpdateHeaderSortGlyphs();
         ApplyListFilter(_viewModel.ListFilterText);
     }
 
     /// <summary>表头按钮点击（每列表头均为带 Tag 的按钮，点击直接触发，不依赖表头内部事件冒泡）。</summary>
+    /// <summary>
+    /// 表头点击：同一列依次为 升序 → 降序 → 取消排序（恢复列表原始顺序）。
+    /// 排序通过 CollectionView 的 SortDescriptions 实现，不改动源集合，
+    /// 因此取消排序后能回到音乐库/歌单本来的顺序，且与列表过滤可叠加。
+    /// </summary>
     private void TrackHeaderButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button { Tag: string field } || field.Length == 0) return;
 
-        if (_trackSortField == field) _trackSortDescending = !_trackSortDescending;
-        else { _trackSortField = field; _trackSortDescending = false; }
+        if (_trackSortField != field)
+        {
+            _trackSortField = field;
+            _trackSortDescending = false;
+        }
+        else if (!_trackSortDescending)
+        {
+            _trackSortDescending = true;
+        }
+        else
+        {
+            _trackSortField = null;      // 第三次点击：取消排序
+            _trackSortDescending = false;
+        }
 
-        SortCurrentList();
+        ApplySort();
         UpdateHeaderSortGlyphs();
     }
 
-    /// <summary>对当前可见集合原地排序（ObservableCollection 重建；保留过滤视图生效）。</summary>
-    private void SortCurrentList()
+    /// <summary>
+    /// 应用/清除排序：排序只作用于当前列表的视图（CustomSort），
+    /// 源集合顺序保持不变——取消排序即可回到原始顺序，列表过滤也依然生效。
+    /// 歌名/歌手/专辑按不区分大小写比较，时长按时间值比较。
+    /// </summary>
+    private void ApplySort()
     {
-        if (TrackList.ItemsSource is not System.Collections.ObjectModel.ObservableCollection<Track> list ||
-            list.Count <= 1)
-            return;
+        if (TrackList.ItemsSource is not System.Collections.IEnumerable source) return;
 
-        IOrderedEnumerable<Track> sorted = _trackSortField switch
+        // ListCollectionView 才支持 CustomSort；普通 CollectionView 则退化为 SortDescriptions
+        if (System.Windows.Data.CollectionViewSource.GetDefaultView(source) is System.Windows.Data.ListCollectionView listView)
         {
-            "Artist" => list.OrderBy(t => t.Artist, StringComparer.OrdinalIgnoreCase),
-            "Album" => list.OrderBy(t => t.Album, StringComparer.OrdinalIgnoreCase),
-            "Duration" => list.OrderBy(t => t.Duration),
-            _ => list.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
-        };
-        var ordered = _trackSortDescending ? sorted.Reverse().ToList() : sorted.ToList();
+            listView.CustomSort = string.IsNullOrEmpty(_trackSortField)
+                ? null   // 取消排序：回到源集合本来的顺序
+                : new Services.Formatting.TrackSortComparer(_trackSortField, _trackSortDescending);
+            return;
+        }
 
-        list.Clear();
-        foreach (var t in ordered) list.Add(t);
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(source);
+        view.SortDescriptions.Clear();
+        if (string.IsNullOrEmpty(_trackSortField)) return;
+        view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
+            _trackSortField switch
+            {
+                "Artist" => nameof(Models.Track.Artist),
+                "Album" => nameof(Models.Track.Album),
+                "Duration" => nameof(Models.Track.Duration),
+                _ => nameof(Models.Track.Title)
+            },
+            _trackSortDescending
+                ? System.ComponentModel.ListSortDirection.Descending
+                : System.ComponentModel.ListSortDirection.Ascending));
     }
 
     /// <summary>表头按钮追加 ▲/▼ 排序指示。</summary>
@@ -344,6 +375,7 @@ public partial class MainWindow : Window
             btn.Content = _trackSortField == field
                 ? baseName + (_trackSortDescending ? " ▼" : " ▲")
                 : baseName;
+            btn.ToolTip = "点击切换：升序 → 降序 → 取消排序";
         }
     }
 
@@ -415,6 +447,25 @@ public partial class MainWindow : Window
         }
         // 锁定右键目标曲目，供"添加到歌单"子菜单使用
         _viewModel.PendingMenuTrack = TrackList.SelectedItem as Track;
+    }
+
+    /// <summary>
+    /// 列表里点击歌手名 / 专辑名：按该字段直接搜索（内部就是普通搜索，
+    /// 与右键菜单"查看歌手/查看专辑"走同一条路径）。
+    /// </summary>
+    private void CellSearch_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: Models.Track track } element) return;
+        var keyword = element.Tag as string switch
+        {
+            "Artist" => track.Artist,
+            "Album" => track.Album,
+            _ => null
+        };
+        if (string.IsNullOrWhiteSpace(keyword)) return;
+
+        e.Handled = true; // 别再触发行选中/双击播放
+        _ = _viewModel.SearchForTextAsync(keyword);
     }
 
     /// <summary>右键菜单"重命名歌单"：弹出输入对话框。</summary>

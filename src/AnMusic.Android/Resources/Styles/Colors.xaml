@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <!-- ══════════════════════════════════════════════════════════════
+         AnMusic 安卓端设计令牌（网易云音乐风格 · 浅色）
+         ──────────────────────────────────────────────────────────────
+         命名约定：Am* 前缀，避免与 MAUI 默认样式键冲突。
+         ══════════════════════════════════════════════════════════════ -->
+
+    <!-- ── 品牌色 ── -->
+    <Color x:Key="AmPrimary">#EC4141</Color>
+    <Color x:Key="AmPrimaryDark">#C73333</Color>
+    <Color x:Key="AmPrimarySoft">#FDECEC</Color>
+
+    <!-- ── 背景层级（浅 -> 深）── -->
+    <Color x:Key="AmBg">#F5F6F8</Color>
+    <Color x:Key="AmSurface">#FFFFFF</Color>
+    <Color x:Key="AmSurfaceAlt">#FAFAFC</Color>
+    <Color x:Key="AmDivider">#EDEDF0</Color>
+    <Color x:Key="AmOverlay">#66000000</Color>
+
+    <!-- ── 文字层级 ── -->
+    <Color x:Key="AmTextPrimary">#1A1A1A</Color>
+    <Color x:Key="AmTextSecondary">#66666E</Color>
+    <Color x:Key="AmTextTertiary">#9E9EA6</Color>
+    <Color x:Key="AmTextOnPrimary">#FFFFFF</Color>
+
+    <!-- ── 功能色 ── -->
+    <Color x:Key="AmAccent">#EC4141</Color>
+    <Color x:Key="AmSuccess">#2FB86B</Color>
+    <Color x:Key="AmWarning">#F0A020</Color>
+    <Color x:Key="AmChipBg">#F2F2F5</Color>
+    <Color x:Key="AmSkeleton">#ECECF0</Color>
+
+    <!-- ── 封面占位（无封面时的渐层底）── -->
+    <Color x:Key="AmCoverPlaceholder">#DCDCE2</Color>
+
+    <!-- ── 播放器深色面板（播放详情页用，网易云播放页惯用深色沉浸）── -->
+    <Color x:Key="AmPlayerBg">#F2F3F5</Color>
+
+    <!-- ── 常用 SolidColorBrush ── -->
+    <SolidColorBrush x:Key="AmPrimaryBrush" Color="{StaticResource AmPrimary}" />
+    <SolidColorBrush x:Key="AmBgBrush" Color="{StaticResource AmBg}" />
+    <SolidColorBrush x:Key="AmSurfaceBrush" Color="{StaticResource AmSurface}" />
+    <SolidColorBrush x:Key="AmDividerBrush" Color="{StaticResource AmDivider}" />
+
+</ResourceDictionary>

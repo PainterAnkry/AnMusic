@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             x:Class="AnMusic.Android.SettingsPage"
+             x:DataType="vm:SettingsViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource AmBg}">
+
+    <ContentPage.Resources>
+        <!-- 设置项：左标题右副标题的两行结构，复用在一堆地方 -->
+        <Style x:Key="RowStack" TargetType="VerticalStackLayout">
+            <Setter Property="Spacing" Value="3" />
+            <Setter Property="VerticalOptions" Value="Center" />
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="Auto,*"
+              Padding="8,10,16,6">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{StaticResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="设置"
+                   Style="{StaticResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
+
+                <!-- ══════════ 用户资料卡 ══════════ -->
+                <Border Style="{StaticResource AmCard}">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                        <Border Grid.Column="0"
+                                WidthRequest="56" HeightRequest="56"
+                                BackgroundColor="{StaticResource AmPrimary}"
+                                StrokeThickness="0"
+                                StrokeShape="RoundRectangle 28">
+                            <Label Text="♪"
+                                   FontSize="26"
+                                   TextColor="#FFFFFF"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center" />
+                        </Border>
+
+                        <VerticalStackLayout Grid.Column="1" Style="{StaticResource RowStack}">
+                            <Entry Text="{Binding UserNickname}"
+                                   Style="{StaticResource AmSearchEntry}"
+                                   FontSize="17"
+                                   FontAttributes="Bold"
+                                   HeightRequest="34" />
+                            <Label Text="点击可修改昵称"
+                                   Style="{StaticResource AmCaptionText}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Border>
+
+                <!-- ══════════ 播放设置 ══════════ -->
+                <Label Text="播放设置" Style="{StaticResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{StaticResource AmCard}">
+                    <VerticalStackLayout Spacing="16">
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="默认音量" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding DefaultVolume, StringFormat='{0:P0}'}"
+                                       Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Slider Grid.Column="1"
+                                    Minimum="0" Maximum="1"
+                                    Value="{Binding DefaultVolume}"
+                                    Style="{StaticResource AmProgress}"
+                                    WidthRequest="150"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="默认播放模式" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding PlayModeText}" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="切换"
+                                    Command="{Binding CyclePlayModeCommand}"
+                                    Style="{StaticResource AmOutlineButton}"
+                                    HeightRequest="32"
+                                    FontSize="12"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="在线歌词" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="无本地歌词时自动联网匹配"
+                                       Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding IsOnlineLyrics}"
+                                    Style="{StaticResource AmSwitch}"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="歌词字号" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding LyricFontSize, StringFormat='{0:F0} px'}"
+                                       Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Slider Grid.Column="1"
+                                    Minimum="12" Maximum="24"
+                                    Value="{Binding LyricFontSize}"
+                                    Style="{StaticResource AmProgress}"
+                                    WidthRequest="150"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="音质" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding AudioQualityText}" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="选择"
+                                    Command="{Binding ComingSoonCommand}"
+                                    CommandParameter="音质选择"
+                                    Style="{StaticResource AmOutlineButton}"
+                                    HeightRequest="32"
+                                    FontSize="12"
+                                    VerticalOptions="Center" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 本地音乐 ══════════ -->
+                <Label Text="本地音乐" Style="{StaticResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{StaticResource AmCard}">
+                    <VerticalStackLayout Spacing="12">
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="扫描目录" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding MusicDirText}" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="刷新"
+                                    Command="{Binding RefreshMusicDirsCommand}"
+                                    Style="{StaticResource AmOutlineButton}"
+                                    HeightRequest="32"
+                                    FontSize="12"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding MusicDirectories}"
+                                             Spacing="6">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Label Text="{Binding .}"
+                                           Style="{StaticResource AmCaptionText}"
+                                           LineBreakMode="MiddleTruncation" />
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 音源插件 ══════════ -->
+                <Label Text="音源插件" Style="{StaticResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{StaticResource AmCard}">
+                    <VerticalStackLayout Spacing="12">
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="已加载插件" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding PluginStatusText}"
+                                       Style="{StaticResource AmCaptionText}"
+                                       LineBreakMode="WordWrap" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="重新加载"
+                                    Command="{Binding ReloadPluginsCommand}"
+                                    Style="{StaticResource AmOutlineButton}"
+                                    HeightRequest="32"
+                                    FontSize="12"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <!-- 插件列表 -->
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Plugins}"
+                                             Spacing="8"
+                                             IsVisible="{Binding HasPlugins}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PluginItem">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                            <Label Text="{Binding DisplayName}"
+                                                   Style="{StaticResource AmTitleText}"
+                                                   FontSize="13" />
+                                            <Label Text="{Binding FileName}"
+                                                   Style="{StaticResource AmCaptionText}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1"
+                                               Text="{Binding VersionLabel}"
+                                               Style="{StaticResource AmCaptionText}"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <!-- 插件放置路径提示 -->
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="插件目录" Style="{StaticResource AmTitleText}" FontSize="14" />
+                            <Label Text="{Binding PluginDirectory}"
+                                   Style="{StaticResource AmCaptionText}"
+                                   LineBreakMode="CharacterWrap" />
+                            <Label Text="把音源 .js 插件放入该目录；或放入 plugins.json 清单自动下载。放入后点「重新加载」，无需重启。"
+                                   Style="{StaticResource AmCaptionText}"
+                                   LineBreakMode="WordWrap"
+                                   Margin="0,4,0,0" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 存储与缓存 ══════════ -->
+                <Label Text="存储与缓存" Style="{StaticResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{StaticResource AmCard}">
+                    <VerticalStackLayout Spacing="12">
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="封面缓存" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding CoverCacheText}" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="清理"
+                                    Command="{Binding ClearCoverCacheCommand}"
+                                    Style="{StaticResource AmOutlineButton}"
+                                    HeightRequest="32"
+                                    FontSize="12"
+                                    VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <VerticalStackLayout Grid.Column="0" Style="{StaticResource RowStack}">
+                                <Label Text="音频缓存" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="{Binding TotalCacheText}" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="1"
+                                    Text="清理"
+                                    Command="{Binding ClearAudioCacheCommand}"
+                                    Style="{StaticResource AmOutlineButton}"
+                                    HeightRequest="32"
+                                    FontSize="12"
+                                    VerticalOptions="Center" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 更多功能（预留入口）══════════ -->
+                <Label Text="更多功能" Style="{StaticResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{StaticResource AmCard}" Padding="0,4">
+                    <VerticalStackLayout>
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Padding="14,13" ColumnSpacing="12">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ComingSoonCommand}" CommandParameter="均衡器" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0" Text="🎚" FontSize="17" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Style="{StaticResource RowStack}">
+                                <Label Text="均衡器" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="调节各频段增益与预设音效" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="›" FontSize="18"
+                                   TextColor="{StaticResource AmTextTertiary}" VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Padding="14,13" ColumnSpacing="12">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ComingSoonCommand}" CommandParameter="定时关闭" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0" Text="⏱" FontSize="17" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Style="{StaticResource RowStack}">
+                                <Label Text="定时关闭" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="设定时间后自动停止播放" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="›" FontSize="18"
+                                   TextColor="{StaticResource AmTextTertiary}" VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Padding="14,13" ColumnSpacing="12">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ComingSoonCommand}" CommandParameter="一起听" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0" Text="👥" FontSize="17" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Style="{StaticResource RowStack}">
+                                <Label Text="一起听" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="与好友同步播放同一首歌" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="›" FontSize="18"
+                                   TextColor="{StaticResource AmTextTertiary}" VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Padding="14,13" ColumnSpacing="12">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ComingSoonCommand}" CommandParameter="下载管理" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0" Text="⬇" FontSize="17" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Style="{StaticResource RowStack}">
+                                <Label Text="下载管理" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="查看与管理已下载的歌曲" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="›" FontSize="18"
+                                   TextColor="{StaticResource AmTextTertiary}" VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="Auto,*,Auto" Padding="14,13" ColumnSpacing="12">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ComingSoonCommand}" CommandParameter="播放页样式" />
+                            </Grid.GestureRecognizers>
+                            <Label Grid.Column="0" Text="🎨" FontSize="17" VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Style="{StaticResource RowStack}">
+                                <Label Text="播放页样式" Style="{StaticResource AmTitleText}" FontSize="14" />
+                                <Label Text="封面样式与背景效果" Style="{StaticResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="›" FontSize="18"
+                                   TextColor="{StaticResource AmTextTertiary}" VerticalOptions="Center" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 关于 ══════════ -->
+                <Label Text="关于" Style="{StaticResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{StaticResource AmCard}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="版本" Style="{StaticResource AmTitleText}" FontSize="14" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding AppVersion}"
+                                   Style="{StaticResource AmCaptionText}"
+                                   VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="构建号" Style="{StaticResource AmTitleText}" FontSize="14" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding AppBuild}"
+                                   Style="{StaticResource AmCaptionText}"
+                                   VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView Style="{StaticResource AmDividerLine}" />
+
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="数据目录" Style="{StaticResource AmTitleText}" FontSize="14" />
+                            <Label Text="{Binding DataRoot}"
+                                   Style="{StaticResource AmCaptionText}"
+                                   LineBreakMode="CharacterWrap" />
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="AnMusic · 本地音乐播放器"
+                       Style="{StaticResource AmCaptionText}"
+                       HorizontalOptions="Center"
+                       Margin="0,10,0,0" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

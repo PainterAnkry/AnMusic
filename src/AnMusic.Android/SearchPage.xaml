@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:AnMusic.Models;assembly=AnMusic.Core"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.SearchPage"
+             x:DataType="vm:SearchViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource AmBg}">
+
+    <ContentPage.Resources>
+        <conv:HasValueConverter x:Key="HasValue" />
+        <conv:InvertBoolConverter x:Key="InvertBool" />
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- ══ 搜索框 ══ -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="Auto,*,Auto"
+              ColumnSpacing="6"
+              Padding="8,10,12,6">
+
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{StaticResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+
+            <Border Grid.Column="1"
+                    BackgroundColor="{StaticResource AmSurface}"
+                    StrokeThickness="0"
+                    StrokeShape="RoundRectangle 20"
+                    Padding="14,0">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                    <Label Grid.Column="0"
+                           Text="🔍"
+                           FontSize="14"
+                           TextColor="{StaticResource AmTextTertiary}"
+                           VerticalOptions="Center" />
+                    <Entry Grid.Column="1"
+                           x:Name="SearchEntry"
+                           Placeholder="搜索歌曲、歌手、专辑"
+                           ReturnType="Search"
+                           Text="{Binding Keyword}"
+                           Style="{StaticResource AmSearchEntry}"
+                           Completed="OnSearchCompleted" />
+                    <Button Grid.Column="2"
+                            Text="✕"
+                            FontSize="14"
+                            TextColor="{StaticResource AmTextTertiary}"
+                            BackgroundColor="Transparent"
+                            Padding="0"
+                            WidthRequest="30"
+                            Clicked="OnClearKeywordClicked" />
+                </Grid>
+            </Border>
+
+            <Button Grid.Column="2"
+                    Text="搜索"
+                    FontSize="14"
+                    FontAttributes="Bold"
+                    TextColor="{StaticResource AmPrimary}"
+                    BackgroundColor="Transparent"
+                    Padding="0"
+                    WidthRequest="46"
+                    Command="{Binding SearchCommand}" />
+        </Grid>
+
+        <!-- ══ 音源选择 ══ -->
+        <VerticalStackLayout Grid.Row="1" Spacing="6">
+            <ScrollView Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Never"
+                        Padding="16,2,16,4">
+                <HorizontalStackLayout Spacing="8">
+                    <CollectionView x:Name="SourceList"
+                                    ItemsSource="{Binding Sources}"
+                                    SelectionMode="Single"
+                                    SelectedItem="{Binding SelectedSource}"
+                                    HeightRequest="34"
+                                    SelectionChanged="OnSourceSelectionChanged">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Horizontal" ItemSpacing="8" />
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SearchSource">
+                                <Border Style="{StaticResource AmChip}"
+                                        HeightRequest="34"
+                                        Padding="14,0"
+                                        VerticalOptions="Center">
+                                    <Label Text="{Binding Label}"
+                                           Style="{StaticResource AmChipText}"
+                                           VerticalOptions="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </HorizontalStackLayout>
+            </ScrollView>
+
+            <Label Text="{Binding StatusText}"
+                   Style="{StaticResource AmCaptionText}"
+                   Margin="16,0"
+                   LineBreakMode="WordWrap" />
+        </VerticalStackLayout>
+
+        <!-- ══ 结果区 ══ -->
+        <Grid Grid.Row="2">
+
+            <!-- 结果列表 -->
+            <CollectionView x:Name="ResultList"
+                            ItemsSource="{Binding Results}"
+                            SelectionMode="None"
+                            IsVisible="{Binding ShowEmpty, Converter={StaticResource InvertBool}}">
+
+                <CollectionView.Header>
+                    <Grid Padding="16,4,16,10" ColumnDefinitions="*,Auto">
+                        <Label Grid.Column="0"
+                               Text="{Binding ResultCountText}"
+                               Style="{StaticResource AmCaptionText}"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="▶ 播放全部"
+                                Command="{Binding PlayAllResultsCommand}"
+                                Style="{StaticResource AmOutlineButton}"
+                                HeightRequest="32"
+                                FontSize="12" />
+                    </Grid>
+                </CollectionView.Header>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Track">
+                        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{StaticResource AmSurface}">
+
+                            <Grid Grid.Row="0"
+                                  Padding="16,10"
+                                  ColumnDefinitions="Auto,*,Auto"
+                                  ColumnSpacing="12">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnResultTapped" />
+                                </Grid.GestureRecognizers>
+
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource AmCoverSmall}"
+                                        VerticalOptions="Center">
+                                    <Grid>
+                                        <Label Text="♪"
+                                               FontSize="20"
+                                               TextColor="#FFFFFF"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+                                        <Image Source="{Binding CoverKey}"
+                                               Aspect="AspectFill"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}}" />
+                                    </Grid>
+                                </Border>
+
+                                <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}" Style="{StaticResource AmTitleText}" />
+                                    <Label Text="{Binding Artist}" Style="{StaticResource AmSubText}" />
+                                </VerticalStackLayout>
+
+                                <Button Grid.Column="2"
+                                        Text="⋯"
+                                        Style="{StaticResource AmRowMenuButton}"
+                                        Clicked="OnResultMenuClicked" />
+                            </Grid>
+
+                            <BoxView Grid.Row="1" Style="{StaticResource AmDividerLine}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <!-- 空结果 -->
+            <VerticalStackLayout IsVisible="{Binding ShowEmpty}"
+                                 Padding="40"
+                                 Spacing="10"
+                                 VerticalOptions="Center">
+                <Label Text="🔍" FontSize="42" HorizontalOptions="Center" />
+                <Label Text="没有找到相关歌曲"
+                       FontSize="15"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center" />
+                <Label Text="换个关键词，或切换其它音源试试"
+                       Style="{StaticResource AmCaptionText}"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+
+            <!-- 初始态：搜索历史 -->
+            <VerticalStackLayout IsVisible="{Binding HasSearched, Converter={StaticResource InvertBool}}"
+                                 Padding="16,8"
+                                 Spacing="12">
+
+                <Grid ColumnDefinitions="*,Auto"
+                      IsVisible="{Binding History.Count}">
+                    <Label Grid.Column="0"
+                           Text="搜索历史"
+                           Style="{StaticResource AmSectionTitle}" />
+                    <Button Grid.Column="1"
+                            Text="清空"
+                            Command="{Binding ClearHistoryCommand}"
+                            FontSize="12"
+                            TextColor="{StaticResource AmTextTertiary}"
+                            BackgroundColor="Transparent"
+                            Padding="0" />
+                </Grid>
+                <FlexLayout BindableLayout.ItemsSource="{Binding History}"
+                            Wrap="Wrap"
+                            Direction="Row"
+                            JustifyContent="Start"
+                            AlignItems="Start">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Border Style="{StaticResource AmChip}"
+                                    Margin="0,0,8,8"
+                                    Padding="14,7">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnHistoryTapped" />
+                                </Border.GestureRecognizers>
+                                <Label Text="{Binding .}" Style="{StaticResource AmChipText}" />
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+
+                <!-- 常用推荐（占位，后续接榜单/推荐接口） -->
+                <Label Text="热门搜索"
+                       Style="{StaticResource AmSectionTitle}"
+                       Margin="0,8,0,0" />
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="在线榜单与推荐将在后续版本接入"
+                           Style="{StaticResource AmCaptionText}" />
+                    <Label Text="目前可在上方选择音源后直接搜索"
+                           Style="{StaticResource AmCaptionText}" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+
+            <!-- 搜索中 -->
+            <ActivityIndicator IsRunning="{Binding IsSearching}"
+                               IsVisible="{Binding IsSearching}"
+                               WidthRequest="36"
+                               HeightRequest="36"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
+        </Grid>
+    </Grid>
+
+</ContentPage>

@@ -1,9 +1,9 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.1.0**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.2.0**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.1.0-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.2.0-orange)
 
 ## 功能特性
 
@@ -101,28 +101,65 @@ AnMusic/
 ├── setup.iss                     # Inno Setup 安装包脚本
 ├── installer/                    # 安装包输出目录
 ├── publish/                      # 发布输出目录
-└── src/AnMusic/
-    ├── Models/                   # 数据模型（Track、Playlist、Lyric…）
-    ├── ViewModels/               # MVVM 视图模型（主视图/播放控制/歌词/设置/一起听）
-    ├── Views/                    # 页面与控件（设置页、桌面歌词、头像裁剪等）
-    ├── Services/
-    │   ├── Audio/                # NAudio 引擎封装、均衡器
-    │   ├── Providers/            # B站/插件(Jint)/封面缓存等 Provider
-    │   ├── Playlist/             # 播放队列、用户数据持久化
-    │   ├── Lyrics/               # LRCLIB/本地歌词、翻译服务
-    │   ├── ListenTogether/       # 在线一起听（房间同步）
-    │   └── Settings/             # 用户设置
-    ├── Converters/               # 值转换器
-    └── Assets/                   # 图标与插件宿主内置 JS 库
+├── src/
+│   ├── AnMusic.Core/             # 跨端共享库（net10.0，无平台依赖）
+│   │   ├── Models/               # 数据模型（Track、Playlist、Lyric…）
+│   │   ├── Services/
+│   │   │   ├── AppPaths.cs       # 数据路径统一入口（数据根可被各端覆盖）
+│   │   │   ├── IPlatformContext.cs # 平台差异抽象（数据根/权限/日志）
+│   │   │   ├── Audio/            # IAudioEngine 抽象（各端各自实现）
+│   │   │   ├── Providers/        # B站/网易云/QQ/插件(Jint) 音源
+│   │   │   ├── Playlist/         # 播放队列、用户数据持久化
+│   │   │   ├── Lyrics/           # LRCLIB/本地歌词
+│   │   │   └── Net/              # 统一 HTTP 出口
+│   │   └── Assets/Plugins/       # 插件宿主内置 JS 库
+│   ├── AnMusic/                  # 桌面端（WPF，net10.0-windows）
+│   │   ├── ViewModels/           # MVVM 视图模型
+│   │   ├── Views/                # 页面与控件
+│   │   ├── Services/Audio/       # NAudio 引擎、均衡器
+│   │   └── Themes/               # 皮肤
+│   └── AnMusic.Android/          # 安卓端（.NET MAUI，net10.0-android）
+│       ├── ViewModels/           # 曲库/播放 ViewModel
+│       ├── Services/             # MediaPlayer 引擎、媒体库扫描、平台上下文
+│       └── Pages                 # MainPage（曲库）、PlayerPage（播放详情）
+└── tests/
 ```
+
+### 跨端架构
+
+业务逻辑集中在 **AnMusic.Core**（音源解析、歌词匹配、播放队列、用户数据、设置），
+桌面端与安卓端各自只实现两部分：
+
+| 关注点 | 桌面端 | 安卓端 |
+|---|---|---|
+| UI 框架 | WPF + XAML 皮肤 | .NET MAUI |
+| 音频引擎 | NAudio 3.1（`NAudioEngine`） | 系统 MediaPlayer（`AndroidAudioEngine`） |
+| 数据根目录 | `%AppData%\AnMusic` | 应用私有目录 `files/AnMusic` |
+| 本地音乐发现 | 递归扫描音乐文件夹 | MediaStore 查询 + 目录枚举 |
+| 平台适配 | `DesktopPlatformContext` | `AndroidPlatformContext` |
+
+两端共用同一份 `userdata.json` / `settings.json` 结构，数据可互相迁移。
+
+### 构建安卓端
+
+需要 JDK 17、Android SDK（API 36）与 `maui-android` 工作负载：
+
+```bash
+dotnet workload install maui-android
+dotnet build src/AnMusic.Android/AnMusic.Android.csproj -c Release
+```
+
+产物：`src/AnMusic.Android/bin/Release/net10.0-android/com.painterankry.anmusic-Signed.apk`
 
 ## 数据存储
 
-| 数据 | 位置 |
+| 数据 | 桌面端位置 |
 |---|---|
-| 用户数据（歌单、我喜欢、最近播放、搜索历史） | `%LocalAppData%\AnMusic\userdata.json` |
-| 应用设置（主题、背景图、音量、窗口状态等） | `%LocalAppData%\AnMusic\settings.json` |
-| 音源插件目录 / 封面与音频缓存 | `%AppData%\AnMusic\plugins`、`%LocalAppData%\AnMusic\covers` |
+| 用户数据（歌单、我喜欢、最近播放、搜索历史） | `%AppData%\AnMusic\userdata.json` |
+| 应用设置（主题、背景图、音量、窗口状态等） | `%AppData%\AnMusic\settings.json` |
+| 音源插件目录 / 封面与音频缓存 | `%AppData%\AnMusic\plugins`、`%AppData%\AnMusic\covers` |
+
+安卓端对应数据位于应用私有目录 `/data/data/com.painterankry.anmusic/files/AnMusic/`，卸载即清除。
 
 卸载应用不会删除以上数据。
 

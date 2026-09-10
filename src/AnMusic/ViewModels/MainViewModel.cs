@@ -412,6 +412,9 @@ public partial class MainViewModel : ObservableObject
         Library.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(LibraryViewModel.IsLoading)) RefreshEmptyState(); };
         // ViewMode 切换 / 搜索状态变化由 partial methods 联动 RefreshEmptyState
 
+        // 每次成功开始播放（含自动切歌、单曲循环重播）都记一次播放次数
+        _playbackBar.TrackChanged += OnTrackStarted;
+
         // 当前曲目变化或收藏列表变化时，刷新爱心按钮状态
         _playbackBar.PropertyChanged += (_, e) =>
         {
@@ -513,6 +516,24 @@ public partial class MainViewModel : ObservableObject
         await _playbackBar.LoadAndPlayAsync(tracks[0]);
         await Lyrics.LoadLyricsAsync(tracks[0]);
         RecordRecent(tracks[0]);
+    }
+
+    /// <summary>
+    /// 曲目开始播放：累加播放次数（听歌排行用）、写入最近播放；
+    /// 正在看听歌排行时立即刷新，数字即时变化。
+    /// </summary>
+    private void OnTrackStarted(Track track)
+    {
+        if (track is null) return;
+
+        var key = $"{track.ProviderId}:{track.Id}";
+        _store.PlayCounts.TryGetValue(key, out var count);
+        _store.PlayCounts[key] = count + 1;
+        _store.Save();
+
+        RecordRecent(track);
+
+        if (ViewMode == ViewMode.ListeningStats) ShowListeningStats();
     }
 
     private void RecordRecent(Track track)
@@ -800,23 +821,33 @@ public partial class MainViewModel : ObservableObject
             .ToList();
 
         var ranked = allTracks
-            .Select(t => new
+            .Select(t =>
             {
-                Track = t,
-                Seconds = _store.PlayStats.TryGetValue($"{t.ProviderId}:{t.Id}", out var s) ? s : 0
+                var key = $"{t.ProviderId}:{t.Id}";
+                return new
+                {
+                    Track = t,
+                    Seconds = _store.PlayStats.TryGetValue(key, out var s) ? s : 0,
+                    Count = _store.PlayCounts.TryGetValue(key, out var c) ? c : 0
+                };
             })
-            .Where(x => x.Seconds > 0)
+            .Where(x => x.Seconds > 0 || x.Count > 0)
             .OrderByDescending(x => x.Seconds)
             .Take(100)
             .ToList();
 
         foreach (var x in ranked)
+        {
+            // 每行展示：播放次数 + 累计时长（旧数据缺次数时只显示时长）
+            x.Track.ListenStatText = Services.Formatting.ListenStatsText.Compose(x.Count, x.Seconds);
             ListeningStatsTracks.Add(x.Track);
+        }
 
         SearchStatus = ranked.Count > 0
             ? $"共 {ranked.Count} 首，累计 {TimeSpan.FromSeconds(_store.TotalListeningSeconds):hh\\:mm\\:ss}"
             : "暂无听歌统计";
     }
+
 
     /// <summary>个性电台：基于我喜欢随机生成推荐（不限数量），点击进入自动持续播放。</summary>
     [RelayCommand]
@@ -1170,6 +1201,10 @@ public partial class MainViewModel : ObservableObject
         SearchText = keyword;
         await SearchAsync();
     }
+
+    /// <summary>右键菜单「查看歌手 / 查看专辑」：按歌手名或专辑名搜索。</summary>
+    [RelayCommand]
+    private async Task SearchForText(string? keyword) => await SearchForTextAsync(keyword);
 
     /// <summary>以指定关键词搜索（供歌词页点击歌手/专辑跳转使用）。</summary>
     public async Task SearchForTextAsync(string? text)
