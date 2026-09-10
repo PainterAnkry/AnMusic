@@ -6,6 +6,8 @@
              xmlns:converters="clr-namespace:AnMusic.Converters"
              mc:Ignorable="d"
              Background="{DynamicResource BgContentAlpha}"
+             Focusable="True"
+             PreviewKeyDown="SettingsPage_PreviewKeyDown"
              d:DesignHeight="500" d:DesignWidth="600">
     <UserControl.Resources>
         <converters:PathToImageConverter x:Key="PathToImageConv"/>
@@ -123,13 +125,87 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,24" MaxWidth="560" HorizontalAlignment="Left">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="146"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
+        <!-- 左：设置分类（点击切换右侧只显示该分类的分区） -->
+        <StackPanel Grid.Column="0" Margin="24,24,8,24">
             <TextBlock Text="设置" Foreground="{DynamicResource FgPrimary}"
-                       FontSize="22" FontWeight="Bold"/>
+                       FontSize="20" FontWeight="Bold" Margin="6,0,0,10"/>
+            <ItemsControl ItemsSource="{Binding SettingsCategories}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Content="{Binding Name}" Tag="{Binding Name}" Click="SettingsCategory_Click"
+                                HorizontalContentAlignment="Left" Padding="10,7" Margin="0,2"
+                                FontSize="12.5" Cursor="Hand" BorderThickness="0">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                                    <Setter Property="Template" Value="{StaticResource RoundedButtonTemplate}"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource BgControl}"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- 右：搜索框（固定）+ 当前分类的设置分区（滚动） -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 设置搜索：输入关键词跨分类过滤设置项 -->
+            <Border Grid.Row="0" Background="{DynamicResource BgControl}" CornerRadius="10" Padding="6,0"
+                    Margin="0,24,24,0" MaxWidth="320" HorizontalAlignment="Left">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="🔍" Foreground="{DynamicResource FgMuted}" FontSize="11"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="搜索设置项（如 音量/皮肤/缓存/歌词…）" Foreground="{DynamicResource FgMuted}"
+                               FontSize="11" VerticalAlignment="Center" IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SettingsFilter}" Value="">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBox x:Name="SettingsSearchBox"
+                             Text="{Binding SettingsFilter, UpdateSourceTrigger=PropertyChanged}"
+                             Background="Transparent" BorderThickness="0"
+                             Foreground="{DynamicResource FgPrimary}" FontSize="11"
+                             VerticalContentAlignment="Center"
+                             TextChanged="SettingsSearch_TextChanged"
+                             KeyDown="SettingsSearch_KeyDown"/>
+                </DockPanel>
+            </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="RootPanel" Margin="0,4,24,32" MaxWidth="560" HorizontalAlignment="Left">
 
             <!-- 外观 -->
+            <!-- ===== 分区：Appearance ===== -->
+            <StackPanel Tag="sec:外观" x:Name="Section_Appearance">
             <TextBlock Text="外观" Style="{StaticResource SectionTitle}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -137,14 +213,12 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="主题" Style="{StaticResource SettingLabel}"/>
-                    <TextBlock Text="切换应用深色 / 浅色外观" Style="{StaticResource SettingDesc}"/>
+                    <TextBlock Text="皮肤" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="整体配色方案（底色 + 配套强调色）" Style="{StaticResource SettingDesc}"/>
                 </StackPanel>
-                <ComboBox Grid.Column="1" Width="120" Style="{StaticResource PageCombo}"
-                          SelectedIndex="{Binding ThemeIndex}">
-                    <ComboBoxItem Content="深色"/>
-                    <ComboBoxItem Content="浅色"/>
-                </ComboBox>
+                <ComboBox Grid.Column="1" Width="132" Style="{StaticResource PageCombo}"
+                          ItemsSource="{Binding SkinNames}"
+                          SelectedIndex="{Binding SkinIndex}"/>
             </Grid>
 
             <!-- 强调色 -->
@@ -155,20 +229,17 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="强调色" Style="{StaticResource SettingLabel}"/>
-                    <TextBlock Text="选择主题强调色方案" Style="{StaticResource SettingDesc}"/>
+                    <TextBlock Text="在皮肤基础上单独调整主色（标题栏 🎨 可预览切换）" Style="{StaticResource SettingDesc}"/>
                 </StackPanel>
-                <ComboBox Grid.Column="1" Width="120" Style="{StaticResource PageCombo}"
-                          SelectedIndex="{Binding AccentColorIndex}">
-                    <ComboBoxItem Content="科技蓝"/>
-                    <ComboBoxItem Content="暗夜紫"/>
-                    <ComboBoxItem Content="森林绿"/>
-                    <ComboBoxItem Content="日落橙"/>
-                    <ComboBoxItem Content="玫瑰红"/>
-                    <ComboBoxItem Content="海洋青"/>
-                </ComboBox>
+                <ComboBox Grid.Column="1" Width="132" Style="{StaticResource PageCombo}"
+                          ItemsSource="{Binding AccentNames}"
+                          SelectedIndex="{Binding AccentColorIndex}"/>
             </Grid>
 
             <!-- 音乐库 -->
+            <!-- ===== 分区：LibraryDir ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:通用" x:Name="Section_LibraryDir">
             <TextBlock Text="音乐库" Style="{StaticResource SectionTitle}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -184,7 +255,53 @@
                         Command="{Binding BrowseMusicDirectoryCommand}"/>
             </Grid>
 
+            <!-- 网络代理 -->
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="网络代理" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="留空 = 跟随系统；如 http://127.0.0.1:7890（改完立即生效）"
+                               Style="{StaticResource SettingDesc}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <TextBox Grid.Column="1" Width="200" Padding="8,5" FontSize="12"
+                         Background="{DynamicResource BgControl}" BorderThickness="0"
+                         Foreground="{DynamicResource FgPrimary}"
+                         Text="{Binding ProxyUrl, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="支持 http:// 与 socks5:// 形式的代理地址"/>
+            </Grid>
+
+            <!-- 下载 -->
+            <!-- ===== 分区：Download ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:通用" x:Name="Section_Download">
+            <TextBlock Text="下载" Style="{StaticResource SectionTitle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource SettingLabel}"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding DownloadDirectoryLabel}"/>
+                    <TextBlock Text="在线歌曲下载保存位置；未设置时保存到音乐库目录（默认 我的音乐\AnMusic）"
+                               Style="{StaticResource SettingDesc}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="浏览..." Style="{StaticResource PageButton}" Margin="0,0,6,0"
+                            Command="{Binding BrowseDownloadDirectoryCommand}"/>
+                    <Button Content="默认" Style="{StaticResource PageButton}" ToolTip="恢复默认（跟随音乐库目录）"
+                            Command="{Binding ClearDownloadDirectoryCommand}"/>
+                </StackPanel>
+            </Grid>
+
             <!-- 播放 -->
+            <!-- ===== 分区：Play ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:播放" x:Name="Section_Play">
             <TextBlock Text="播放" Style="{StaticResource SectionTitle}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -203,7 +320,72 @@
                 </StackPanel>
             </Grid>
 
-            <!-- 背景图片 -->
+            <!-- 快捷键 -->
+            <!-- ===== 分区：Shortcuts ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:播放" x:Name="Section_Shortcuts">
+            <TextBlock Text="快捷键" Style="{StaticResource SectionTitle}"/>
+            <CheckBox IsChecked="{Binding ShortcutsEnabled}" Content="启用键盘快捷键"
+                      Foreground="{DynamicResource FgNormal}" FontSize="12.5" Cursor="Hand"/>
+            <TextBlock Style="{StaticResource SettingDesc}" TextWrapping="Wrap" Margin="0,5,0,8"
+                       Text="点「修改」后按下新的按键组合即可改键；Esc 取消，Delete 清除该项。勾选「全局」后在其他程序窗口中也生效（全局热键必须包含 Ctrl / Alt / Shift）。"/>
+            <ItemsControl ItemsSource="{Binding ShortcutItems}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="{Binding Name}" Foreground="{DynamicResource FgNormal}"
+                                           FontSize="12.5" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Tip}" Foreground="{DynamicResource FgMuted}"
+                                           FontSize="10.5" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <!-- 当前按键（捕获中 / 未设置 / 冲突 三种状态变色） -->
+                            <Border Grid.Column="1" MinWidth="104" Padding="8,4" CornerRadius="6"
+                                    Background="{DynamicResource BgControl}" ToolTip="{Binding Warning}">
+                                <TextBlock Text="{Binding GestureText}" FontSize="11.5" HorizontalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUnset}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource FgMuted}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsCapturing}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding HasWarning}" Value="True">
+                                                    <Setter Property="Foreground" Value="#E5484D"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+                            <CheckBox Grid.Column="2" Content="全局" IsChecked="{Binding IsGlobal}"
+                                      Foreground="{DynamicResource FgSecondary}" FontSize="11"
+                                      VerticalAlignment="Center" Margin="8,0,0,0"
+                                      ToolTip="在其他程序窗口中也生效（需含修饰键）"/>
+                            <Button Grid.Column="3" Content="修改" Click="ShortcutEdit_Click"
+                                    Style="{StaticResource PageButton}" Padding="10,4" FontSize="11.5"
+                                    Margin="8,0,0,0" ToolTip="点击后按下新的按键组合"/>
+                            <Button Grid.Column="4" Content="重置" Click="ShortcutReset_Click"
+                                    Style="{StaticResource PageButton}" Padding="10,4" FontSize="11.5"
+                                    Margin="6,0,0,0" ToolTip="恢复该项默认按键"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Content="全部恢复默认" Command="{Binding ResetAllShortcutsCommand}"
+                    Style="{StaticResource PageButton}" Margin="0,10,0,0" HorizontalAlignment="Left"/>
+            </StackPanel>
+            <StackPanel Tag="sec:外观" x:Name="Section_Wallpaper">
             <TextBlock Text="背景图片" Style="{StaticResource SectionTitle}"/>
             <!-- 预览缩略图：即时查看设置效果 -->
             <Border CornerRadius="6" Margin="0,0,0,8" MaxWidth="220" HorizontalAlignment="Left"
@@ -254,6 +436,9 @@
             </Grid>
 
             <!-- 音乐源 -->
+            <!-- ===== 分区：Sources ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:音源" x:Name="Section_Sources">
             <TextBlock Text="音乐源" Style="{StaticResource SectionTitle}"/>
             <ItemsControl ItemsSource="{Binding RegisteredSources}">
                 <ItemsControl.ItemTemplate>
@@ -299,12 +484,19 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <Button Content="🧹 清理B站音频缓存" HorizontalAlignment="Left"
+            <TextBlock Text="{Binding CacheUsageText}" Foreground="{DynamicResource FgMuted}"
+                       FontSize="11" Margin="0,10,0,0"/>
+
+            <Button Content="🧹 一键清理全部缓存" HorizontalAlignment="Left"
                     Background="{DynamicResource BgControl}" Foreground="{DynamicResource FgPrimary}"
                     BorderThickness="0" Padding="12,6" FontSize="13" Cursor="Hand"
-                    Margin="0,8,0,0" Command="{Binding ClearAudioCacheCommand}"/>
+                    Margin="0,6,0,0" Command="{Binding ClearAllCachesCommand}"
+                    ToolTip="清理 B站音频、插件在线歌曲、封面与在线歌词缓存（不影响已下载歌曲和歌单数据）"/>
 
             <!-- 歌词 -->
+            <!-- ===== 分区：Lyrics ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:歌词" x:Name="Section_Lyrics">
             <TextBlock Text="歌词" Style="{StaticResource SectionTitle}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -360,6 +552,9 @@
             </Grid>
 
             <!-- 关于 -->
+            <!-- ===== 分区：About ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:关于" x:Name="Section_About">
             <TextBlock Text="关于" Style="{StaticResource SectionTitle}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -380,6 +575,9 @@
             </Grid>
 
             <!-- 用户协议（点击查看） -->
+            <!-- ===== 分区：Agreement ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:关于" x:Name="Section_Agreement">
             <TextBlock Text="用户协议" Style="{StaticResource SectionTitle}"/>
             <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="12,8">
                 <Grid>
@@ -393,6 +591,9 @@
             </Border>
 
             <!-- 免责声明（点击查看） -->
+            <!-- ===== 分区：Disclaimer ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:关于" x:Name="Section_Disclaimer">
             <TextBlock Text="免责声明" Style="{StaticResource SectionTitle}"/>
             <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="12,8">
                 <Grid>
@@ -406,6 +607,9 @@
             </Border>
 
             <!-- 联系作者 -->
+            <!-- ===== 分区：Contact ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:关于" x:Name="Section_Contact">
             <TextBlock Text="联系作者" Style="{StaticResource SectionTitle}"/>
             <Border Background="{DynamicResource BgControl}" CornerRadius="6" Padding="12,10">
                 <StackPanel>
@@ -428,6 +632,9 @@
             </Border>
 
             <!-- 关闭行为 -->
+            <!-- ===== 分区：CloseBehavior ===== -->
+            </StackPanel>
+            <StackPanel Tag="sec:通用" x:Name="Section_CloseBehavior">
             <TextBlock Text="关闭行为" Style="{StaticResource SectionTitle}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -449,6 +656,9 @@
             <!-- 状态 -->
             <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource FgMuted}"
                        FontSize="11" Margin="0,24,0,0"/>
+            </StackPanel>
         </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+        </Grid>
+    </Grid>
 </UserControl>

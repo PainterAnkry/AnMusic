@@ -11,6 +11,9 @@ public sealed class UserSettings
     /// <summary>音乐库扫描目录（启动时自动加载）。</summary>
     public string? MusicDirectory { get; set; }
 
+    /// <summary>下载保存目录（空 = 保存到音乐库目录，未设置音乐库时保存到「我的音乐\AnMusic」）。</summary>
+    public string? DownloadDirectory { get; set; }
+
     /// <summary>默认音量 0~1。</summary>
     public double DefaultVolume { get; set; } = 1.0;
 
@@ -54,6 +57,29 @@ public sealed class UserSettings
     public double DesktopLyricsBgOpacity { get; set; } = 0.65;
     /// <summary>桌面歌词窗口宽度 400~1920。</summary>
     public double DesktopLyricsWidth { get; set; } = 960;
+    /// <summary>桌面歌词行距系数 1.1~2.2。</summary>
+    public double DesktopLyricsLineSpacing { get; set; } = 1.45;
+    /// <summary>桌面歌词是否锁定（锁定时禁止拖拽/关闭，仅允许点击跳转行）。</summary>
+    public bool DesktopLyricsIsLocked { get; set; }
+    /// <summary>桌面歌词窗口位置（双屏记忆）。</summary>
+    public double DesktopLyricsLeft { get; set; } = double.NaN;
+    public double DesktopLyricsTop { get; set; } = double.NaN;
+
+    // 迷你悬浮卡片播放器
+    /// <summary>迷你卡片窗口左上角位置（NaN = 未设置，首次打开默认屏幕右下角）。</summary>
+    public double MiniCardLeft { get; set; } = double.NaN;
+    public double MiniCardTop { get; set; } = double.NaN;
+
+    /// <summary>网络代理地址（如 http://127.0.0.1:7890；空 = 跟随系统设置）。</summary>
+    public string ProxyUrl { get; set; } = "";
+
+    // 键盘快捷键
+    /// <summary>快捷键总开关。</summary>
+    public bool ShortcutsEnabled { get; set; } = true;
+    /// <summary>动作 Id → 按键串（规范串，如 "Ctrl+Shift+L"；空串 = 该动作未绑定）。</summary>
+    public Dictionary<string, string>? ShortcutBindings { get; set; }
+    /// <summary>需要在其他程序窗口中也生效的动作 Id（全局热键，需含修饰键）。</summary>
+    public List<string>? GlobalShortcutIds { get; set; }
 
     /// <summary>主题强调色方案索引：0=科技蓝, 1=暗夜紫, 2=森林绿, 3=日落橙, 4=玫瑰红, 5=海洋青。</summary>
     public int AccentColorIndex { get; set; }

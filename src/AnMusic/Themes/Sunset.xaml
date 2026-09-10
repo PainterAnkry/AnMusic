@@ -1,0 +1,24 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 暖阳橙（浅色）：暖米色底 + 日落橙强调 -->
+
+    <SolidColorBrush x:Key="BgMain" Color="#FDF7EF"/>
+    <SolidColorBrush x:Key="BgMainAlpha" Color="#EAFDF7EF"/>
+    <SolidColorBrush x:Key="BgContentAlpha" Color="#EAFDF7EF"/>
+    <SolidColorBrush x:Key="BgPanel" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BgDeeper" Color="#F8EFE2"/>
+    <SolidColorBrush x:Key="BgControl" Color="#F5EADD"/>
+    <SolidColorBrush x:Key="BgControlHover" Color="#EDDCC7"/>
+    <SolidColorBrush x:Key="BorderSubtle" Color="#EEDFCB"/>
+    <SolidColorBrush x:Key="BgPlaybar" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="FgPrimary" Color="#33241A"/>
+    <SolidColorBrush x:Key="FgNormal" Color="#3C2C21"/>
+    <SolidColorBrush x:Key="FgSecondary" Color="#7A6250"/>
+    <SolidColorBrush x:Key="FgMuted" Color="#A8937F"/>
+    <SolidColorBrush x:Key="FgSidebar" Color="#5A4636"/>
+    <SolidColorBrush x:Key="Accent" Color="#F97316"/>
+    <SolidColorBrush x:Key="AccentHover" Color="#FB923C"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#FDEBD9"/>
+    <SolidColorBrush x:Key="BtnPrimaryFg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="AccentWarm" Color="#F59E0B"/>
+</ResourceDictionary>

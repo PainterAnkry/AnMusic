@@ -26,17 +26,14 @@ public sealed class JsPluginManifest
 /// </summary>
 public sealed class JsPluginLoader
 {
-    private static readonly HttpClient Http = new()
-    {
-        Timeout = TimeSpan.FromSeconds(30)
-    };
+    /// <summary>统一 HTTP 出口（含 UA / 超时 / 代理设置）。</summary>
+    private static HttpClient Http => Services.Net.HttpService.Client;
 
     private readonly CoverCacheService _covers;
     private readonly List<JsPluginProvider> _plugins = [];
 
     /// <summary>插件目录：用户把音乐源 .js 插件文件放进此目录即可接入。</summary>
-    public static string PluginDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AnMusic", "plugins");
+    public static string PluginDir => Services.AppPaths.PluginsDir;
 
     /// <summary>清单文件路径（包含远程插件列表，放进去即自动下载安装）。</summary>
     public static string ManifestPath => Path.Combine(PluginDir, "plugins.json");
@@ -63,6 +60,7 @@ public sealed class JsPluginLoader
         catch (Exception ex)
         {
             errors.Add($"plugins.json: 解析失败 {ex.Message}");
+            Services.AppPaths.LogError("解析插件清单", ex);
             return errors;
         }
 
@@ -111,6 +109,7 @@ public sealed class JsPluginLoader
             catch (Exception ex)
             {
                 errors.Add($"{item.Name}: 下载失败 {ex.Message}");
+                Services.AppPaths.LogError("下载音源插件", ex, item.Name);
             }
         }
         return errors;

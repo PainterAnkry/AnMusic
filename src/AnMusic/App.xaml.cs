@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using AnMusic.Services.Audio;
 using AnMusic.Services.Lyrics;
+using AnMusic.Services.Media;
 using AnMusic.Services.Metadata;
 using AnMusic.Services.Playlist;
 using AnMusic.Services.Providers;
@@ -22,19 +25,49 @@ namespace AnMusic;
 public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
+    private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _activateEvent;
+    private MediaSessionService? _mediaSession;
+    private MainWindow? _mainWindow;
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 单实例：已有实例在运行（可能在托盘）时，通知其恢复窗口并退出本次启动
+        _singleInstanceMutex = new Mutex(true, @"Local\AnMusic_SingleInstance_Mutex", out var createdNew);
+        if (!createdNew)
+        {
+            try { EventWaitHandle.OpenExisting(@"Local\AnMusic_ActivateWindow").Set(); }
+            catch { /* 通知失败不影响退出 */ }
+            Shutdown();
+            return;
+        }
+
+        // 数据目录归一：把历史版本散落在 %LocalAppData%\AnMusic 的数据迁入 %AppData%\AnMusic
+        Services.AppPaths.MigrateLegacyLocalLayout();
+
+                // 崩溃日志（便于排查启动异常）
+        DispatcherUnhandledException += (_, e) =>
+        {
+            try { File.WriteAllText(System.IO.Path.Combine(Services.AppPaths.DataRoot, "crash.log"), e.Exception.ToString()); } catch { }
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            try { File.WriteAllText(System.IO.Path.Combine(Services.AppPaths.DataRoot, "crash.log"), e.ExceptionObject?.ToString() ?? "unknown"); } catch { }
+        };
+
         base.OnStartup(e);
 
         var services = new ServiceCollection();
         ConfigureServices(services);
         _serviceProvider = services.BuildServiceProvider();
 
-        // 应用已保存的主题与强调色
+        // 应用已保存的皮肤与强调色
         var settings = _serviceProvider.GetRequiredService<UserSettingsService>().Settings;
-        ThemeService.Apply(settings.Theme != "Light");
+        ThemeService.ApplySkin(settings.Theme);
         ThemeService.ApplyAccent(settings.AccentColorIndex);
+
+        // 网络代理（空 = 跟随系统）：所有 HTTP 请求统一走 HttpService
+        Services.Net.HttpService.ConfigureProxy(settings.ProxyUrl);
 
         // 加载外部 .js 音源插件（含 plugins.json 清单远程下载）并注册进 ProviderRegistry。
         // 注意：必须异步执行——UI 线程同步等待会与 await 的 SynchronizationContext 死锁。
@@ -43,7 +76,43 @@ public partial class App : Application
         _ = LoadPluginsAsync(registry, pluginLoader);
 
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+        _mainWindow = mainWindow;
         mainWindow.Show();
+
+        // 系统媒体会话（SMTC）：音量浮层媒体卡片显示与遥控
+        try
+        {
+            _mediaSession = new MediaSessionService(
+                new WindowInteropHelper(mainWindow).Handle,
+                _serviceProvider.GetRequiredService<PlaybackBarViewModel>(),
+                mainWindow.Dispatcher);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[App] SMTC 初始化失败: {ex.Message}");
+        }
+
+        // 监听"再次启动"信号 → 从托盘/后台恢复主窗口
+        try
+        {
+            _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\AnMusic_ActivateWindow");
+            var t = new Thread(() =>
+            {
+                while (true)
+                {
+                    try { _activateEvent.WaitOne(); }
+                    catch { return; } // 句柄已释放（退出）
+                    try { _mainWindow?.Dispatcher.Invoke(_mainWindow.ShowFromTray); }
+                    catch { /* 窗口已关闭则忽略 */ }
+                }
+            })
+            { IsBackground = true };
+            t.Start();
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[App] 单实例监听启动失败: {ex.Message}");
+        }
 
         // 恢复上次的音乐目录扫描
         if (settings.MusicDirectory is { Length: > 0 } musicDir && Directory.Exists(musicDir))
@@ -66,6 +135,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             Trace.WriteLine($"[JsPlugin] 插件加载异常: {ex.Message}");
+            Services.AppPaths.LogError("加载音源插件", ex);
         }
     }
 
@@ -106,6 +176,9 @@ public partial class App : Application
         // 外部 .js 音源插件加载器（%AppData%\AnMusic\plugins\*.js）
         services.AddSingleton<JsPluginLoader>();
 
+        // 键盘快捷键：绑定表 + 应用内匹配 + 全局热键注册
+        services.AddSingleton<Services.Shortcuts.ShortcutService>();
+
         // ViewModels
         services.AddSingleton<PlaybackBarViewModel>();
         services.AddSingleton<LibraryViewModel>();
@@ -120,10 +193,22 @@ public partial class App : Application
         // 桌面歌词窗口：用工厂模式每次解析新建实例（关闭后无法复用同一实例）
         services.AddTransient<Views.DesktopLyricsWindow>();
         services.AddSingleton<Func<Views.DesktopLyricsWindow>>(sp => () => sp.GetRequiredService<Views.DesktopLyricsWindow>());
+        // 迷你悬浮卡片播放器：同样每次新建（✕ 关闭后需能重新打开）
+        services.AddTransient<Views.MiniPlayerWindow>();
+        services.AddSingleton<Func<Views.MiniPlayerWindow>>(sp => () => sp.GetRequiredService<Views.MiniPlayerWindow>());
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _mediaSession?.Dispose();
+        _mediaSession = null;
+
+        try { _activateEvent?.Set(); } catch { }
+        _activateEvent?.Dispose();
+        _activateEvent = null;
+        _singleInstanceMutex?.Dispose();
+        _singleInstanceMutex = null;
+
         if (_serviceProvider is { } sp)
         {
             var engine = sp.GetService<IAudioEngine>();

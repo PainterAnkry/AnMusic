@@ -30,29 +30,52 @@
             </Border.Effect>
         </Border>
 
-        <!-- 歌词文本容器 -->
+        <!-- 歌词文本容器：三行（上一行/当前行/下一行）+ 译文 -->
         <Grid Margin="16,8,16,8">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+            <!-- 上一行 / 下一行：淡显，点击跳转该行 -->
+            <TextBlock x:Name="PrevText" Grid.Row="0"
+                       Foreground="#FF9C9C9C"
+                       FontSize="16"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       Cursor="Hand"
+                       MouseLeftButtonDown="PrevText_Click">
+                <TextBlock.Effect><DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0.7"/></TextBlock.Effect>
+            </TextBlock>
+
             <!-- 当前歌词行 -->
-            <TextBlock x:Name="LyricText" Grid.Row="0"
-                        Text="{Binding CurrentLineText, FallbackValue=桌面歌词}"
-                        Foreground="White"
-                        FontSize="30" FontWeight="Bold"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        TextAlignment="Center" TextWrapping="NoWrap"
-                        TextTrimming="CharacterEllipsis"
-                        FontFamily="Microsoft YaHei UI">
+            <TextBlock x:Name="LyricText" Grid.Row="1"
+                       Text="{Binding CurrentLineText, FallbackValue=桌面歌词}"
+                       Foreground="White"
+                       FontSize="30" FontWeight="Bold"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       FontFamily="Microsoft YaHei UI">
                 <TextBlock.Effect>
                     <DropShadowEffect Color="Black" BlurRadius="6" ShadowDepth="1" Opacity="0.8"/>
                 </TextBlock.Effect>
             </TextBlock>
 
+            <TextBlock x:Name="NextText" Grid.Row="2"
+                       Foreground="#FF9C9C9C"
+                       FontSize="16"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       Cursor="Hand"
+                       MouseLeftButtonDown="NextText_Click">
+                <TextBlock.Effect><DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0.7"/></TextBlock.Effect>
+            </TextBlock>
+
             <!-- 译文行 -->
-            <TextBlock x:Name="TransText" Grid.Row="1"
+            <TextBlock x:Name="TransText" Grid.Row="3"
                         Text="{Binding CurrentLineTranslation}"
                         Foreground="#FFCCCCCC"
                         FontSize="16"

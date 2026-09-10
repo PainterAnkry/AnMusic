@@ -13,10 +13,9 @@ namespace AnMusic.Services.ListenTogether;
 /// </summary>
 public sealed class ListenTogetherClient : IAsyncDisposable
 {
-    private static readonly HttpClient SharedClient = new()
-    {
-        Timeout = TimeSpan.FromSeconds(35) // 略大于服务器 30s 长轮询超时
-    };
+    /// <summary>共享 HTTP 客户端（统一 UA / 代理）；长轮询需要 35s 超时，故单独建一个。</summary>
+    private static readonly HttpClient SharedClient =
+        Services.Net.HttpService.CreateClient(timeout: TimeSpan.FromSeconds(35));
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource? _cts;

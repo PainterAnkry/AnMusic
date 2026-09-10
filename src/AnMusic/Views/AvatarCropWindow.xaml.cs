@@ -29,8 +29,7 @@ public partial class AvatarCropWindow : Window
     /// <summary>裁剪结果文件路径（确定后有效）。</summary>
     public string? CroppedImagePath { get; private set; }
 
-    private static readonly string OutputDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AnMusic");
+    private static readonly string OutputDir = Services.AppPaths.DataRoot;
 
     public AvatarCropWindow(string imagePath)
     {
@@ -50,7 +49,7 @@ public partial class AvatarCropWindow : Window
         catch (Exception ex)
         {
             _source = null;
-            MessageBox.Show($"图片加载失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Views.UiDialog.Error("图片加载失败", ex);
         }
 
         // 布局就绪后计算图像显示矩形；窗口大小固定（NoResize），仅首次计算即可
@@ -136,7 +135,7 @@ public partial class AvatarCropWindow : Window
         if (SelRect.Visibility != Visibility.Visible || SelRect.Width < MinSelectionSide ||
             _imageRect.Width <= 0 || _imageRect.Height <= 0)
         {
-            MessageBox.Show("请先拖动鼠标框选头像区域", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            Views.UiDialog.Info("请先拖动鼠标框选头像区域");
             return;
         }
 
@@ -185,7 +184,7 @@ public partial class AvatarCropWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"裁剪失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Views.UiDialog.Error("裁剪失败", ex);
         }
     }
 }

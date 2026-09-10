@@ -21,20 +21,29 @@ public sealed class QQMusicApiClient
 {
     private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
-    private static readonly string CacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnMusic", "qqmusic-cache");
+    private static readonly string CacheDir = Services.AppPaths.QqmusicCacheDir;
 
-    private readonly HttpClient _http;
+    private HttpClient _http;
 
     public QQMusicApiClient()
     {
-        _http = new HttpClient(new HttpClientHandler
+        _http = BuildClient();
+        Services.Net.HttpService.ProxyChanged += () => _http = BuildClient(); // 代理变更后重建
+    }
+
+    /// <summary>新建带 Cookie 容器的客户端，并套用当前代理设置。</summary>
+    private static HttpClient BuildClient()
+    {
+        var handler = new HttpClientHandler
         {
             AllowAutoRedirect = true,
             UseCookies = true,
             CookieContainer = new System.Net.CookieContainer()
-        }) { Timeout = TimeSpan.FromSeconds(20) };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+        };
+        Services.Net.HttpService.ApplyProxy(handler);
+        var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+        return client;
     }
 
     /// <summary>按关键词搜索歌曲。</summary>

@@ -136,6 +136,48 @@ public sealed class PlaylistQueue : IPlaylistQueue
         return Current;
     }
 
+    /// <summary>从队列移除曲目（不允许移除当前正在播放的曲目）。</summary>
+    public bool RemoveTrack(Track track)
+    {
+        var index = FindIndex(track);
+        if (index < 0 || index == _currentIndex) return false; // 移除项不存在或为当前曲目
+
+        _items.RemoveAt(index);
+        if (index < _currentIndex) _currentIndex--;
+        if (_shuffle && _items.Count > 0) RegenerateShuffleOrder();
+        RaiseCurrentChanged();
+        return true;
+    }
+
+    /// <summary>把曲目在队列中上移/下移一格（不允许移动当前正在播放的曲目；跨过当前曲目时自动修正其索引）。</summary>
+    public bool MoveTrack(Track track, int delta)
+    {
+        if (delta == 0) return false;
+        var index = FindIndex(track);
+        var target = index + delta;
+        if (index < 0 || index == _currentIndex || target < 0 || target >= _items.Count)
+            return false;
+
+        (_items[index], _items[target]) = (_items[target], _items[index]);
+        // 移动跨越了当前曲目：当前索引向反方向补偿
+        if (index < _currentIndex && _currentIndex <= target) _currentIndex--;
+        else if (target <= _currentIndex && _currentIndex < index) _currentIndex++;
+        if (_shuffle) RegenerateShuffleOrder();
+        RaiseCurrentChanged();
+        return true;
+    }
+
+    private int FindIndex(Track track)
+    {
+        for (var i = 0; i < _items.Count; i++)
+        {
+            if (ReferenceEquals(_items[i], track) ||
+                (_items[i].Id == track.Id && _items[i].ProviderId == track.ProviderId))
+                return i;
+        }
+        return -1;
+    }
+
     /// <summary>预览接下来将播放的曲目（按当前模式计算；随机模式为洗牌顺序近似）。</summary>
     public IReadOnlyList<Track> PeekNext(int count)
     {

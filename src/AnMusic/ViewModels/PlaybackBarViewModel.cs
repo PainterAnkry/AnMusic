@@ -183,7 +183,7 @@ public partial class PlaybackBarViewModel : ObservableObject
                 }
                 else
                 {
-                    MessageBox.Show("该曲目缺少本地文件且无对应在线源", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Views.UiDialog.Warn("该曲目缺少本地文件且无对应在线源");
                     return;
                 }
             }
@@ -202,7 +202,7 @@ public partial class PlaybackBarViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"加载失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Views.UiDialog.Error("加载这首歌失败", ex);
         }
         finally
         {
@@ -240,6 +240,24 @@ public partial class PlaybackBarViewModel : ObservableObject
         var prev = _queue.MovePrevious();
         if (prev is not null)
             await LoadAndPlayAsync(prev);
+    }
+
+    /// <summary>静音前的音量（用于再次按下时恢复）。</summary>
+    private double _lastAudibleVolume = 0.8;
+
+    /// <summary>静音 / 取消静音（快捷键、迷你卡片静音按钮共用）。</summary>
+    [RelayCommand]
+    private void ToggleMute()
+    {
+        if (Volume > 0.001)
+        {
+            _lastAudibleVolume = Volume;
+            Volume = 0;
+        }
+        else
+        {
+            Volume = Math.Clamp(_lastAudibleVolume, 0.01, 1);
+        }
     }
 
     /// <summary>进度条拖动/点击开始。</summary>
@@ -299,14 +317,14 @@ public partial class PlaybackBarViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Application.Current?.Dispatcher.Invoke(() =>
-                MessageBox.Show($"自动切歌失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error));
+            Application.Current?.Dispatcher.BeginInvoke(() =>
+                Views.UiDialog.Error("自动切歌失败", ex));
         }
     }
 
     private void OnStateChanged(object? sender, PlaybackState state)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             var wasPlaying = IsPlaying;
             IsPlaying = state == PlaybackState.Playing;
@@ -318,13 +336,14 @@ public partial class PlaybackBarViewModel : ObservableObject
     private void OnPositionChanged(object? sender, TimeSpan position)
     {
         if (_isDragging) return;
-        Application.Current?.Dispatcher.Invoke(() => PositionSeconds = position.TotalSeconds);
+        // BeginInvoke：音频回调线程上同步 Invoke 会在 UI 繁忙时反压音频线程导致卡顿
+        Application.Current?.Dispatcher.BeginInvoke(() => PositionSeconds = position.TotalSeconds);
     }
 
     private void OnPlaybackFailed(object? sender, Exception ex)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
-            MessageBox.Show($"播放失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error));
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+            Views.UiDialog.Error("播放失败", ex));
     }
 
     partial void OnVolumeChanged(double value) => _engine.Volume = (float)value;

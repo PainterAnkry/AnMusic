@@ -1,7 +1,9 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media;
 using AnMusic.Models;
 using AnMusic.Services.Settings;
@@ -17,15 +19,30 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly EqualizerViewModel _eqViewModel;
     private readonly UserSettingsService _settingsService;
+    private readonly Services.Shortcuts.ShortcutService _shortcuts;
     private EqualizerWindow? _eqWindow;
 
-    public MainWindow(MainViewModel viewModel, EqualizerViewModel eqViewModel, UserSettingsService settingsService)
+    /// <summary>系统正在注销/关机（此时关闭窗口不应询问或转入后台，直接退出）。</summary>
+    private bool _sessionEnding;
+
+    public MainWindow(MainViewModel viewModel, EqualizerViewModel eqViewModel, UserSettingsService settingsService,
+        Services.Shortcuts.ShortcutService shortcutService)
     {
         InitializeComponent();
         _viewModel = viewModel;
         _eqViewModel = eqViewModel;
         _settingsService = settingsService;
+        _shortcuts = shortcutService;
         DataContext = _viewModel;
+
+        // 键盘快捷键：应用内按键匹配（窗口层拦截，文本框输入自动放行）
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+        _shortcuts.Invoked += OnShortcutInvoked;                 // 全局热键触发
+        _viewModel.SearchFocusRequested += FocusSearchBox;
+        _viewModel.ToggleMainWindowRequested += ToggleMainWindowFromShortcut;
+
+        // Windows 注销/关机时跳过关闭询问与托盘转入，直接退出
+        Microsoft.Win32.SystemEvents.SessionEnding += (_, _) => _sessionEnding = true;
 
         RestoreWindowBounds();
 
@@ -41,7 +58,68 @@ public partial class MainWindow : Window
         _viewModel.ListenTogether.PanelToggleRequested += () =>
             Dispatcher.BeginInvoke(() => ListenTogetherPopup.IsOpen = false);
 
+        // 页面/数据源切换（绑定替换 ItemsSource）→ 重置排序指示并重新应用过滤词
+        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+                System.Windows.Controls.ItemsControl.ItemsSourceProperty,
+                typeof(System.Windows.Controls.ItemsControl))
+            .AddValueChanged(TrackList, OnTrackListItemsSourceChanged);
+
     }
+
+    #region 快捷键
+
+    /// <summary>应用内按键：命中绑定即执行动作并拦截事件。</summary>
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_shortcuts.IsCapturing) return;                      // 设置页正在改键
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (Services.Shortcuts.ShortcutKeys.IsModifierKey(key)) return;
+
+        if (_shortcuts.TryMatch(key, Keyboard.Modifiers, IsTextInputFocused(), out var actionId) &&
+            actionId is not null)
+        {
+            _viewModel.ExecuteShortcut(actionId);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>焦点是否在文本输入控件内：是则纯按键（空格/方向键等）让给输入框。</summary>
+    private static bool IsTextInputFocused()
+    {
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase) return true;
+        if (Keyboard.FocusedElement is System.Windows.Controls.PasswordBox) return true;
+        return Keyboard.FocusedElement is System.Windows.Controls.ComboBox { IsEditable: true };
+    }
+
+    /// <summary>全局热键回调（WndProc 在 UI 线程触发）。</summary>
+    private void OnShortcutInvoked(string actionId) => _viewModel.ExecuteShortcut(actionId);
+
+    /// <summary>快捷键「聚焦搜索框」：打开搜索区并把光标放进输入框。</summary>
+    private void FocusSearchBox()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+        });
+    }
+
+    /// <summary>快捷键「显示 / 隐藏主窗口」。</summary>
+    private void ToggleMainWindowFromShortcut()
+    {
+        if (IsVisible && WindowState != WindowState.Minimized)
+        {
+            EnsureTrayIcon();
+            if (_trayIcon is not null) _trayIcon.Visible = true;
+            Hide();
+        }
+        else
+        {
+            ShowFromTray();
+        }
+    }
+
+    #endregion
 
     #region 自定义背景图时面板半透明
 
@@ -195,15 +273,129 @@ public partial class MainWindow : Window
     {
         if (TrackList.SelectedItem is Track track)
         {
-            await _viewModel.PlayTrackAsync(track);
+            // 按当前视图（含排序/过滤）顺序建立播放队列，保证“所见即所播”
+            var ordered = CollectionViewSource.GetDefaultView(TrackList.ItemsSource)
+                .Cast<Track>()
+                .ToList();
+            await _viewModel.PlayTrackAsync(track, ordered);
         }
     }
+
+    #region 列表表头排序 + 当前列表过滤
+
+    private string? _trackSortField; // "Title"/"Artist"/"Album"/"Duration"
+    private bool _trackSortDescending;
+
+    /// <summary>列表数据源切换（切页面/重扫/搜索）：复位排序指示，并把过滤词应用到新列表。</summary>
+    private void OnTrackListItemsSourceChanged(object? sender, EventArgs e)
+    {
+        _trackSortField = null;
+        _trackSortDescending = false;
+        UpdateHeaderSortGlyphs();
+        ApplyListFilter(_viewModel.ListFilterText);
+    }
+
+    /// <summary>表头按钮点击（每列表头均为带 Tag 的按钮，点击直接触发，不依赖表头内部事件冒泡）。</summary>
+    private void TrackHeaderButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string field } || field.Length == 0) return;
+
+        if (_trackSortField == field) _trackSortDescending = !_trackSortDescending;
+        else { _trackSortField = field; _trackSortDescending = false; }
+
+        SortCurrentList();
+        UpdateHeaderSortGlyphs();
+    }
+
+    /// <summary>对当前可见集合原地排序（ObservableCollection 重建；保留过滤视图生效）。</summary>
+    private void SortCurrentList()
+    {
+        if (TrackList.ItemsSource is not System.Collections.ObjectModel.ObservableCollection<Track> list ||
+            list.Count <= 1)
+            return;
+
+        IOrderedEnumerable<Track> sorted = _trackSortField switch
+        {
+            "Artist" => list.OrderBy(t => t.Artist, StringComparer.OrdinalIgnoreCase),
+            "Album" => list.OrderBy(t => t.Album, StringComparer.OrdinalIgnoreCase),
+            "Duration" => list.OrderBy(t => t.Duration),
+            _ => list.OrderBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+        };
+        var ordered = _trackSortDescending ? sorted.Reverse().ToList() : sorted.ToList();
+
+        list.Clear();
+        foreach (var t in ordered) list.Add(t);
+    }
+
+    /// <summary>表头按钮追加 ▲/▼ 排序指示。</summary>
+    private void UpdateHeaderSortGlyphs()
+    {
+        if (TrackList.View is not System.Windows.Controls.GridView gv) return;
+        foreach (var c in gv.Columns)
+        {
+            if (c.Header is not System.Windows.Controls.Button { Tag: string field } btn) continue;
+            var baseName = field switch
+            {
+                "Title" => "标题",
+                "Artist" => "艺术家",
+                "Album" => "专辑",
+                _ => "时长"
+            };
+            btn.Content = _trackSortField == field
+                ? baseName + (_trackSortDescending ? " ▼" : " ▲")
+                : baseName;
+        }
+    }
+
+    /// <summary>当前列表过滤（默认视图 Filter；清空恢复）。</summary>
+    private void ApplyListFilter(string? keyword)
+    {
+        keyword = keyword?.Trim();
+        if (TrackList.ItemsSource is not System.Collections.IEnumerable src) return;
+        var view = CollectionViewSource.GetDefaultView(src);
+        if (string.IsNullOrEmpty(keyword))
+        {
+            view.Filter = null;
+            return;
+        }
+        view.Filter = o => o is Track t &&
+                           (t.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                            t.Artist.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                            t.Album.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void FilterBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        => ApplyListFilter(FilterBox.Text);
+
+    private void FilterBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            FilterBox.Text = "";
+            ApplyListFilter(null);
+        }
+    }
+
+    #endregion
 
     #region 侧边栏与右键菜单
 
     private void CreatePlaylistButton_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.CreatePlaylistCommand.Execute(null);
+    }
+
+    /// <summary>从网易云/QQ音乐歌单分享链接导入（弹输入框 → 插件解析 → 新建歌单）。</summary>
+    private async void ImportPlaylistButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _viewModel.ImportPlaylistFromLinkCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex)
+        {
+            Views.UiDialog.Error("导入歌单失败", ex);
+        }
     }
 
     private void SidebarPlaylist_Click(object sender, MouseButtonEventArgs e)
@@ -438,10 +630,43 @@ public partial class MainWindow : Window
     }
 
     /// <summary>在线一起听：切换面板弹窗。</summary>
-    private void ListenTogetherButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>播放条「更多」按钮：展开 桌面歌词 / 一起听 / 迷你悬浮卡片 菜单。</summary>
+    private void MoreButton_Click(object sender, RoutedEventArgs e)
+        => MorePopup.IsOpen = !MorePopup.IsOpen;
+
+    /// <summary>更多 → 桌面歌词：开关独立置顶歌词窗（菜单保持可继续点其他项）。</summary>
+    private void MoreDesktopLyrics_Click(object sender, RoutedEventArgs e)
+        => _viewModel.ToggleDesktopLyricsCommand.Execute(null);
+
+    /// <summary>更多 → 一起听：把一起听面板挂到「更多」按钮上弹出（面板单例，状态共享）。</summary>
+    private void MoreListenTogether_Click(object sender, RoutedEventArgs e)
     {
-        ListenTogetherPopup.IsOpen = !ListenTogetherPopup.IsOpen;
+        MorePopup.IsOpen = false;
+        ListenTogetherPopup.PlacementTarget = MoreBtn;
+        ListenTogetherPopup.IsOpen = true;
     }
+
+    /// <summary>更多 → 迷你悬浮卡片：开关卡片窗（开启时主窗口自动最小化）。</summary>
+    private void MoreMiniPlayer_Click(object sender, RoutedEventArgs e)
+    {
+        MorePopup.IsOpen = false;
+        _viewModel.ToggleMiniPlayerCommand.Execute(null);
+    }
+
+    /// <summary>更多 → 分享当前歌曲：复制分享文本并弹窗展示。</summary>
+    private void MoreShare_Click(object sender, RoutedEventArgs e)
+    {
+        MorePopup.IsOpen = false;
+        _viewModel.ShareCurrentTrack();
+    }
+
+    /// <summary>标题栏 🎨 皮肤按钮：开关皮肤选择面板。</summary>
+    private void SkinButton_Click(object sender, RoutedEventArgs e)
+        => SkinPopup.IsOpen = !SkinPopup.IsOpen;
+
+    /// <summary>选中某个皮肤后收起面板（切换即时生效，无需确认）。</summary>
+    private void SkinOption_Click(object sender, RoutedEventArgs e)
+        => SkinPopup.IsOpen = false;
 
     /// <summary>用户按钮：切换资料下拉面板（昵称/等级/经验在面板内查看与修改）。</summary>
     private void UserButton_Click(object sender, RoutedEventArgs e)
@@ -456,11 +681,26 @@ public partial class MainWindow : Window
         _viewModel.ChangeAvatarCommand.Execute(null);
     }
 
-    /// <summary>播放列表按钮：打开时刷新"接下来播放"，再次点击关闭。</summary>
+    /// <summary>播放队列按钮：打开前刷新队列数据（再次点击关闭）。</summary>
     private void UpNextButton_Click(object sender, RoutedEventArgs e)
     {
-        _viewModel.PlaybackBar.RefreshUpNext();
-        UpNextPopup.IsOpen = !UpNextPopup.IsOpen;
+        QueuePopup.IsOpen = false;
+        _viewModel.RefreshQueuePanel();
+        QueuePopup.IsOpen = true;
+    }
+
+    /// <summary>下载管理（侧栏入口）：切换下载面板，入口高亮联动。</summary>
+    private void DownloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        DownloadPopup.IsOpen = !DownloadPopup.IsOpen;
+        _viewModel.IsDownloadPanelOpen = DownloadPopup.IsOpen;
+    }
+
+    /// <summary>队列面板双击行 → 播放该曲目。</summary>
+    private void QueueList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (QueueList.SelectedItem is ViewModels.MainViewModel.QueueRowItem row)
+            _ = _viewModel.PlayQueueTrackCommand.ExecuteAsync(row.Track);
     }
 
     private void CoverImage_Click(object sender, MouseButtonEventArgs e)
@@ -528,6 +768,16 @@ public partial class MainWindow : Window
         RegisterMediaKeys();
         if (HwndSource.FromHwnd(new WindowInteropHelper(this).Handle) is { } source)
             source.AddHook(HwndHook);
+
+        // 用户自定义的全局快捷键（窗口隐藏/最小化时依旧有效）
+        try
+        {
+            _shortcuts.AttachGlobalHost(new WindowInteropHelper(this).Handle);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"[Shortcut] 全局热键初始化失败: {ex.Message}");
+        }
     }
 
     protected override void OnClosed(EventArgs e)
@@ -546,24 +796,102 @@ public partial class MainWindow : Window
 
     private System.Windows.Forms.NotifyIcon? _trayIcon;
 
+    /// <summary>托盘“退出”菜单触发：关闭窗口时跳过询问直接退出。</summary>
+    private bool _forceExit;
+
+    /// <summary>从托盘恢复主窗口（双击托盘 / 单实例通知 / 托盘菜单）。</summary>
+    public void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+        if (_trayIcon is not null) _trayIcon.Visible = false;
+    }
+
+    /// <summary>关闭方式选择结果。</summary>
+    private enum CloseChoice { Background, Quit, Cancel }
+
+    /// <summary>“每次询问”模式：弹出明确的三选一对话框（后台运行/直接退出/取消），Esc 或点 ✕ 视作取消。</summary>
+    private static CloseChoice AskCloseChoice(Window owner)
+    {
+        var result = CloseChoice.Cancel;
+        var win = new Window
+        {
+            Title = "关闭 AnMusic",
+            Width = 430,
+            SizeToContent = System.Windows.SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Owner = owner,
+            Background = (Brush)(owner.TryFindResource("BgPanel") ?? System.Windows.Media.Brushes.White)
+        };
+
+        var msg = new System.Windows.Controls.TextBlock
+        {
+            Text = "关闭窗口后希望程序如何运行？\n\n后台运行：最小化到系统托盘，继续播放音乐；\n直接退出：结束程序，停止播放。\n\n默认行为可在 设置 → 关闭行为 中修改。",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)(owner.TryFindResource("FgPrimary") ?? System.Windows.Media.Brushes.Black),
+            Margin = new Thickness(6, 6, 6, 16)
+        };
+
+        var btnBg = new System.Windows.Controls.Button { Content = "后台运行", Width = 100, Margin = new Thickness(0, 0, 10, 0), Cursor = System.Windows.Input.Cursors.Hand };
+        var btnQuit = new System.Windows.Controls.Button { Content = "直接退出", Width = 100, Margin = new Thickness(0, 0, 10, 0), Cursor = System.Windows.Input.Cursors.Hand, IsDefault = true };
+        var btnCancel = new System.Windows.Controls.Button { Content = "取消", Width = 80, Cursor = System.Windows.Input.Cursors.Hand, IsCancel = true };
+        btnBg.Click += (_, _) => { result = CloseChoice.Background; win.Close(); };
+        btnQuit.Click += (_, _) => { result = CloseChoice.Quit; win.Close(); };
+        btnCancel.Click += (_, _) => win.Close();
+        // 复用主题按钮样式（若资源缺失则保持默认外观）
+        foreach (var b in new[] { btnBg, btnQuit, btnCancel })
+        {
+            if (owner.TryFindResource("BtnStyle") is Style s) b.Style = s;
+        }
+
+        var bar = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        bar.Children.Add(btnBg);
+        bar.Children.Add(btnQuit);
+        bar.Children.Add(btnCancel);
+
+        var root = new System.Windows.Controls.StackPanel { Margin = new Thickness(18, 14, 18, 14) };
+        root.Children.Add(msg);
+        root.Children.Add(bar);
+        win.Content = root;
+        win.ShowDialog();
+        return result;
+    }
+
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         var behavior = _settingsService.Settings.CloseBehavior;
 
-        if (behavior == 0) // 每次询问
+        // 系统注销/关机：一律直接退出，不询问、不进托盘
+        if (_sessionEnding || _forceExit)
         {
-            var result = MessageBox.Show(
-                "是要后台运行还是直接关闭程序？\n\n选择后台运行：程序将最小化到系统托盘，继续播放音乐。\n选择直接关闭：退出程序。\n\n可在设置中修改默认行为。",
-                "关闭确认", MessageBoxButton.YesNoCancel, MessageBoxImage.Question,
-                MessageBoxResult.Yes);
-            if (result == MessageBoxResult.Cancel)
+            SaveWindowBounds();
+            if (_trayIcon is not null)
             {
-                e.Cancel = true;
-                return;
+                _trayIcon.Visible = false;
+                _trayIcon.Dispose();
+                _trayIcon = null;
             }
-            behavior = result == MessageBoxResult.Yes ? 1 : 2;
-            // 记住选择
-            _settingsService.Update(s => s.CloseBehavior = behavior);
+            base.OnClosing(e);
+            return;
+        }
+
+        if (behavior == 0) // 每次询问（不自动记住本次选择，避免误选后一直后台）
+        {
+            switch (AskCloseChoice(this))
+            {
+                case CloseChoice.Background: behavior = 1; break;
+                case CloseChoice.Quit: behavior = 2; break;
+                default:
+                    e.Cancel = true; // 取消/Esc/关掉弹窗：维持窗口
+                    return;
+            }
         }
 
         if (behavior == 1) // 后台运行
@@ -586,23 +914,65 @@ public partial class MainWindow : Window
         base.OnClosing(e);
     }
 
-    /// <summary>创建系统托盘图标（双击恢复窗口）。</summary>
+    /// <summary>创建系统托盘图标：双击恢复窗口，右键菜单提供播放控制与退出。</summary>
     private void EnsureTrayIcon()
     {
         if (_trayIcon is not null) return;
+
+        // 单文件发布下 Assembly.Location 为空，必须用进程路径（或基目录拼 exe 名）取图标
+        var exePath = Environment.ProcessPath
+                      ?? Path.Combine(AppContext.BaseDirectory, "AnMusic.exe");
         _trayIcon = new System.Windows.Forms.NotifyIcon
         {
-            Icon = System.Drawing.Icon.ExtractAssociatedIcon(
-                Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location),
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath)
+                   ?? System.Drawing.SystemIcons.Application,
             Text = "AnMusic",
             Visible = false
         };
-        _trayIcon.DoubleClick += (_, _) =>
+        _trayIcon.DoubleClick += (_, _) => ShowFromTray();
+
+        // 右键菜单：播放控制 / 显示窗口 / 退出
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        var bar = _viewModel.PlaybackBar;
+
+        var playPause = new System.Windows.Forms.ToolStripMenuItem("播放/暂停");
+        playPause.Click += (_, _) => Dispatcher.BeginInvoke(() =>
         {
-            this.Show();
-            this.WindowState = WindowState.Normal;
-            this.Activate();
-            _trayIcon.Visible = false;
-        };
+            if (bar.PlayPauseCommand.CanExecute(null)) bar.PlayPauseCommand.Execute(null);
+        });
+        var prev = new System.Windows.Forms.ToolStripMenuItem("上一首");
+        prev.Click += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            if (bar.PreviousCommand.CanExecute(null)) bar.PreviousCommand.Execute(null);
+        });
+        var next = new System.Windows.Forms.ToolStripMenuItem("下一首");
+        next.Click += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            if (bar.NextCommand.CanExecute(null)) bar.NextCommand.Execute(null);
+        });
+        var show = new System.Windows.Forms.ToolStripMenuItem("显示主窗口");
+        show.Click += (_, _) => Dispatcher.BeginInvoke(ShowFromTray);
+        var miniCard = new System.Windows.Forms.ToolStripMenuItem("迷你播放器");
+        miniCard.Click += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            if (_viewModel.ToggleMiniPlayerCommand.CanExecute(null))
+                _viewModel.ToggleMiniPlayerCommand.Execute(null);
+        });
+        var quit = new System.Windows.Forms.ToolStripMenuItem("退出 AnMusic");
+        quit.Click += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            _forceExit = true; // 跳过关闭询问，真正退出
+            Close();
+        });
+
+        menu.Items.Add(playPause);
+        menu.Items.Add(prev);
+        menu.Items.Add(next);
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add(show);
+        menu.Items.Add(miniCard);
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add(quit);
+        _trayIcon.ContextMenuStrip = menu;
     }
 }

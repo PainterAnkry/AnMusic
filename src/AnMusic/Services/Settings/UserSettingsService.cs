@@ -12,7 +12,10 @@ public sealed class UserSettingsService
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        // 窗口/悬浮窗位置用 double.NaN 表示「未设置」，而默认序列化遇到 NaN 会抛异常，
+        // 导致整次保存静默失败（设置改了却不落盘的元凶）。允许 NaN 字面量后即可正常读写。
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals
     };
 
     private readonly string _filePath;
@@ -47,7 +50,7 @@ public sealed class UserSettingsService
         return new UserSettings();
     }
 
-    /// <summary>保存当前设置到磁盘。</summary>
+    /// <summary>保存当前设置到磁盘（失败时写入日志文件，避免再次出现"设置静默丢失"）。</summary>
     public void Save()
     {
         try
@@ -57,6 +60,13 @@ public sealed class UserSettingsService
         catch (Exception ex)
         {
             Trace.WriteLine($"[UserSettings] 保存失败: {ex.Message}");
+            try
+            {
+                File.AppendAllText(
+                    Path.Combine(Path.GetDirectoryName(_filePath)!, "settings-save-error.log"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}");
+            }
+            catch { /* 日志写入失败只能放弃 */ }
         }
     }
 

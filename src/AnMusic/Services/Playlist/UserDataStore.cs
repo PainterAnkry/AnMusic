@@ -12,7 +12,7 @@ namespace AnMusic.Services.Playlist;
 public sealed class UserDataStore
 {
     private static readonly string FilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnMusic", "userdata.json");
+        Services.AppPaths.UserDataFile);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -40,8 +40,9 @@ public sealed class UserDataStore
             var json = File.ReadAllText(FilePath);
             return JsonSerializer.Deserialize<UserDataStore>(json, JsonOptions) ?? new UserDataStore();
         }
-        catch
+        catch (Exception ex)
         {
+            Services.AppPaths.LogError("加载用户数据", ex, FilePath);
             return new UserDataStore();
         }
     }
@@ -54,9 +55,10 @@ public sealed class UserDataStore
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
             File.WriteAllText(FilePath, JsonSerializer.Serialize(this, JsonOptions));
         }
-        catch
+        catch (Exception ex)
         {
-            // 持久化失败不阻塞 UI
+            // 不阻塞 UI，但要留痕：否则歌单/收藏会"改了却没保存"
+            Services.AppPaths.LogError("保存用户数据", ex, FilePath);
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using AnMusic.Models;
@@ -31,6 +32,7 @@ public partial class MainViewModel : ObservableObject
     private readonly LocalFileProvider _localFiles;
     private readonly UserSettingsService _settingsService;
     private readonly Func<Views.DesktopLyricsWindow> _desktopLyricsWindowFactory;
+    private readonly Func<Views.MiniPlayerWindow> _miniPlayerWindowFactory;
 
     /// <summary>右键菜单当前曲目（"添加到歌单"子菜单使用）。</summary>
     public Track? PendingMenuTrack { get; set; }
@@ -82,6 +84,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>搜索关键词。</summary>
     [ObservableProperty]
     private string _searchText = "";
+
+    /// <summary>当前列表过滤关键词（仅过滤显示，不影响数据与播放队列；在标题栏过滤框输入）。</summary>
+    [ObservableProperty]
+    private string _listFilterText = "";
 
     /// <summary>是否正在搜索。</summary>
     [ObservableProperty]
@@ -213,6 +219,7 @@ public partial class MainViewModel : ObservableObject
         // 两个页面互斥：打开设置时收起歌词遮罩
         if (value && IsLyricsOpen) IsLyricsOpen = false;
         OnPropertyChanged(nameof(IsContentAreaVisible));
+        RefreshEmptyState();
     }
 
     partial void OnIsLyricsOpenChanged(bool value)
@@ -301,6 +308,66 @@ public partial class MainViewModel : ObservableObject
     public bool IsListeningStatsView => ViewMode == ViewMode.ListeningStats;
     public bool IsRadioView => ViewMode == ViewMode.Radio;
 
+    /// <summary>按时段的小问候（早安 / 中午好 / 晚安），显示在内容区标题右侧。</summary>
+    [ObservableProperty]
+    private string _greeting = "";
+
+    /// <summary>按当前时间刷新问候语。</summary>
+    public void RefreshGreeting()
+    {
+        Greeting = DateTime.Now.Hour switch
+        {
+            >= 5 and < 11 => "早安 ☀️ 新的一天，从一首歌开始",
+            >= 11 and < 18 => "中午好 🌤 来点轻快的音乐吧",
+            _ => "晚安 🌙 让音乐陪你放松一下"
+        };
+    }
+
+    /// <summary>空列表状态引导文案（根据视图模式动态切换）。</summary>
+    [ObservableProperty]
+    private string _emptyStateText = "音乐库还是空的\n点击右上角「📂 打开文件夹」选择你的音乐目录";
+
+    /// <summary>是否显示空状态引导（列表为空且未在加载时显示）。</summary>
+    [ObservableProperty]
+    private bool _isEmptyStateVisible;
+
+    partial void OnIsSearchingChanged(bool value) => RefreshEmptyState();
+
+    /// <summary>根据当前视图与数据状态刷新空列表引导文案/可见性。</summary>
+    public void RefreshEmptyState()
+    {
+        // 集合可能被后台线程填充（插件封面/异步搜索），统一切回 UI 线程再更新绑定
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(RefreshEmptyState);
+            return;
+        }
+
+        var empty = (CurrentTracks?.Count ?? 0) == 0;
+        var loading = ViewMode == ViewMode.AllTracks && Library.IsLoading;
+
+        EmptyStateText = ViewMode switch
+        {
+            ViewMode.AllTracks => loading
+                ? "正在扫描音乐文件夹…"
+                : "音乐库还是空的\n点击右上角「📂 打开文件夹」选择你的音乐目录",
+            ViewMode.SearchResults => IsSearching
+                ? "正在搜索…"
+                : "输入关键词开始搜索\n或从左侧选择不同音源",
+            ViewMode.Favorites => "还没有收藏歌曲\n播放时点 ♡ 即可加入喜欢",
+            ViewMode.Recent => "还没有播放记录\n播放歌曲后将自动记录在此",
+            ViewMode.Playlist => "这个歌单是空的\n右键歌曲选择「加入歌单」或批量导入",
+            ViewMode.Ranking => "正在加载排行榜…",
+            ViewMode.ListeningStats => "暂无听歌统计\n多听几首歌后这里会展示时长排行",
+            ViewMode.Radio => "正在生成个性电台…",
+            _ => ""
+        };
+
+        IsEmptyStateVisible = empty && !IsShowingSettings && !string.IsNullOrEmpty(EmptyStateText);
+    }
+
+
     /// <summary>当前显示的曲目列表。</summary>
     public System.Collections.IList CurrentTracks => ViewMode switch
     {
@@ -318,6 +385,7 @@ public partial class MainViewModel : ObservableObject
         LyricViewModel lyrics, SettingsViewModel settings, ProviderRegistry registry, UserDataStore store,
         LocalFileProvider localFiles, UserSettingsService settingsService,
         Func<Views.DesktopLyricsWindow> desktopLyricsWindowFactory,
+        Func<Views.MiniPlayerWindow> miniPlayerWindowFactory,
         ListenTogetherViewModel listenTogether)
     {
         _playbackBar = playbackBar;
@@ -331,7 +399,18 @@ public partial class MainViewModel : ObservableObject
         _localFiles = localFiles;
         _settingsService = settingsService;
         _desktopLyricsWindowFactory = desktopLyricsWindowFactory;
+        _miniPlayerWindowFactory = miniPlayerWindowFactory;
         LoadUserData();
+
+        // 空状态响应各数据集合变化
+        foreach (var col in new System.Collections.IList[] { Library.Tracks, Favorites, Recent, RankingTracks, ListeningStatsTracks, RadioTracks })
+        {
+            if (col is System.Collections.Specialized.INotifyCollectionChanged ncc)
+                ncc.CollectionChanged += (_, _) => RefreshEmptyState();
+        }
+        // 音乐库扫描状态变化时刷新空引导
+        Library.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(LibraryViewModel.IsLoading)) RefreshEmptyState(); };
+        // ViewMode 切换 / 搜索状态变化由 partial methods 联动 RefreshEmptyState
 
         // 当前曲目变化或收藏列表变化时，刷新爱心按钮状态
         _playbackBar.PropertyChanged += (_, e) =>
@@ -342,7 +421,21 @@ public partial class MainViewModel : ObservableObject
                 RecordPlayTime();
         };
         Favorites.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsCurrentFavorited));
+
+        // 初始视图可能是空音乐库，构造完成后立即算一次空状态
+        RefreshEmptyState();
+
+        // 按时段问候：启动即算一次，之后每小时边界附近自动刷新（跨时段不用重启）
+        RefreshGreeting();
+        _greetingTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(5)
+        };
+        _greetingTimer.Tick += (_, _) => RefreshGreeting();
+        _greetingTimer.Start();
     }
+
+    private readonly System.Windows.Threading.DispatcherTimer _greetingTimer;
 
     private double _lastRecordedPosition;
 
@@ -390,13 +483,22 @@ public partial class MainViewModel : ObservableObject
         _store.Save();
     }
 
-    /// <summary>从当前可见列表播放指定曲目（设队列+播放+加载歌词），并记录最近播放。</summary>
-    public async Task PlayTrackAsync(Track track)
+    /// <summary>从当前可见列表播放指定曲目（设队列+播放+加载歌词），并记录最近播放。
+    /// orderedSource：双击行时传入当前视图（含排序/过滤）顺序，保证播放队列与所见一致；为空则用 CurrentTracks。</summary>
+    public async Task PlayTrackAsync(Track track, IReadOnlyList<Track>? orderedSource = null)
     {
-        var list = CurrentTracks;
-        var index = list.IndexOf(track);
-        var tracks = list.OfType<Track>().ToList();
-        _queue.SetItems(tracks, Math.Max(0, index));
+        var list = orderedSource ?? CurrentTracks.OfType<Track>().ToList();
+        var index = -1;
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (ReferenceEquals(list[i], track) ||
+                (list[i].Id == track.Id && list[i].ProviderId == track.ProviderId))
+            {
+                index = i;
+                break;
+            }
+        }
+        _queue.SetItems(list, Math.Max(0, index));
         await _playbackBar.LoadAndPlayAsync(track);
         await Lyrics.LoadLyricsAsync(track);
         RecordRecent(track);
@@ -438,12 +540,14 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsRankingView));
         OnPropertyChanged(nameof(IsListeningStatsView));
         OnPropertyChanged(nameof(IsRadioView));
+        RefreshEmptyState();
     }
 
     partial void OnSelectedPlaylistChanged(Playlist? value)
     {
         OnPropertyChanged(nameof(CurrentTracks));
         OnPropertyChanged(nameof(CurrentViewTitle));
+        RefreshEmptyState();
     }
 
     /// <summary>切换视图模式，并记录导航历史（前进/返回）。</summary>
@@ -463,6 +567,9 @@ public partial class MainViewModel : ObservableObject
             SelectedPlaylist = playlist;
         IsShowingSearch = mode == ViewMode.SearchResults;
         IsShowingSettings = false;
+        // 切换视图时清掉上一视图遗留的状态文案（如“飙升榜共 99 首(内置榜单)”串到歌单页）；
+        // 各视图自身的加载结果文案在其切换完成后另行写入
+        SearchStatus = "";
     }
 
     [RelayCommand]
@@ -879,6 +986,7 @@ public partial class MainViewModel : ObservableObject
     {
         // 歌词遮罩盖在内容区之上，先关闭歌词再打开设置
         if (IsLyricsOpen) IsLyricsOpen = false;
+        SearchStatus = ""; // 设置遮罩下的内容状态不再保留
         IsShowingSettings = true;
     }
 
@@ -899,6 +1007,7 @@ public partial class MainViewModel : ObservableObject
             SelectedPlaylist = prev.Playlist;
             IsShowingSearch = prev.Mode == ViewMode.SearchResults;
             IsShowingSettings = false;
+            SearchStatus = ""; // 导航后不残留上一视图的状态文案
         }
         finally
         {
@@ -922,6 +1031,7 @@ public partial class MainViewModel : ObservableObject
             SelectedPlaylist = next.Playlist;
             IsShowingSearch = next.Mode == ViewMode.SearchResults;
             IsShowingSettings = false;
+            SearchStatus = ""; // 导航后不残留上一视图的状态文案
         }
         finally
         {
@@ -966,12 +1076,88 @@ public partial class MainViewModel : ObservableObject
         IsDesktopLyricsOpen = false;
     }
 
-    /// <summary>歌词卡片播放模式：极简界面，仅展示封面、当前歌词行、播放键、进度条。</summary>
-    [ObservableProperty]
-    private bool _isCardMode;
+    /// <summary>迷你悬浮卡片播放器窗口实例（运行时按需创建，关闭后置空；收起时仅隐藏，实例保留）。</summary>
+    private Views.MiniPlayerWindow? _miniPlayerWindow;
 
+    /// <summary>迷你卡片是否正在显示（供菜单项勾选状态）。</summary>
+    [ObservableProperty]
+    private bool _isMiniPlayerOpen;
+
+    /// <summary>主窗口是否因开启迷你卡片而被自动最小化（仅此种情况才在关闭卡片时复原，避免打扰用户原本的最小化）。</summary>
+    private bool _mainWindowMinimizedForCard;
+
+    /// <summary>切换迷你悬浮卡片：已显示 → 收起；已收起 → 复原；从未打开 → 创建并显示。
+    /// 卡片显示期间默认把主窗口最小化，卡片收起/关闭时再复原。</summary>
     [RelayCommand]
-    private void ToggleCardMode() => IsCardMode = !IsCardMode;
+    private void ToggleMiniPlayer()
+    {
+        switch (_miniPlayerWindow)
+        {
+            case { IsVisible: true } visible:
+                visible.Hide();
+                IsMiniPlayerOpen = false;
+                RestoreMainWindowForCard();
+                return;
+            case { } hidden: // 收起过：直接复原，位置状态仍在
+                hidden.Show();
+                hidden.Activate();
+                IsMiniPlayerOpen = true;
+                MinimizeMainWindowForCard();
+                return;
+        }
+
+        _miniPlayerWindow = _miniPlayerWindowFactory();
+        _miniPlayerWindow.Closed += (_, _) =>
+        {
+            _miniPlayerWindow = null;
+            IsMiniPlayerOpen = false;
+            RestoreMainWindowForCard();
+        };
+        _miniPlayerWindow.Show();
+        IsMiniPlayerOpen = true;
+        MinimizeMainWindowForCard();
+    }
+
+    /// <summary>开启卡片时最小化主窗口（记忆是否由本功能触发）。</summary>
+    private void MinimizeMainWindowForCard()
+    {
+        if (Application.Current?.MainWindow is not { } main) return;
+        if (!main.IsVisible) return;                            // 已收进托盘：保持原样
+        if (main.WindowState == WindowState.Minimized) return;  // 本来就是最小化：退出卡片时不应擅自弹出
+        main.WindowState = WindowState.Minimized;
+        _mainWindowMinimizedForCard = true;
+    }
+
+    /// <summary>卡片收起/关闭时复原主窗口（仅复原由卡片触发的那次最小化）。</summary>
+    private void RestoreMainWindowForCard()
+    {
+        if (!_mainWindowMinimizedForCard) return;
+        _mainWindowMinimizedForCard = false;
+        if (Application.Current?.MainWindow is not { } main) return;
+        if (!main.IsVisible) return;                            // 期间被收进托盘：不要擅自弹出
+        if (main.WindowState != WindowState.Minimized) return;
+        main.WindowState = WindowState.Normal;
+        main.Activate();
+    }
+
+    /// <summary>迷你卡片“收起”按钮回调：同步菜单勾选状态并复原主窗口。</summary>
+    public void NotifyMiniPlayerHidden()
+    {
+        IsMiniPlayerOpen = false;
+        RestoreMainWindowForCard();
+    }
+
+    /// <summary>迷你卡片被关闭（✕）时回调：置空实例并复原主窗口。</summary>
+    public void NotifyMiniPlayerClosed()
+    {
+        _miniPlayerWindow = null;
+        IsMiniPlayerOpen = false;
+        RestoreMainWindowForCard();
+    }
+
+    // 分享当前歌曲相关实现已拆分到 MainViewModel.Share.cs（partial class，成员可直接访问）
+
+    // 快捷键动作分发相关实现已拆分到 MainViewModel.Shortcuts.cs（partial class，成员可直接访问）
 
     [RelayCommand]
     private async Task PlayAllCurrentAsync() => await PlayAllAsync();
@@ -1097,6 +1283,8 @@ public partial class MainViewModel : ObservableObject
         SetViewMode(ViewMode.Playlist, playlist);
     }
 
+    // 播放队列管理相关实现已拆分到 MainViewModel.Queue.cs（partial class，成员可直接访问）
+
     /// <summary>重命名歌单。</summary>
     public void RenamePlaylist(Playlist playlist, string newName)
     {
@@ -1131,6 +1319,143 @@ public partial class MainViewModel : ObservableObject
         SearchStatus = $"已导入 {added} 首歌曲到「{playlist.Name}」";
     }
 
+    /// <summary>从网易云 / QQ音乐歌单分享链接导入：粘贴链接 → 由对应音源插件解析 → 新建歌单并展示。</summary>
+    [RelayCommand]
+    private async Task ImportPlaylistFromLinkAsync()
+    {
+        var url = PromptForPlaylistLink();
+        if (string.IsNullOrWhiteSpace(url)) return;
+        url = url.Trim();
+
+        // 按链接来源优先匹配插件（网易云链接优先元力WY/网易，QQ 链接优先元力QQ/酷狗），
+        // 失败后依次尝试其它已加载插件（依赖其 importMusicSheet 实现）
+        var preferred = url.Contains("163.com") || url.Contains("music.163")
+            ? FindPluginSource("netease", "wy", "网易")
+            : url.Contains("y.qq.com") || url.Contains("qq.com")
+                ? FindPluginSource("qqmusic", "qq", "酷gou", "酷")
+                : null;
+
+        var candidates = new List<JsPluginProvider>();
+        if (preferred is not null) candidates.Add(preferred);
+        foreach (var p in _registry.OnlineMusicProviders.OfType<JsPluginProvider>())
+            if (!candidates.Contains(p)) candidates.Add(p);
+
+        if (candidates.Count == 0)
+        {
+            Views.UiDialog.Info("没有已加载的在线音源插件，无法导入歌单。\n请先在 设置 → 音源插件 中加载网易云/QQ音乐插件。", "导入歌单");
+            return;
+        }
+
+        SearchStatus = "正在从链接导入歌单…";
+        (string Name, IReadOnlyList<Track> Tracks)? result = null;
+        string? lastError = null;
+        foreach (var p in candidates)
+        {
+            try
+            {
+                result = await p.ImportMusicSheetAsync(url);
+                if (result is not null) break;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex.Message; // 该插件解析失败，换下一个尝试
+            }
+        }
+
+        if (result is not { Tracks.Count: > 0 })
+        {
+            SearchStatus = "导入歌单失败";
+            Views.UiDialog.Warn(lastError is null
+                    ? "未从该链接解析到歌单（当前插件不支持该平台歌单或链接格式不正确）。\n支持形如：\nhttps://music.163.com/playlist?id=3778678\nhttps://y.qq.com/n/ryqq/playlist/8655958142"
+                    : $"导入歌单失败：{lastError}", "导入歌单");
+            return;
+        }
+
+        // 歌单重名时自动追加序号
+        var name = string.IsNullOrWhiteSpace(result.Value.Name) ? "导入的歌单" : result.Value.Name.Trim();
+        var uniqueName = name;
+        for (var i = 2; UserPlaylists.Any(p => p.Name == uniqueName); i++)
+            uniqueName = $"{name} {i}";
+
+        var playlist = new Playlist { Name = uniqueName };
+        foreach (var t in result.Value.Tracks)
+            playlist.Tracks.Add(t);
+        UserPlaylists.Insert(0, playlist);
+        SaveUserData();
+        SelectPlaylist(playlist);
+        SearchStatus = $"✔ 已导入 {playlist.Tracks.Count} 首到「{playlist.Name}」";
+    }
+
+    /// <summary>弹出歌单分享链接输入框，返回输入内容（取消返回 null）。</summary>
+    private static string? PromptForPlaylistLink()
+    {
+        var window = new Window
+        {
+            Title = "导入歌单",
+            Width = 460,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Owner = Application.Current.MainWindow,
+            Background = (System.Windows.Media.Brush)Application.Current.FindResource("BgPanel")
+        };
+
+        var tip = new System.Windows.Controls.TextBlock
+        {
+            Text = "粘贴网易云 / QQ音乐 歌单分享链接，例如：\nhttps://music.163.com/playlist?id=3778678\nhttps://y.qq.com/n/ryqq/playlist/8655958142",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("FgMuted"),
+            FontSize = 12,
+            Margin = new Thickness(6, 0, 6, 10)
+        };
+        var input = new System.Windows.Controls.TextBox
+        {
+            Margin = new Thickness(6, 0, 6, 14),
+            Padding = new Thickness(8, 6, 8, 6)
+        };
+        var ok = new System.Windows.Controls.Button { Content = "导入", IsDefault = true, Width = 90, Margin = new Thickness(0, 0, 8, 0), Cursor = System.Windows.Input.Cursors.Hand };
+        var cancel = new System.Windows.Controls.Button { Content = "取消", IsCancel = true, Width = 80, Cursor = System.Windows.Input.Cursors.Hand };
+        if (Application.Current.MainWindow?.TryFindResource("BtnStyle") is Style btnStyle)
+        {
+            ok.Style = btnStyle;
+            cancel.Style = btnStyle;
+        }
+
+        var bar = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        bar.Children.Add(ok);
+        bar.Children.Add(cancel);
+
+        var root = new System.Windows.Controls.StackPanel { Margin = new Thickness(18, 14, 18, 14) };
+        root.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "从链接导入歌单",
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("FgPrimary"),
+            Margin = new Thickness(6, 0, 6, 10)
+        });
+        root.Children.Add(tip);
+        root.Children.Add(input);
+        root.Children.Add(bar);
+        window.Content = root;
+
+        string? result = null;
+        ok.Click += (_, _) =>
+        {
+            result = input.Text;
+            window.DialogResult = true;
+        };
+        input.KeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter) ok.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        };
+        return window.ShowDialog() == true && !string.IsNullOrWhiteSpace(result) ? result : null;
+    }
+
     /// <summary>把右键菜单锁定的曲目加入指定歌单。</summary>
     [RelayCommand]
     private void AddTrackToPlaylist(Playlist? playlist)
@@ -1143,197 +1468,7 @@ public partial class MainViewModel : ObservableObject
         PendingMenuTrack = null;
     }
 
-    #region 在线曲目下载（B 站）
-
-    /// <summary>右键播放指定曲目（设队列+播放+歌词+最近播放）。</summary>
-    [RelayCommand]
-    private async Task PlayTrack(Track? track)
-    {
-        if (track is null) return;
-        await PlayTrackAsync(track);
-    }
-
-    /// <summary>下一首播放：把曲目插到当前播放曲目之后。</summary>
-    [RelayCommand]
-    private void PlayNext(Track? track)
-    {
-        if (track is null) return;
-        _queue.InsertNext(track);
-        SearchStatus = $"已设为下一首播放: {track.Title}";
-    }
-
-    /// <summary>从当前打开的歌单中移除曲目。</summary>
-    [RelayCommand]
-    private void RemoveTrackFromPlaylist(Track? track)
-    {
-        if (track is null || ViewMode != ViewMode.Playlist || SelectedPlaylist is null) return;
-        SelectedPlaylist.Tracks.Remove(track);
-        SaveUserData();
-    }
-
-    /// <summary>下载在线曲目为本地文件，网易云/QQ音乐支持选择音质。</summary>
-    [RelayCommand]
-    private async Task DownloadTrackAsync(Track? track)
-    {
-        if (track is null) return;
-
-        if (!string.IsNullOrEmpty(track.FilePath) && File.Exists(track.FilePath))
-        {
-            MessageBox.Show("该曲目已是本地文件，无需下载", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        if (_registry.Find(track.ProviderId) is not IOnlineMusicProvider online)
-        {
-            MessageBox.Show("该曲目没有对应的在线源，无法下载", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        // 网易云 / QQ 音乐：弹出音质选择
-        AudioQuality quality = AudioQuality.ExHigh;
-        if (track.ProviderId is "netease" or "qqmusic")
-        {
-            var qualities = await online.GetAvailableQualitiesAsync(track);
-            quality = ShowQualityDialog(qualities);
-            if (quality == AudioQuality.Standard && qualities.Count > 0 && qualities[0] != AudioQuality.Standard)
-                return; // 用户取消
-        }
-
-        SearchStatus = $"⬇ 正在下载: {track.Title}";
-        try
-        {
-            string cachedPath;
-            if (track.ProviderId is "netease" or "qqmusic")
-                cachedPath = await online.DownloadAsync(track, quality);
-            else
-                cachedPath = await online.ResolveToLocalAsync(track);
-
-            var dir = GetDownloadDirectory();
-            Directory.CreateDirectory(dir);
-            var ext = Path.GetExtension(cachedPath);
-            if (string.IsNullOrEmpty(ext)) ext = ".mp3";
-            var targetPath = UniquePath(Path.Combine(dir, SanitizeFileName($"{track.Artist} - {track.Title}") + ext));
-            File.Copy(cachedPath, targetPath);
-
-            if (Library.Tracks.OfType<Track>().All(t => !string.Equals(t.FilePath, targetPath, StringComparison.OrdinalIgnoreCase)))
-            {
-                Library.Tracks.Add(new Track
-                {
-                    Id = targetPath,
-                    FilePath = targetPath,
-                    Title = track.Title,
-                    Artist = track.Artist,
-                    Album = track.Album,
-                    Duration = track.Duration,
-                    ProviderId = "local-file"
-                });
-            }
-
-            SearchStatus = $"✔ 已下载: {Path.GetFileName(targetPath)}（{dir}）";
-        }
-        catch (Exception ex)
-        {
-            SearchStatus = $"下载失败: {ex.Message}";
-            MessageBox.Show($"下载失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>弹出音质选择对话框，返回所选音质；取消返回 Standard（调用方据此判断）。</summary>
-    private static AudioQuality ShowQualityDialog(IReadOnlyList<AudioQuality> qualities)
-    {
-        var names = qualities.Select(q => q switch
-        {
-            AudioQuality.Standard => "标准 (128kbps)",
-            AudioQuality.Higher => "较高 (192kbps)",
-            AudioQuality.ExHigh => "极高 (320kbps)",
-            AudioQuality.Lossless => "无损 (FLAC)",
-            _ => q.ToString()
-        }).ToArray();
-
-        var dialog = new Window
-        {
-            Title = "选择音质",
-            Width = 280,
-            SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize,
-            Background = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("BgPanel")
-        };
-
-        var combo = new System.Windows.Controls.ComboBox
-        {
-            ItemsSource = names,
-            SelectedIndex = 0,
-            Margin = new Thickness(16),
-            Padding = new Thickness(8, 6, 8, 6)
-        };
-
-        var okBtn = new System.Windows.Controls.Button
-        {
-            Content = "确定", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0),
-            Padding = new Thickness(0, 6, 0, 6)
-        };
-        var cancelBtn = new System.Windows.Controls.Button
-        {
-            Content = "取消", IsCancel = true, Width = 80, Padding = new Thickness(0, 6, 0, 6)
-        };
-
-        var panel = new System.Windows.Controls.StackPanel();
-        panel.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = "请选择下载音质",
-            Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("FgPrimary"),
-            Margin = new Thickness(16, 12, 16, 0)
-        });
-        panel.Children.Add(combo);
-        var btnPanel = new System.Windows.Controls.StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 16, 12)
-        };
-        btnPanel.Children.Add(okBtn);
-        btnPanel.Children.Add(cancelBtn);
-        panel.Children.Add(btnPanel);
-        dialog.Content = panel;
-
-        okBtn.Click += (_, _) => dialog.DialogResult = true;
-
-        if (dialog.ShowDialog() == true && combo.SelectedIndex >= 0)
-            return qualities[combo.SelectedIndex];
-        return AudioQuality.Standard;
-    }
-
-    /// <summary>下载保存目录：优先用户设置的音乐目录，否则「音乐\AnMusic」。</summary>
-    private string GetDownloadDirectory()
-    {
-        var musicDir = Settings.MusicDirectory;
-        return !string.IsNullOrWhiteSpace(musicDir) && Path.IsPathRooted(musicDir)
-            ? musicDir
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "AnMusic");
-    }
-
-    private static string SanitizeFileName(string name)
-    {
-        foreach (var c in Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '_');
-        return name.Trim();
-    }
-
-    private static string UniquePath(string path)
-    {
-        if (!File.Exists(path)) return path;
-        var dir = Path.GetDirectoryName(path)!;
-        var name = Path.GetFileNameWithoutExtension(path);
-        var ext = Path.GetExtension(path);
-        for (var i = 1; ; i++)
-        {
-            var candidate = Path.Combine(dir, $"{name} ({i}){ext}");
-            if (!File.Exists(candidate)) return candidate;
-        }
-    }
-
-    #endregion
+    // 在线曲目下载相关实现已拆分到 MainViewModel.Download.cs（partial class，成员可直接访问）
 
     /// <summary>执行搜索：本地直接匹配；网易云/QQ音乐/B站 在线源自动翻页取足一批（默认 50 条），
     /// 列表底部提供“加载更多”继续分页追加。</summary>

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using AnMusic.Models;
@@ -22,9 +23,7 @@ public sealed class LrclibLyricProvider : IOnlineLyricProvider, ILyricProvider
     public LrclibLyricProvider(ILrcParser parser)
     {
         _parser = parser;
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-            "AnMusic/2.0 (desktop music player; lyric fetch via public LRCLIB API)");
+        _http = Services.Net.HttpService.Client; // 统一出口：含 UA / 超时 / 代理设置
     }
 
     /// <summary>按曲目信息获取 LRC 文本（未找到返回 null）。</summary>
@@ -33,13 +32,17 @@ public sealed class LrclibLyricProvider : IOnlineLyricProvider, ILyricProvider
         if (string.IsNullOrWhiteSpace(title))
             return null;
 
+        // 0) 先看本地歌词缓存（命中即用，断网/限流也能显示上次拿到的歌词）
+        if (TryReadCache(title, artist) is { Length: > 0 } cached)
+            return cached;
+
         // 1) 精确匹配
         var url = $"{BaseUrl}/api/get?track_name={Uri.EscapeDataString(title)}" +
                   (string.IsNullOrWhiteSpace(artist) ? "" : $"&artist_name={Uri.EscapeDataString(artist)}");
         var result = await TryGetJsonAsync(url, ct);
         var lrc = ExtractSynced(result) ?? ExtractPlain(result);
         if (!string.IsNullOrEmpty(lrc))
-            return lrc;
+            return WriteCache(title, artist, lrc);
 
         // 2) 模糊搜索，取第一条含同步歌词的结果
         var searchUrl = $"{BaseUrl}/api/search?track_name={Uri.EscapeDataString(title)}" +
@@ -55,14 +58,73 @@ public sealed class LrclibLyricProvider : IOnlineLyricProvider, ILyricProvider
             {
                 lrc = ExtractSynced(item);
                 if (!string.IsNullOrEmpty(lrc))
-                    return lrc;
+                    return WriteCache(title, artist, lrc);
             }
             lrc = ExtractPlain(items[0]);
             if (!string.IsNullOrEmpty(lrc))
-                return lrc;
+                return WriteCache(title, artist, lrc);
         }
         return null;
     }
+
+    #region 歌词落盘缓存（%AppData%\AnMusic\lyrics）
+
+    /// <summary>缓存键：歌名 + 歌手（小写、去空白）的 SHA1，避免文件名非法字符。</summary>
+    private static string CacheKey(string title, string artist)
+    {
+        var raw = (title.Trim() + "|" + (artist ?? "").Trim()).ToLowerInvariant();
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(
+            System.Text.Encoding.UTF8.GetBytes(raw)));
+    }
+
+    /// <summary>读取缓存歌词（不存在/读失败返回 null）。</summary>
+    public static string? TryReadCache(string title, string artist)
+    {
+        try
+        {
+            var path = Path.Combine(Services.AppPaths.LyricsDir, CacheKey(title, artist) + ".lrc");
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch (Exception ex)
+        {
+            Services.AppPaths.LogError("读取歌词缓存", ex, title);
+            return null;
+        }
+    }
+
+    /// <summary>写入缓存并返回原文（写失败不影响本次返回）。</summary>
+    private static string WriteCache(string title, string artist, string lrc)
+    {
+        try
+        {
+            Directory.CreateDirectory(Services.AppPaths.LyricsDir);
+            File.WriteAllText(Path.Combine(Services.AppPaths.LyricsDir, CacheKey(title, artist) + ".lrc"), lrc);
+        }
+        catch (Exception ex)
+        {
+            Services.AppPaths.LogError("写入歌词缓存", ex, title);
+        }
+        return lrc;
+    }
+
+    /// <summary>清空歌词缓存。</summary>
+    public static void ClearCache()
+    {
+        try
+        {
+            if (!Directory.Exists(Services.AppPaths.LyricsDir)) return;
+            foreach (var file in Directory.EnumerateFiles(Services.AppPaths.LyricsDir))
+            {
+                try { File.Delete(file); } catch { /* 占用跳过 */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            Services.AppPaths.LogError("清空歌词缓存", ex);
+        }
+    }
+
+    #endregion
 
     /// <summary>ILyricProvider：直接返回解析后的歌词文档。</summary>
     public async Task<LyricDocument?> FetchAsync(Track track, CancellationToken ct = default)
@@ -82,6 +144,10 @@ public sealed class LrclibLyricProvider : IOnlineLyricProvider, ILyricProvider
             return null;
         title = title.Trim();
         artist = artist?.Trim();
+
+        // 命中缓存直接返回（手动搜索同样受益）
+        if (TryReadCache(title, artist ?? "") is { Length: > 0 } cachedLrc)
+            return new LyricSearchHit(title, artist ?? "", cachedLrc);
 
         // 有歌手时双字段搜索更精确；仅歌名时用 q 模糊匹配（跨 歌名/歌手）
         var url = string.IsNullOrEmpty(artist)

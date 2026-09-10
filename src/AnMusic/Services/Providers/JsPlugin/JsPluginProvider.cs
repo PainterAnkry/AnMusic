@@ -16,8 +16,7 @@ namespace AnMusic.Services.Providers.JsPlugin;
 /// </summary>
 public sealed class JsPluginProvider : IOnlineMusicProvider
 {
-    private static readonly string CacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnMusic", "plugin-cache");
+    public static readonly string CacheDir = Services.AppPaths.PluginAudioCacheDir;
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
@@ -377,7 +376,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
     private static async Task<string> AxiosRequestAsync(string method, string url, string headersJson, string body)
     {
         var logPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AnMusic", "plugins", "http-debug.log");
+            Services.AppPaths.PluginsDir, "http-debug.log");
         try
         {
             WriteHttpLog(logPath, $"[{DateTime.Now:HH:mm:ss}] >> {method} {url} bodyLen={body.Length} body={body[..Math.Min(200, body.Length)]}");
@@ -593,6 +592,36 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         }
         catch (JsonException) { }
         return result;
+    }
+
+    /// <summary>按分享链接导入歌单（MusicFree importMusicSheet：支持网易云/QQ音乐等平台分享页，取决于插件实现）。
+    /// 返回 (歌单名, 曲目列表)；插件不支持（未实现该函数）或解析失败返回 null。</summary>
+    public async Task<(string Name, IReadOnlyList<Track> Tracks)?> ImportMusicSheetAsync(string url, CancellationToken ct = default)
+    {
+        var res = await CallAsync("importMusicSheet", url);
+        if (res.IsUndefined() || res.IsNull()) return null;
+        var json = await ToJsonAsync(res);
+        if (string.IsNullOrEmpty(json) || json == "null") return null;
+
+        // 返回形如 { name/name, cover, musicList: [...] }、{ data: [...] } 或直接数组
+        var name = "";
+        var tracks = ParseTracks(json);
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                if (doc.RootElement.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String)
+                    name = n.GetString() ?? "";
+                if (tracks.Count == 0 && doc.RootElement.TryGetProperty("musicList", out var ml) &&
+                    ml.ValueKind == JsonValueKind.Array)
+                    tracks = ParseTracks(ml.GetRawText());
+            }
+        }
+        catch (JsonException) { }
+        if (tracks.Count == 0) return null;
+        LoadCoversInBackground(tracks);
+        return (name, tracks);
     }
 
     /// <summary>获取指定榜单的歌曲详情（调用 getTopListDetail(id)，MusicFree 协议）。</summary>
@@ -869,6 +898,12 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
                 try
                 {
                     // 封面缺失时尝试 getMusicInfo 补全（MusicFree 协议，返回含 artwork 的完整信息）
+                    // 注意：网易云 song/detail 类接口对高频无登录请求有“操作频繁(405)”风控，
+                    // 批量补全加小间隔节流，降低触发限频导致后续导入/搜索失败的概率
+                    if (string.IsNullOrEmpty(t.CoverUrl) && Supports("getMusicInfo"))
+                    {
+                        await Task.Delay(80);
+                    }
                     if (string.IsNullOrEmpty(t.CoverUrl) && Supports("getMusicInfo"))
                     {
                         try

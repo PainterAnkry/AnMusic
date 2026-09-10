@@ -18,6 +18,12 @@ public interface IPlaylistQueue
     Track? MovePrevious();
     Track? JumpTo(int index);
 
+    /// <summary>从队列移除曲目（不允许移除当前正在播放的曲目），返回是否成功。</summary>
+    bool RemoveTrack(Track track);
+
+    /// <summary>把曲目在队列中上移/下移（delta = ±1；不允许移动当前正在播放的曲目），返回是否成功。</summary>
+    bool MoveTrack(Track track, int delta);
+
     /// <summary>预览接下来将播放的曲目（不含当前曲目，按当前模式计算）。</summary>
     IReadOnlyList<Track> PeekNext(int count);
 

@@ -23,15 +23,22 @@ public sealed class BilibiliApiClient
     private const string Referer = "https://www.bilibili.com/";
     private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
-    private static readonly string CacheDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnMusic", "audio-cache");
+    public static readonly string CacheDir = Services.AppPaths.AudioCacheDir;
 
-    private readonly HttpClient _http;
-    private readonly HttpClientHandler _handler;
+    private HttpClient _http;
+    private HttpClientHandler _handler;  // 重建连接时一并替换
     private (string ImgKey, string SubKey, DateTime FetchedAt)? _wbiKeys;
     private bool _primed;
 
     public BilibiliApiClient()
+    {
+        _http = BuildClient();
+        // 代理设置变更后重建连接（保留 Cookie 容器，登录态/风控凭据不丢）
+        Services.Net.HttpService.ProxyChanged += () => _http = BuildClient();
+    }
+
+    /// <summary>新建带 Cookie 容器的客户端，并套用当前代理设置。</summary>
+    private HttpClient BuildClient()
     {
         _handler = new HttpClientHandler
         {
@@ -39,9 +46,11 @@ public sealed class BilibiliApiClient
             CookieContainer = new System.Net.CookieContainer(),
             UseCookies = true
         };
-        _http = new HttpClient(_handler) { Timeout = TimeSpan.FromSeconds(20) };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("Referer", Referer);
+        Services.Net.HttpService.ApplyProxy(_handler);
+        var client = new HttpClient(_handler) { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Referer", Referer);
+        return client;
     }
 
     /// <summary>
@@ -239,13 +248,6 @@ public sealed class BilibiliApiClient
             page++;
         }
         return videos;
-    }
-
-    /// <summary>清理音频缓存目录。</summary>
-    public static void ClearAudioCache()
-    {
-        if (Directory.Exists(CacheDir))
-            Directory.Delete(CacheDir, true);
     }
 
     /// <summary>去除搜索标题中的关键词高亮标签。</summary>

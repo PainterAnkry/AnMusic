@@ -1,0 +1,280 @@
+<Window x:Class="AnMusic.Views.MiniPlayerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:AnMusic.ViewModels"
+        xmlns:converters="clr-namespace:AnMusic.Converters"
+        mc:Ignorable="d"
+        Title="迷你播放器"
+        Width="474" Height="136"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        ShowActivated="False"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <Window.Resources>
+        <converters:PathToImageConverter x:Key="PathToImageConv"/>
+        <converters:SecondsToTextConverter x:Key="SecondsToTextConv"/>
+        <converters:BoolToPlayTextConverter x:Key="BoolToPlayText"/>
+        <converters:StringNotEmptyToVisibilityConverter x:Key="StrNotEmptyToVis"/>
+        <converters:TimeSpanToTextConverter x:Key="TimeSpanToTextConv"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- 卡片内的小图标按钮（无边框，悬停高亮） -->
+        <Style x:Key="CardIconBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="7" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"
+                                              TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgControlHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 播放控制按钮（略大，悬停变主题色底） -->
+        <Style x:Key="CardTransportBtn" TargetType="Button" BasedOn="{StaticResource CardIconBtn}">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <!-- 卡片本体：圆角 + 阴影；空白处按住即可拖动窗口 -->
+        <Border x:Name="Card"
+                CornerRadius="14"
+                Background="{DynamicResource BgPanel}"
+                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                Padding="10,9,8,8"
+                MouseLeftButtonDown="Card_MouseLeftButtonDown">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.4"/>
+            </Border.Effect>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左：封面（点击打开歌词页） -->
+                <Border Grid.Row="0" Grid.Column="0" Width="52" Height="52" CornerRadius="9"
+                        Background="{DynamicResource BgControl}" ClipToBounds="True"
+                        Cursor="Hand" ToolTip="点击打开歌词"
+                        MouseLeftButtonDown="Cover_Click">
+                    <Grid>
+                        <TextBlock Text="🎵" FontSize="22" Foreground="{DynamicResource FgMuted}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Image Source="{Binding PlaybackBar.CoverPath, Converter={StaticResource PathToImageConv}}"
+                               Stretch="UniformToFill"
+                               Visibility="{Binding PlaybackBar.CoverPath, Converter={StaticResource StrNotEmptyToVis}}"/>
+                    </Grid>
+                </Border>
+
+                <!-- 中：歌名 + 歌手（两行） -->
+                <Grid Grid.Row="0" Grid.Column="1" Margin="10,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PlaybackBar.CurrentTitle}"
+                                   Foreground="{DynamicResource FgPrimary}"
+                                   FontSize="13.5" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding PlaybackBar.CurrentTitle}"/>
+                        <TextBlock Text="{Binding PlaybackBar.CurrentArtist}"
+                                   Foreground="{DynamicResource FgMuted}" FontSize="11"
+                                   TextTrimming="CharacterEllipsis" Margin="0,2,0,0"
+                                   ToolTip="{Binding PlaybackBar.CurrentArtist}"/>
+                    </StackPanel>
+
+                    <!-- 右：收藏 / 音量 / 播放列表 / 最小化 / 关闭 -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <Button Command="{Binding ToggleCurrentFavoriteCommand}" ToolTip="收藏 / 取消收藏">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource CardIconBtn}">
+                                    <Setter Property="Content">
+                                        <Setter.Value>
+                                            <TextBlock Text="♡" FontSize="13">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrentFavorited}" Value="True">
+                                                                <Setter Property="Text" Value="♥"/>
+                                                                <Setter Property="Foreground" Value="#E91E63"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button x:Name="VolumeBtn" Content="🔊" Click="VolumeButton_Click"
+                                Style="{StaticResource CardIconBtn}" Margin="2,0,0,0" ToolTip="音量"/>
+                        <Button x:Name="QueueBtn" Content="☰" Click="QueueButton_Click"
+                                Style="{StaticResource CardIconBtn}" Margin="2,0,0,0" ToolTip="播放列表"/>
+                        <Button Content="—" Click="Minimize_Click"
+                                Style="{StaticResource CardIconBtn}" Margin="8,0,0,0" ToolTip="收起卡片"/>
+                        <Button Content="✕" Click="Close_Click"
+                                Style="{StaticResource CardIconBtn}" Margin="2,0,0,0" ToolTip="关闭迷你播放器"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 下：播放控制 + 进度条（可拖拽、可点击轨道跳转） -->
+                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                            Orientation="Horizontal" VerticalAlignment="Center" Margin="0,9,2,0">
+                    <Button Content="⏮" Command="{Binding PlaybackBar.PreviousCommand}"
+                            Style="{StaticResource CardTransportBtn}" ToolTip="上一首"/>
+                    <Button Content="{Binding PlaybackBar.IsPlaying, Converter={StaticResource BoolToPlayText}}"
+                            Command="{Binding PlaybackBar.PlayPauseCommand}"
+                            Style="{StaticResource CardTransportBtn}" FontSize="15" Margin="2,0,0,0"
+                            ToolTip="播放 / 暂停"/>
+                    <Button Content="⏭" Command="{Binding PlaybackBar.NextCommand}"
+                            Style="{StaticResource CardTransportBtn}" Margin="2,0,0,0" ToolTip="下一首"/>
+
+                    <TextBlock Text="{Binding PlaybackBar.PositionSeconds, Converter={StaticResource SecondsToTextConv}}"
+                               Foreground="{DynamicResource FgMuted}" FontSize="10"
+                               VerticalAlignment="Center" Margin="10,0,6,0" MinWidth="30" TextAlignment="Right"/>
+                    <Slider x:Name="ProgressSlider" Width="196"
+                            Minimum="0" Maximum="{Binding PlaybackBar.DurationSeconds}"
+                            Value="{Binding PlaybackBar.PositionSeconds}"
+                            PreviewMouseLeftButtonDown="ProgressSlider_PreviewMouseLeftButtonDown"
+                            PreviewMouseMove="ProgressSlider_PreviewMouseMove"
+                            PreviewMouseLeftButtonUp="ProgressSlider_PreviewMouseLeftButtonUp"
+                            Thumb.DragStarted="ProgressSlider_DragStarted"
+                            Thumb.DragCompleted="ProgressSlider_DragCompleted"
+                            VerticalAlignment="Center" ToolTip="点击或拖拽跳转播放位置"/>
+                    <TextBlock Text="{Binding PlaybackBar.DurationSeconds, Converter={StaticResource SecondsToTextConv}}"
+                               Foreground="{DynamicResource FgMuted}" FontSize="10"
+                               VerticalAlignment="Center" Margin="6,0,0,0" MinWidth="30"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 音量弹层 -->
+        <Popup x:Name="VolumePopup" PlacementTarget="{Binding ElementName=VolumeBtn}"
+               Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="{DynamicResource BgPanel}" CornerRadius="10"
+                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                    Padding="12,9" Margin="0,0,0,6">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🔊" Foreground="{DynamicResource FgSecondary}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Slider x:Name="VolumeSlider" Width="130" Minimum="0" Maximum="1"
+                            Value="{Binding PlaybackBar.Volume}"
+                            IsMoveToPointEnabled="True" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding PlaybackBar.Volume, StringFormat={}{0:P0}}"
+                               Foreground="{DynamicResource FgMuted}" FontSize="11"
+                               VerticalAlignment="Center" Margin="8,0,0,0" MinWidth="34"/>
+                    <Button Content="静音" Click="Mute_Click" FontSize="11" Padding="8,4"
+                            Style="{StaticResource CardIconBtn}" Width="Auto" Margin="4,0,0,0"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- 播放列表弹层：当前播放队列，点击切换曲目 -->
+        <Popup x:Name="QueuePopup" PlacementTarget="{Binding ElementName=QueueBtn}"
+               Placement="Top" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="{DynamicResource BgPanel}" CornerRadius="10"
+                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                    Padding="8" Margin="0,0,0,6" MinWidth="320" MaxHeight="330">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="播放列表 · 点击切换曲目"
+                               Foreground="{DynamicResource FgPrimary}" FontWeight="Bold" FontSize="12"
+                               Margin="4,2,4,6"/>
+                    <TextBlock DockPanel.Dock="Top" Text="队列为空，先从主界面播放一首歌"
+                               Foreground="{DynamicResource FgMuted}" FontSize="11"
+                               HorizontalAlignment="Center" Margin="0,10,0,12">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding QueueRows.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="QueueList" ItemsSource="{Binding QueueRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="6" Padding="8,6" Cursor="Hand"
+                                            MouseLeftButtonUp="QueueRow_Click" ToolTip="点击播放该曲目">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                                    </DataTrigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource BgControl}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding Track.Title}"
+                                                           Foreground="{DynamicResource FgNormal}" FontSize="12.5"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Track.Artist}"
+                                                           Foreground="{DynamicResource FgMuted}" FontSize="10.5"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                                       Text="{Binding Track.Duration, Converter={StaticResource TimeSpanToTextConv}}"
+                                                       Foreground="{DynamicResource FgMuted}" FontSize="10.5"
+                                                       Margin="10,0,0,0"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</Window>

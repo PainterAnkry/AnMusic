@@ -3,16 +3,86 @@ using System.Windows.Media;
 
 namespace AnMusic.Services.Settings;
 
+/// <summary>皮肤描述：Id 即资源字典文件名（Themes/{Id}.xaml）。</summary>
+public sealed record Skin(string Id, string Name, bool IsDark, string BgHex, string AccentHex, int AccentIndex);
+
 /// <summary>
-/// 主题服务：运行时在 Dark/Light 资源字典间切换（画刷键名一致，DynamicResource 自动刷新）。
-/// 支持多种强调色方案。
+/// 主题/皮肤服务：运行时切换 Themes/*.xaml 资源字典（画刷键名一致，DynamicResource 自动刷新）。
+/// 皮肤决定底色与文字色，强调色可在此基础上单独调整（0-5 套方案）。
 /// </summary>
 public static class ThemeService
 {
-    private const string DarkSource = "Themes/Dark.xaml";
-    private const string LightSource = "Themes/Light.xaml";
+    private const string ThemeFolder = "Themes/";
 
-    public static bool IsDark { get; private set; } = true;
+    /// <summary>全部皮肤（顺序即设置页/皮肤面板展示顺序）。</summary>
+    public static readonly IReadOnlyList<Skin> Skins =
+    [
+        new("Light",     "浅色",   false, "#F6F7F9", "#2B7DE9", 0),
+        new("Dark",      "深色",   true,  "#17191D", "#3B8CFF", 0),
+        new("DeepSpace", "深空蓝", true,  "#0D1420", "#06B6D4", 5),
+        new("Midnight",  "午夜紫", true,  "#141020", "#8B5CF6", 1),
+        new("Forest",    "护眼绿", false, "#F2F7F0", "#10B981", 2),
+        new("Sunset",    "暖阳橙", false, "#FDF7EF", "#F97316", 3),
+        new("Sakura",    "樱雾粉", false, "#FDF5F7", "#EC4899", 4),
+    ];
+
+    /// <summary>当前皮肤 Id。</summary>
+    public static string CurrentSkinId { get; private set; } = "Light";
+
+    /// <summary>当前皮肤（找不到时回落到浅色）。</summary>
+    public static Skin Current => Find(CurrentSkinId) ?? Skins[0];
+
+    public static bool IsDark { get; private set; }
+
+    /// <summary>皮肤切换完成（用于刷新界面上的皮肤预览选中态）。</summary>
+    public static event Action<Skin>? SkinChanged;
+
+    /// <summary>按 Id 查皮肤；未知 Id 返回 null（兼容旧配置里的 "Dark"/"Light"）。</summary>
+    public static Skin? Find(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        foreach (var skin in Skins)
+        {
+            if (string.Equals(skin.Id, id, StringComparison.OrdinalIgnoreCase)) return skin;
+        }
+        // 历史配置可能存了小写或旧写法，统一兜底
+        return id.ToLowerInvariant() switch
+        {
+            "light" => Skins[0],
+            "dark" => Skins[1],
+            _ => null
+        };
+    }
+
+    /// <summary>应用皮肤（未知 Id 回落浅色）。</summary>
+    public static void ApplySkin(string? skinId)
+    {
+        var skin = Find(skinId) ?? Skins[0];
+        var app = Application.Current;
+        if (app is null) return;
+
+        var merged = app.Resources.MergedDictionaries;
+
+        // 移除全部旧皮肤字典（Themes/ 下的都算），再插入新皮肤
+        for (var i = merged.Count - 1; i >= 0; i--)
+        {
+            var src = merged[i].Source?.OriginalString;
+            if (src is not null && src.Contains("/" + ThemeFolder, StringComparison.OrdinalIgnoreCase))
+                merged.RemoveAt(i);
+        }
+
+        merged.Insert(0, new ResourceDictionary
+        {
+            Source = new Uri($"pack://application:,,,/AnMusic;component/{ThemeFolder}{skin.Id}.xaml")
+        });
+
+        CurrentSkinId = skin.Id;
+        IsDark = skin.IsDark;
+        SkinChanged?.Invoke(skin);
+    }
+
+    /// <summary>兼容旧调用：true = 深色，false = 浅色。</summary>
+    public static void Apply(bool dark) => ApplySkin(dark ? "Dark" : "Light");
 
     /// <summary>6 套强调色方案：主色、悬浮色、浅色。</summary>
     private static readonly (Color Accent, Color AccentHover, Color AccentSoft)[] AccentPalettes =
@@ -25,32 +95,9 @@ public static class ThemeService
         (Color.FromRgb(0x06, 0xB6, 0xD4), Color.FromRgb(0x22, 0xD3, 0xEE), Color.FromRgb(0xDC, 0xF7, 0xFC)), // 5 海洋青
     };
 
-    /// <summary>应用主题（true=深色）。</summary>
-    public static void Apply(bool dark)
-    {
-        var app = Application.Current;
-        if (app is null) return;
-
-        var merged = app.Resources.MergedDictionaries;
-        var newDict = new ResourceDictionary
-        {
-            Source = new Uri($"pack://application:,,,/AnMusic;component/{(dark ? DarkSource : LightSource)}")
-        };
-
-        // 移除旧主题字典（Dark.xaml / Light.xaml）
-        for (int i = merged.Count - 1; i >= 0; i--)
-        {
-            var src = merged[i].Source?.OriginalString;
-            if (src is not null && (src.EndsWith(DarkSource, StringComparison.OrdinalIgnoreCase)
-                                    || src.EndsWith(LightSource, StringComparison.OrdinalIgnoreCase)))
-            {
-                merged.RemoveAt(i);
-            }
-        }
-
-        merged.Insert(0, newDict);
-        IsDark = dark;
-    }
+    /// <summary>强调色方案显示名。</summary>
+    public static readonly IReadOnlyList<string> AccentNames =
+        ["科技蓝", "暗夜紫", "森林绿", "日落橙", "玫瑰红", "海洋青"];
 
     /// <summary>应用强调色方案（0-5）。</summary>
     public static void ApplyAccent(int index)
