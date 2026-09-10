@@ -73,7 +73,7 @@ public sealed class PlaylistQueue : IPlaylistQueue
             {
                 if (Repeat == RepeatMode.All)
                 {
-                    RegenerateShuffleOrder();
+                    RegenerateShuffleOrder(putCurrentFirst: false); // 新一轮：从随机曲目继续
                     _shufflePosition = 0;
                 }
                 else
@@ -249,7 +249,12 @@ public sealed class PlaylistQueue : IPlaylistQueue
         if (_shuffle) RegenerateShuffleOrder();
     }
 
-    private void RegenerateShuffleOrder()
+    /// <summary>
+    /// 重新洗牌。putCurrentFirst = true 时把当前曲目放到序列首位，
+    /// 这样"开启随机"后按下一首会依次走完其余歌曲，而不是可能直接判定没有下一首。
+    /// 一轮播完自动重洗时传 false，避免重播刚唱完的那首。
+    /// </summary>
+    private void RegenerateShuffleOrder(bool putCurrentFirst = true)
     {
         var indices = Enumerable.Range(0, _items.Count).ToList();
         // Fisher-Yates
@@ -259,8 +264,15 @@ public sealed class PlaylistQueue : IPlaylistQueue
             int j = rng.Next(i + 1);
             (indices[i], indices[j]) = (indices[j], indices[i]);
         }
+
+        if (putCurrentFirst && _currentIndex >= 0 && _currentIndex < _items.Count)
+        {
+            indices.Remove(_currentIndex);
+            indices.Insert(0, _currentIndex);
+        }
+
         _shuffleOrder = indices;
-        _shufflePosition = _shuffleOrder.IndexOf(_currentIndex);
+        _shufflePosition = 0;
     }
 
     private void RaiseCurrentChanged() => CurrentChanged?.Invoke(this, EventArgs.Empty);

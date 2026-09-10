@@ -88,7 +88,7 @@ public class PlaylistQueueTests
             steps++;
             Assert.True(steps < 20, "顺序 + 随机不应无限循环");
         }
-        Assert.True(steps >= 1);
+        Assert.Equal(3, steps); // 4 首歌：开启随机后还能顺序走到其余 3 首
     }
 
     [Fact]
@@ -102,13 +102,44 @@ public class PlaylistQueueTests
     }
 
     [Fact]
-    public void 关闭随机后回到顺序播放()
+    public void 关闭随机后从当前曲目继续顺序播放()
     {
         var q = Queue(4, 0);
+        q.Repeat = RepeatMode.All;             // 循环模式：末尾也有确定的下一首
         q.Shuffle = true;
         q.MoveNext();
+        var idx = q.CurrentIndex;              // 随机跳到的位置
+
         q.Shuffle = false;
-        Assert.Equal("1", q.MoveNext()?.Id);   // 从当前索引顺序推进
+        var expected = q.Queue[(idx + 1) % q.Queue.Count].Id;
+        Assert.Equal(expected, q.MoveNext()?.Id); // 关闭随机后从当前位置顺序推进
+    }
+
+    [Fact]
+    public void 开启随机后按下一首不会立刻停播()
+    {
+        // 回归：洗牌序列若把当前曲目排在末尾，MoveNext 会直接返回 null 导致"开了随机反而停住"
+        for (var round = 0; round < 50; round++)
+        {
+            var q = Queue(5, 0);
+            q.Shuffle = true;
+            q.Repeat = RepeatMode.None;
+            Assert.NotNull(q.MoveNext());
+        }
+    }
+
+    [Fact]
+    public void 随机播放_顺序模式下一轮恰好覆盖其余每首歌一次()
+    {
+        var q = Queue(6, 0);
+        q.Shuffle = true;
+        q.Repeat = RepeatMode.None;
+
+        var played = new List<string>();
+        while (q.MoveNext() is { } next) played.Add(next.Id);
+
+        var expected = q.Queue.Select(t => t.Id).Where(id => id != "0").OrderBy(x => x).ToList();
+        Assert.Equal(expected, played.OrderBy(x => x).ToList()); // 其余 5 首各播一次且不重复
     }
 
     [Fact]

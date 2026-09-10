@@ -1,9 +1,9 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.0.0**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.0.1**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.0.0-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.0.1-orange)
 
 ## 功能特性
 
