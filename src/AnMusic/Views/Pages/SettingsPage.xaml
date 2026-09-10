@@ -12,6 +12,9 @@
     <UserControl.Resources>
         <converters:PathToImageConverter x:Key="PathToImageConv"/>
         <converters:StringNotEmptyToVisibilityConverter x:Key="StrNotEmptyToVis"/>
+        <!-- 更新检查区域用到：BoolToVis / InvBoolToVis 属于本页资源，不能只依赖主窗口 -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource FgPrimary}"/>
             <Setter Property="FontSize" Value="15"/>
@@ -570,9 +573,26 @@
                                Foreground="{DynamicResource FgSecondary}" FontSize="12" VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
                     <Button Content="{Binding UpdateCheckText}" Style="{StaticResource PageButton}"
-                            Command="{Binding CheckForUpdatesCommand}"/>
+                            Command="{Binding CheckForUpdatesCommand}"
+                            ToolTip="到 GitHub 查询最新版本"/>
+                    <!-- 有新版本时才出现的「直接下载并安装」 -->
+                    <Button Content="⬇ 下载并安装" Style="{StaticResource PageButton}" Margin="6,0,0,0"
+                            Command="{Binding DownloadAndInstallUpdateCommand}"
+                            Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}"
+                            IsEnabled="{Binding IsUpdateBusy, Converter={StaticResource InvBoolToVis}}"
+                            ToolTip="下载安装包（约 78 MB），完成后可立即安装"/>
                 </StackPanel>
             </Grid>
+
+            <!-- 下载进度 -->
+            <StackPanel Margin="0,8,0,0"
+                        Visibility="{Binding IsUpdateBusy, Converter={StaticResource BoolToVis}}">
+                <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding UpdateProgress}"
+                             Background="{DynamicResource BgControl}" BorderThickness="0"
+                             Foreground="{DynamicResource Accent}"/>
+                <TextBlock Text="{Binding UpdateProgressText}" Foreground="{DynamicResource FgMuted}"
+                           FontSize="11" Margin="0,4,0,0"/>
+            </StackPanel>
 
             <!-- 用户协议（点击查看） -->
             <!-- ===== 分区：Agreement ===== -->

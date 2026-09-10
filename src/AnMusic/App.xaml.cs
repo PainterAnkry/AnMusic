@@ -36,6 +36,9 @@ public partial class App : Application
         _singleInstanceMutex = new Mutex(true, @"Local\AnMusic_SingleInstance_Mutex", out var createdNew);
         if (!createdNew)
         {
+            // 若是通过 anmusic:// 链接启动的，先把链接转交给已运行实例再退出
+            if (e.Args.FirstOrDefault(Services.ShareLink.IsShareLink) is { } forwarded)
+                Services.ShareLink.QueuePendingOpen(forwarded);
             try { EventWaitHandle.OpenExisting(@"Local\AnMusic_ActivateWindow").Set(); }
             catch { /* 通知失败不影响退出 */ }
             Shutdown();
@@ -75,9 +78,17 @@ public partial class App : Application
         var pluginLoader = _serviceProvider.GetRequiredService<JsPluginLoader>();
         _ = LoadPluginsAsync(registry, pluginLoader);
 
+        // 注册 anmusic:// 协议（HKCU，点击分享链接可直接打开本软件）
+        Services.ShareLink.RegisterProtocol();
+
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
         _mainWindow = mainWindow;
         mainWindow.Show();
+
+        // 本次启动若带着分享链接（命令行参数 / 上一实例转交），打开对应曲目
+        if (e.Args.FirstOrDefault(Services.ShareLink.IsShareLink) is { } startupLink)
+            _ = mainWindow.Dispatcher.BeginInvoke(new Func<Task>(() =>
+                _serviceProvider.GetRequiredService<MainViewModel>().OpenSharedLinkAsync(startupLink)));
 
         // 系统媒体会话（SMTC）：音量浮层媒体卡片显示与遥控
         try
@@ -102,7 +113,16 @@ public partial class App : Application
                 {
                     try { _activateEvent.WaitOne(); }
                     catch { return; } // 句柄已释放（退出）
-                    try { _mainWindow?.Dispatcher.Invoke(_mainWindow.ShowFromTray); }
+                    try
+                    {
+                        _mainWindow?.Dispatcher.Invoke(() =>
+                        {
+                            _mainWindow.ShowFromTray();
+                            // 新实例可能是带 anmusic:// 链接启动的，恢复窗口后打开它
+                            if (_serviceProvider is { } sp)
+                                _ = sp.GetRequiredService<MainViewModel>().OpenPendingSharedLinkAsync();
+                        });
+                    }
                     catch { /* 窗口已关闭则忽略 */ }
                 }
             })

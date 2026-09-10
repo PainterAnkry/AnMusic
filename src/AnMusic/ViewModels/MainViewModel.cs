@@ -1479,6 +1479,13 @@ public partial class MainViewModel : ObservableObject
         if (string.IsNullOrEmpty(keyword))
             return;
 
+        // 粘贴的是 AnMusic 分享链接：直接打开该曲目，不当作关键词搜索
+        if (Services.ShareLink.IsShareLink(keyword))
+        {
+            await OpenSharedLinkAsync(keyword);
+            return;
+        }
+
         // 记录搜索历史（去重置顶，最多 20 条）
         var existing = SearchHistory.FirstOrDefault(h => h == keyword);
         if (existing is not null) SearchHistory.Remove(existing);

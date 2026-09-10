@@ -245,38 +245,144 @@ public partial class SettingsViewModel : ObservableObject
         请支持正版音乐，尊重艺术家的劳动成果。
         """;
 
-    /// <summary>检查 Github 更新（对比最新 Release 版本号）。</summary>
+    private const string Repo = "PainterAnkry/AnMusic";
+
+    /// <summary>发现新版本（决定"下载并安装"按钮是否出现）。</summary>
+    [ObservableProperty]
+    private bool _updateAvailable;
+
+    /// <summary>更新流程进行中（检查/下载），期间按钮禁用并显示进度条。</summary>
+    [ObservableProperty]
+    private bool _isUpdateBusy;
+
+    /// <summary>安装包下载进度 0-100。</summary>
+    [ObservableProperty]
+    private double _updateProgress;
+
+    /// <summary>下载进度文本。</summary>
+    [ObservableProperty]
+    private string _updateProgressText = "";
+
+    /// <summary>待下载的安装包地址与文件名。</summary>
+    private string? _updateAssetUrl;
+    private string? _updateAssetName;
+    private string _latestVersion = "";
+
+    /// <summary>检查 Github 更新（对比最新 Release 版本号，并找出可下载的安装包）。</summary>
     [RelayCommand]
     private async Task CheckForUpdatesAsync()
     {
+        if (IsUpdateBusy) return;
+        IsUpdateBusy = true;
+        UpdateAvailable = false;
+        _updateAssetUrl = null;
         UpdateCheckText = "正在检查更新...";
         try
         {
             var http = Services.Net.HttpService.Client; // 统一出口：含 UA / 超时 / 代理
-            const string repo = "PainterAnkry/AnMusic";
-            using var resp = await http.GetAsync($"https://api.github.com/repos/{repo}/releases/latest");
+            using var resp = await http.GetAsync($"https://api.github.com/repos/{Repo}/releases/latest");
             if (!resp.IsSuccessStatusCode)
             {
                 UpdateCheckText = "检查更新失败（网络或仓库不存在）";
                 return;
             }
-            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync());
-            var latestTag = doc.RootElement.TryGetProperty("tag_name", out var tag) ? tag.GetString() ?? "" : "";
-            var latestVersion = latestTag.TrimStart('v');
 
-            if (string.IsNullOrEmpty(latestVersion))
+            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync());
+            if (Services.Update.UpdateFeed.ParseRelease(doc.RootElement) is not { } info)
             {
                 UpdateCheckText = "未获取到版本信息";
                 return;
             }
 
-            UpdateCheckText = latestVersion == CurrentVersion
-                ? $"已是最新版本 v{CurrentVersion}"
-                : $"发现新版本 v{latestVersion}（当前 v{CurrentVersion}），请到 Github 下载";
+            _latestVersion = info.LatestVersion;
+            if (!Services.Update.UpdateFeed.IsNewer(info.LatestVersion, CurrentVersion))
+            {
+                UpdateCheckText = $"已是最新版本 v{CurrentVersion}";
+                return;
+            }
+
+            // 发布里的安装包（优先安装版，其次便携版）
+            _updateAssetUrl = info.AssetUrl;
+            _updateAssetName = info.AssetName;
+            UpdateAvailable = _updateAssetUrl is not null;
+            UpdateCheckText = UpdateAvailable
+                ? $"发现新版本 v{_latestVersion}"
+                : $"发现新版本 v{_latestVersion}（未找到安装包，请到 GitHub 下载）";
         }
-        catch
+        catch (Exception ex)
         {
+            Services.AppPaths.LogError("检查更新", ex);
             UpdateCheckText = "检查更新失败，请检查网络连接";
+        }
+        finally
+        {
+            IsUpdateBusy = false;
+        }
+    }
+
+    /// <summary>下载安装包并在确认后启动安装程序（安装前先退出 AnMusic）。</summary>
+    [RelayCommand]
+    private async Task DownloadAndInstallUpdateAsync()
+    {
+        if (IsUpdateBusy || _updateAssetUrl is null) return;
+
+        IsUpdateBusy = true;
+        UpdateProgress = 0;
+        UpdateProgressText = "正在连接下载服务器…";
+        try
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "AnMusic-Update");
+            Directory.CreateDirectory(dir);
+            var target = Path.Combine(dir, _updateAssetName ?? "AnMusic-Setup.exe");
+
+            // 下载交给 UpdateFeed（流式 + 进度回调），这里只更新界面文案
+            var progress = new Progress<Services.Update.UpdateFeed.DownloadProgress>(p =>
+            {
+                if (p.Percent >= 0)
+                {
+                    UpdateProgress = p.Percent;
+                    UpdateProgressText = $"正在下载 v{_latestVersion}… {p.Percent:F0}%（{p.Read / 1048576.0:F1} / {p.Total / 1048576.0:F1} MB）";
+                }
+                else
+                {
+                    // 服务端未提供长度（分块传输）：只显示已下载量，进度条走动由字节数模拟
+                    UpdateProgressText = $"正在下载 v{_latestVersion}… 已下载 {p.Read / 1048576.0:F1} MB";
+                }
+            });
+            UpdateProgressText = $"正在下载 v{_latestVersion}…";
+            await Services.Update.UpdateFeed.DownloadAsync(_updateAssetUrl!, target, progress);
+
+            UpdateCheckText = $"v{_latestVersion} 已下载完成";
+            UpdateProgressText = $"安装包已保存到：{target}";
+            Views.UiDialog.Info(
+                $"新版本 v{_latestVersion} 已下载完成。" + Environment.NewLine + Environment.NewLine +
+                "点击确定后将启动安装向导，AnMusic 会先退出；按向导完成安装即可" +
+                "（歌单、收藏、设置都会保留）。", "更新已就绪");
+
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = target,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Views.UiDialog.Error("启动安装程序失败", ex, "更新失败");
+                UpdateProgressText = $"安装包已保存在 {target}，可手动双击安装";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Services.AppPaths.LogError("下载更新", ex);
+            Views.UiDialog.Error("下载更新失败", ex);
+            UpdateProgressText = "下载失败，可稍后重试";
+        }
+        finally
+        {
+            IsUpdateBusy = false;
         }
     }
 
