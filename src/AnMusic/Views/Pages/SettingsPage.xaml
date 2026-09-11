@@ -394,7 +394,7 @@
             <Border CornerRadius="6" Margin="0,0,0,8" MaxWidth="220" HorizontalAlignment="Left"
                     BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
                     Visibility="{Binding BackgroundImagePath, Converter={StaticResource StrNotEmptyToVis}}">
-                <Image Source="{Binding BackgroundImagePath, Converter={StaticResource PathToImageConv}}"
+                <Image Source="{Binding BackgroundImagePath, Converter={StaticResource PathToImageConv}, ConverterParameter=480}"
                        MaxHeight="120" Stretch="Uniform"/>
             </Border>
             <Grid>

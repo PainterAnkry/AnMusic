@@ -311,7 +311,7 @@
     <Grid x:Name="RootGrid" PreviewMouseLeftButtonDown="CloseHistoryPopupIfOutside">
         <!-- 背景图片层（设置页可选，默认隐藏）：当动态壁纸关闭时显示 -->
         <Image Stretch="UniformToFill" IsHitTestVisible="False"
-               Source="{Binding Settings.BackgroundImagePath, Converter={StaticResource PathToImageConv}}"
+               Source="{Binding Settings.BackgroundImagePath, Converter={StaticResource PathToImageConv}, ConverterParameter=2560}"
                Opacity="{Binding Settings.BackgroundOpacity}">
             <Image.Style>
                 <Style TargetType="Image">
@@ -372,7 +372,7 @@
                                     <!-- UniformToFill 等比放大并居中：非方形图片也不会拉伸/偏移 -->
                                     <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center">
                                         <ImageBrush.ImageSource>
-                                            <Binding Path="UserAvatarPath" Converter="{StaticResource PathToImageConv}"/>
+                                            <Binding Path="UserAvatarPath" Converter="{StaticResource PathToImageConv}" ConverterParameter="128"/>
                                         </ImageBrush.ImageSource>
                                     </ImageBrush>
                                 </Ellipse.Fill>
@@ -399,7 +399,7 @@
                                             <Ellipse.Fill>
                                                 <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center">
                                                     <ImageBrush.ImageSource>
-                                                        <Binding Path="UserAvatarPath" Converter="{StaticResource PathToImageConv}"/>
+                                                        <Binding Path="UserAvatarPath" Converter="{StaticResource PathToImageConv}" ConverterParameter="128"/>
                                                     </ImageBrush.ImageSource>
                                                 </ImageBrush>
                                             </Ellipse.Fill>
@@ -540,9 +540,9 @@
                             <TextBlock Text="🎵" FontSize="22"
                                        Foreground="{DynamicResource FgMuted}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            <Image Width="48" Height="48" Stretch="Uniform">
+                            <Image x:Name="PlayBarCover" Width="48" Height="48" Stretch="Uniform">
                                 <Image.Source>
-                                    <Binding Path="PlaybackBar.CoverPath" Converter="{StaticResource PathToImageConv}"/>
+                                    <Binding Path="PlaybackBar.CoverPath" Converter="{StaticResource PathToImageConv}" ConverterParameter="96"/>
                                 </Image.Source>
                             </Image>
                         </Grid>
@@ -1239,7 +1239,7 @@
                                Visibility="{Binding SearchStatus, Converter={StaticResource StrNotEmptyToVis}}"/>
                 </Border>
 
-                <Grid Grid.Row="3">
+                <Grid Grid.Row="3" x:Name="ContentArea">
                 <ListView x:Name="TrackList"
                           ItemsSource="{Binding CurrentTracks}"
                           Background="{DynamicResource BgMainAlpha}" BorderThickness="0"
@@ -1262,7 +1262,7 @@
                                             <TextBlock Text="🎵" FontSize="18"
                                                        Foreground="{DynamicResource FgMuted}"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            <Image Source="{Binding CoverKey, Converter={StaticResource PathToImageConv}}"
+                                            <Image Source="{Binding CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=96}"
                                                    Width="40" Height="40" Stretch="Uniform"
                                                    Visibility="{Binding CoverKey, Converter={StaticResource StrNotEmptyToVis}}"/>
                                         </Grid>
@@ -1389,11 +1389,11 @@
             </Grid>
 
             <!-- 设置覆盖层：独立于内容区（内容区已隐藏），蒙层后只有背景图 -->
-            <pages:SettingsPage Grid.Column="1" DataContext="{Binding Settings}"
+            <pages:SettingsPage Grid.Column="1" x:Name="SettingsPageHost" DataContext="{Binding Settings}"
                                 Visibility="{Binding DataContext.IsShowingSettings, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 歌词覆盖层（默认隐藏，点击左下封面/列表封面切换，覆盖内容区） -->
-            <Border Grid.Column="1" Background="{DynamicResource BgMainAlpha}"
+            <Border Grid.Column="1" x:Name="LyricsOverlay" Background="{DynamicResource BgMainAlpha}"
                     Visibility="{Binding IsLyricsOpen, Converter={StaticResource BoolToVis}}">
                 <DockPanel>
                     <!-- 顶部：曲目信息 + 工具栏 -->
@@ -1413,7 +1413,7 @@
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         <Image Width="44" Height="44" Stretch="Uniform">
                                             <Image.Source>
-                                                <Binding Path="PlaybackBar.CoverPath" Converter="{StaticResource PathToImageConv}"/>
+                                                <Binding Path="PlaybackBar.CoverPath" Converter="{StaticResource PathToImageConv}" ConverterParameter="512"/>
                                             </Image.Source>
                                         </Image>
                                     </Grid>

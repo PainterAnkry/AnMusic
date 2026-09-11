@@ -95,7 +95,7 @@
                     <Grid>
                         <TextBlock Text="🎵" FontSize="22" Foreground="{DynamicResource FgMuted}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <Image Source="{Binding PlaybackBar.CoverPath, Converter={StaticResource PathToImageConv}}"
+                        <Image Source="{Binding PlaybackBar.CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=104}"
                                Stretch="UniformToFill"
                                Visibility="{Binding PlaybackBar.CoverPath, Converter={StaticResource StrNotEmptyToVis}}"/>
                     </Grid>

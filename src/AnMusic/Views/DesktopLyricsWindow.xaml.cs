@@ -53,7 +53,11 @@ public partial class DesktopLyricsWindow : Window
             nameof(LyricViewModel.CurrentLineText) or
             nameof(LyricViewModel.Lines))
         {
-            Dispatcher.BeginInvoke(RefreshLineWindows);
+            Dispatcher.BeginInvoke(() =>
+            {
+                RefreshLineWindows();
+                Animations.SwapFade(LyricText, 0.35, 240); // 换行淡入，跳变更柔和
+            });
         }
     }
 

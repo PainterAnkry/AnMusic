@@ -231,6 +231,13 @@ public partial class MiniPlayerWindow : Window
 
     #endregion
 
+    /// <summary>窗口首次呈现时淡入上移，避免"啪"地出现。</summary>
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        Animations.FadeIn(Card, 180, 0, 10);
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _vm.PlaybackBar.PropertyChanged -= OnPlaybackPropertyChanged;

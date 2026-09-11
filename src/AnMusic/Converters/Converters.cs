@@ -124,6 +124,15 @@ public sealed class PathToImageConverter : IValueConverter
             bmp.BeginInit();
             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+
+            // ConverterParameter 可指定"按展示尺寸解码"的目标宽度（等比缩放）：
+            // 大图（尤其 4K 背景图）按原尺寸解码会长期占用几十 MB 内存
+            var decodeWidth = 0;
+            if (parameter is not null)
+                int.TryParse(parameter.ToString(), out decodeWidth);
+            if (decodeWidth > 0)
+                bmp.DecodePixelWidth = decodeWidth;
+
             bmp.UriSource = new Uri(path);
             bmp.EndInit();
             bmp.Freeze();

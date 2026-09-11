@@ -64,6 +64,15 @@ public partial class MainWindow : Window
                 typeof(System.Windows.Controls.ItemsControl))
             .AddValueChanged(TrackList, OnTrackListItemsSourceChanged);
 
+        // 过渡动画：设置页/歌词页出现时淡入上移；播放栏封面切歌时轻闪
+        Views.Animations.AutoFadeInOnVisible(SettingsPageHost);
+        Views.Animations.AutoFadeInOnVisible(LyricsOverlay);
+        _viewModel.PlaybackBar.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlaybackBarViewModel.CoverPath))
+                Views.Animations.SwapFade(PlayBarCover, 0.3, 260);
+        };
+
     }
 
     #region 快捷键
@@ -293,6 +302,9 @@ public partial class MainWindow : Window
         ApplySort();
         UpdateHeaderSortGlyphs();
         ApplyListFilter(_viewModel.ListFilterText);
+
+        // 视图切换时列表淡入（150ms 缓出，够顺滑又不拖手）
+        Views.Animations.FadeIn(TrackList, 150, 0, 6);
     }
 
     /// <summary>表头按钮点击（每列表头均为带 Tag 的按钮，点击直接触发，不依赖表头内部事件冒泡）。</summary>

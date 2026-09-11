@@ -23,10 +23,38 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
 
     private static readonly JsonSerializerOptions CamelCase = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    private readonly Engine _engine;
-    private readonly JsValue _exports;
-    private readonly JsValue _jsonParse;
-    private readonly JsValue _jsonStringify;
+    /// <summary>Jint 引擎：首次真正用到该插件时才创建（空闲时不占内存）。</summary>
+    private Engine? _engine;
+    private JsValue _exports;
+    private JsValue _jsonParse;
+    private JsValue _jsonStringify;
+
+    /// <summary>插件源码（建好引擎后释放，避免长期驻留大字符串）。</summary>
+    private string? _source;
+
+    /// <summary>
+    /// 引擎访问入口：必须在 _engineGate 内调用。
+    /// 首次访问时创建引擎、加载运行时兼容层并执行插件代码。
+    /// </summary>
+    private Engine Engine => _engine ?? throw new InvalidOperationException("插件引擎未初始化");
+
+    /// <summary>插件导出对象（首次访问会按需创建引擎）。</summary>
+    private JsValue Exports
+    {
+        get { _ = Engine; return _exports; }
+    }
+
+    /// <summary>JSON.parse 的 JS 函数（首次访问会按需创建引擎）。</summary>
+    private JsValue JsonParse
+    {
+        get { _ = Engine; return _jsonParse; }
+    }
+
+    /// <summary>JSON.stringify 的 JS 函数（首次访问会按需创建引擎）。</summary>
+    private JsValue JsonStringify
+    {
+        get { _ = Engine; return _jsonStringify; }
+    }
     private readonly CoverCacheService _covers;
 
     /// <summary>引擎访问串行闸：Jint 引擎非线程安全，搜索/封面补全/解析播放地址等可能并发触发
@@ -46,9 +74,33 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         FileName = Path.GetFileName(filePath);
 
         var code = File.ReadAllText(filePath);
-        _engine = new Engine(o =>
+        var engine = NewEngine(TimeSpan.FromSeconds(15));
+        ConfigureRuntime(engine);
+        engine.Execute(code);
+        _engine = engine;
+
+        _exports = engine.GetValue("module").AsObject().Get("exports");
+        _jsonParse = engine.Evaluate("(s)=>JSON.parse(s)");
+        _jsonStringify = engine.Evaluate("(x)=>JSON.stringify(x)");
+        _source = null;
+
+        var platform = _exports.Get("platform");
+        var version = _exports.Get("version");
+        Id = platform.IsString() && !string.IsNullOrWhiteSpace(platform.AsString())
+            ? platform.AsString()
+            : Path.GetFileNameWithoutExtension(filePath);
+        Version = version.IsString() ? version.AsString() : "";
+        DisplayName = Id;
+    }
+
+    /// <summary>构造 Jint 引擎并执行运行时兼容层 + 插件代码（懒加载，仅在首次使用时调用）。</summary>
+    /// <summary>新建 Jint 引擎（统一沙箱参数）。</summary>
+    /// <param name="scriptTimeout">脚本执行超时；元数据解析用更短的超时。</param>
+    private static Engine NewEngine(TimeSpan scriptTimeout)
+    {
+        return new Engine(o =>
         {
-            o.TimeoutInterval(TimeSpan.FromSeconds(15))
+            o.TimeoutInterval(scriptTimeout)
                 .LimitRecursion(64)
                 .Strict();
             // Jint 默认 Constraints.PromiseTimeout 只有 10 秒：插件 Promise 内部 await 宿主网络
@@ -58,25 +110,31 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             // 真实上限由 CallAsync 的 45 秒 CancellationToken 兜底。
             o.Constraints.PromiseTimeout = TimeSpan.FromSeconds(60);
         });
+    }
 
-        // 注册宿主 C# 能力（Task 会被 Jint 自动转为 JS Promise）
-        _engine.SetValue("__axiosRequestAsync", new Func<string, string, string, string, Task<string>>(AxiosRequestAsync));
-        _engine.SetValue("__btoa", new Func<string, string>(s => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(s))));
-        _engine.SetValue("__atob", new Func<string, string>(s => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(s))));
-        _engine.SetValue("__bufferFrom", new Func<string, string, int[]>(BufferFrom));
-        _engine.SetValue("__bytesToString", new Func<int[], string, string>(BytesToString));
-        _engine.SetValue("__textEncode", new Func<string, int[]>(s => [.. System.Text.Encoding.UTF8.GetBytes(s)]));
-        _engine.SetValue("__textDecode", new Func<int[], string>(b => System.Text.Encoding.UTF8.GetString(b.Select(i => (byte)i).ToArray())));
+    /// <summary>
+    /// 宿主运行时兼容层：module/exports、console、localStorage、Buffer、TextEncoder、URL/URLSearchParams、
+    /// axios 兼容层等。不含内置库（crypto-js 等按插件 require 时才加载，省内存）。
+    /// </summary>
+    private static void ConfigureRuntime(Engine engine)
+    {
+        engine.SetValue("__axiosRequestAsync", new Func<string, string, string, string, Task<string>>(AxiosRequestAsync));
+        engine.SetValue("__btoa", new Func<string, string>(s => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(s))));
+        engine.SetValue("__atob", new Func<string, string>(s => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(s))));
+        engine.SetValue("__bufferFrom", new Func<string, string, int[]>(BufferFrom));
+        engine.SetValue("__bytesToString", new Func<int[], string, string>(BytesToString));
+        engine.SetValue("__textEncode", new Func<string, int[]>(s => [.. System.Text.Encoding.UTF8.GetBytes(s)]));
+        engine.SetValue("__textDecode", new Func<int[], string>(b => System.Text.Encoding.UTF8.GetString(b.Select(i => (byte)i).ToArray())));
         // setTimeout：记录但不执行。插件常用 setTimeout(reject, 10000) 做超时保护，
         // 引擎内同步立即执行会导致请求被瞬间拒绝（"Timeout of 00:00:10 reached"）。
         // 禁用插件侧超时后由宿主 CallAsync 的 45s 兜底统一处理真实超时。
-        _engine.SetValue("setTimeout", new Func<JsValue, double, JsValue>((fn, _) => JsValue.Undefined));
-        _engine.SetValue("clearTimeout", new Action<JsValue>(_ => { }));
-        _engine.SetValue("setInterval", new Func<JsValue, double, JsValue>((_, _) => JsValue.Undefined));
-        _engine.SetValue("clearInterval", new Action<JsValue>(_ => { }));
+        engine.SetValue("setTimeout", new Func<JsValue, double, JsValue>((fn, _) => JsValue.Undefined));
+        engine.SetValue("clearTimeout", new Action<JsValue>(_ => { }));
+        engine.SetValue("setInterval", new Func<JsValue, double, JsValue>((_, _) => JsValue.Undefined));
+        engine.SetValue("clearInterval", new Action<JsValue>(_ => { }));
 
         // CommonJS 运行环境 + MusicFree 宿主兼容层
-        _engine.Execute("""
+        engine.Execute("""
             var module = { exports: {} };
             var exports = module.exports;
             var console = { log: function(){}, warn: function(){}, error: function(){}, info: function(){} };
@@ -95,11 +153,34 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
                 removeItem: function(k){ delete s[k]; },
                 clear: function(){ s = {}; }
             }; })();
-            // 宿主模块表 + require（内置库加载后填充 __modules）
+            // 宿主模块表 + require：内置库（crypto-js/dayjs/jsencrypt/he/big-integer）
+            // 不再启动时全量解析，改为首次 require 时向宿主取源码并执行，未用到的库零开销。
             var __modules = {};
             var require = function(name){
                 if (__modules[name]) return __modules[name];
-                throw new Error('AnMusic 宿主暂不支持模块: ' + name);
+                var code = __builtinCode(String(name));
+                if (code == null) {
+                    try { __hostLog('宿主未内置模块: ' + name); } catch (e0) {}
+                    throw new Error('AnMusic 宿主暂不支持模块: ' + name);
+                }
+                var __libModule = { exports: {} };
+                var __savedModule = module, __savedExports = exports;
+                module = __libModule; exports = __libModule.exports;
+                try {
+                    eval(code);
+                    __modules[name] = __libModule.exports;
+                } catch (e) {
+                    __modules[name] = null;
+                    // 记日志：库解析失败会让依赖它的插件功能异常，静默会很难查
+                    try { __hostLog('内置库 ' + name + ' 加载失败: ' + (e && e.message ? e.message : e)); } catch (e2) {}
+                }
+                module = __savedModule; exports = __savedExports;
+                var m = __modules[name];
+                if (m && typeof m === 'object' && !m.default) { try { m.default = m; } catch (e) {} }
+                // 兼容直接引用全局的插件（如 CryptoJS.xxx）
+                var g = { 'crypto-js': 'CryptoJS', 'dayjs': 'dayjs', 'big-integer': 'bigInt', 'jsencrypt': 'JSEncrypt' }[name];
+                if (g) { try { globalThis[g] = m; } catch (e) {} }
+                return m;
             };
             // URLSearchParams（简易实现，覆盖 get/has/append/toString/entries）
             var URLSearchParams = function(init){
@@ -158,10 +239,80 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             """);
 
         // 注入宿主内置库（在临时 module 作用域执行 UMD，导出写入 __modules 后还原）
-        LoadBuiltinLibraries(_engine);
+        RegisterBuiltinLibraryLoader(engine);
+
+        // qs（querystring 序列化/解析，纯 JS 实现）与 cheerio 兼容 stub（HTML 解析返回空结果）
+        // 体积很小（约 2.5KB），随兼容层直接注册；crypto-js / jsencrypt 等大库才按需加载
+        engine.Execute("""
+
+            __modules['qs'] = (function(){
+                function stringify(obj){
+                    var parts = [];
+                    for (var k in obj) {
+                        if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+                        var v = obj[k];
+                        if (v == null) { parts.push(encodeURIComponent(k) + '='); continue; }
+                        if (Array.isArray(v)) {
+                            for (var i = 0; i < v.length; i++) parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v[i]));
+                        } else {
+                            parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+                        }
+                    }
+                    return parts.join('&');
+                }
+                function parse(str){
+                    var out = {};
+                    String(str).replace(/^\?/, '').split('&').forEach(function(p){
+                        if (!p) return;
+                        var i = p.indexOf('=');
+                        var k = i < 0 ? p : p.slice(0, i);
+                        var v = i < 0 ? '' : p.slice(i + 1);
+                        try { out[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { out[k] = v; }
+                    });
+                    return out;
+                }
+                return { stringify: stringify, parse: parse };
+            })();
+            __modules['querystring'] = __modules['qs'];
+            // cheerio stub：返回空结果的兼容实现（插件可加载，HTML 抓取类功能受限）
+            // 注意：元素用普通对象而非函数对象——函数的 length 属性只读，严格模式下赋值会抛 TypeError
+            __modules['cheerio'] = (function(){
+                function makeEl(html){
+                    var el = {};
+                    el.length = 0;
+                    el.text = function(){ return ''; };
+                    el.html = function(){ return html || ''; };
+                    el.attr = function(){ return el; };
+                    el.find = function(){ return makeEl(''); };
+                    el.each = function(){ return el; };
+                    el.map = function(){ return { get: function(){ return []; } }; };
+                    el.get = function(){ return []; };
+                    el.toArray = function(){ return []; };
+                    el.first = function(){ return el; };
+                    el.eq = function(){ return el; };
+                    el.parent = function(){ return el; };
+                    el.children = function(){ return el; };
+                    el.val = function(){ return ''; };
+                    // 支持 for...of / 展开运算符（空结果迭代器）
+                    el[Symbol.iterator] = function(){
+                        return { next: function(){ return { done: true, value: undefined }; } };
+                    };
+                    return el;
+                }
+                return {
+                    load: function(html){
+                        var $ = function(){ return makeEl(html || ''); };
+                        $.html = function(){ return html || ''; };
+                        $.text = function(){ return ''; };
+                        return $;
+                    }
+                };
+            })();
+            
+            """);
 
         // axios 兼容层（基于 HttpClient，覆盖 get/post 最常见用法）
-        _engine.Execute("""
+        engine.Execute("""
             var __axiosRequest = function(method, url, headersJson, body){
                 return __axiosRequestAsync(method, url, headersJson, body);
             };
@@ -233,144 +384,60 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             axios.default = axios;
             __modules['axios'] = axios;
             """);
-
-        _engine.Execute(code);
-
-        _exports = _engine.GetValue("module").AsObject().Get("exports");
-        Id = _exports.Get("platform").IsString() ? _exports.Get("platform").AsString()
-            : Path.GetFileNameWithoutExtension(filePath);
-        Version = _exports.Get("version").IsString() ? _exports.Get("version").AsString() : "";
-        DisplayName = Id;
-
-        _jsonParse = _engine.Evaluate("(s)=>JSON.parse(s)");
-        _jsonStringify = _engine.Evaluate("(x)=>JSON.stringify(x)");
     }
 
-    /// <summary>执行宿主内置库（crypto-js / dayjs / big-integer / jsencrypt），导出注册进 __modules 供 require 使用。</summary>
-    private static void LoadBuiltinLibraries(Engine engine)
-    {
-        var asm = typeof(JsPluginProvider).Assembly;
-        var libs = new[]
-        {
-            ("crypto-js", "AnMusic.Assets.Plugins.crypto-js.min.js"),
-            ("dayjs", "AnMusic.Assets.Plugins.dayjs.min.js"),
-            ("big-integer", "AnMusic.Assets.Plugins.big-integer.min.js"),
-            ("jsencrypt", "AnMusic.Assets.Plugins.jsencrypt.min.js"),
-            ("he", "AnMusic.Assets.Plugins.he.min.js"),
-        };
 
-        foreach (var (name, res) in libs)
+    /// <summary>内置库资源名（require 时才读取并解析）。</summary>
+    private static readonly Dictionary<string, string> BuiltinLibraryResources = new()
+    {
+        ["crypto-js"] = "AnMusic.Assets.Plugins.crypto-js.min.js",
+        ["dayjs"] = "AnMusic.Assets.Plugins.dayjs.min.js",
+        ["big-integer"] = "AnMusic.Assets.Plugins.big-integer.min.js",
+        ["jsencrypt"] = "AnMusic.Assets.Plugins.jsencrypt.min.js",
+        ["he"] = "AnMusic.Assets.Plugins.he.min.js",
+    };
+
+    /// <summary>库源码缓存（多个插件共用一份字符串，避免重复读资源）。</summary>
+    private static readonly Dictionary<string, string?> LibrarySourceCache = [];
+    private static readonly object LibraryCacheGate = new();
+
+    /// <summary>
+    /// 注册 __builtinCode 宿主函数：插件 require 某库时才返回其源码（找不到返回 null）。
+    /// 库的解析发生在插件侧 eval 里，因此未用到的库完全不占内存。
+    /// </summary>
+    private static void RegisterBuiltinLibraryLoader(Engine engine)
+    {
+        engine.SetValue("__builtinCode", new Func<string, string?>(GetBuiltinLibrarySource));
+        engine.SetValue("__hostLog", new Action<string>(msg =>
+            AnMusic.Services.AppPaths.LogError("插件运行时", null, msg)));
+    }
+
+    private static string? GetBuiltinLibrarySource(string name)
+    {
+        if (!BuiltinLibraryResources.TryGetValue(name, out var resource)) return null;
+
+        lock (LibraryCacheGate)
         {
-            string code;
+            if (LibrarySourceCache.TryGetValue(name, out var cached)) return cached;
+
+            string? code = null;
             try
             {
-                using var stream = asm.GetManifestResourceStream(res);
-                if (stream is null) continue;
-                using var reader = new StreamReader(stream);
-                code = reader.ReadToEnd();
+                using var stream = typeof(JsPluginProvider).Assembly.GetManifestResourceStream(resource);
+                if (stream is not null)
+                {
+                    using var reader = new StreamReader(stream);
+                    code = reader.ReadToEnd();
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                continue;
+                AnMusic.Services.AppPaths.LogError("读取内置 JS 库", ex, resource);
             }
 
-            // 临时替换 module/exports 执行 UMD 库，导出写入 __modules，最后还原供插件代码使用
-            var script = """
-                (function(){
-                    var __libModule = { exports: {} };
-                    var __savedModule = module, __savedExports = exports;
-                    module = __libModule; exports = __libModule.exports;
-                    try {
-                        __LIB_CODE__
-                        __modules['__LIB_NAME__'] = __libModule.exports;
-                    } catch (e) {
-                        __modules['__LIB_NAME__'] = null;
-                    }
-                    module = __savedModule; exports = __savedExports;
-                })();
-                """.Replace("__LIB_NAME__", name).Replace("__LIB_CODE__", code);
-            engine.Execute(script);
+            LibrarySourceCache[name] = code;
+            return code;
         }
-
-        // 常用库同时挂为全局（部分插件直接引用全局 CryptoJS/dayjs）
-        engine.Execute("""
-            if (__modules['crypto-js']) { try { globalThis.CryptoJS = __modules['crypto-js']; } catch (e) {} }
-            if (__modules['dayjs']) { try { globalThis.dayjs = __modules['dayjs']; } catch (e) {} }
-            if (__modules['big-integer']) { try { globalThis.bigInt = __modules['big-integer']; } catch (e) {} }
-            if (__modules['jsencrypt']) { try { globalThis.JSEncrypt = __modules['jsencrypt']; } catch (e) {} }
-            // TS 编译的插件会调用 xx_1.default(...)，给所有内置模块补 default 自引用（与真实 axios 包行为一致）
-            ['crypto-js', 'dayjs', 'big-integer', 'jsencrypt', 'he', 'axios'].forEach(function(n){
-                var m = __modules[n];
-                if (m && typeof m === 'object' && !m.default) { try { m.default = m; } catch (e) {} }
-            });
-            """);
-
-        // qs（querystring 序列化/解析，纯 JS 实现）与 cheerio 兼容 stub（HTML 解析返回空结果）
-        engine.Execute("""
-            __modules['qs'] = (function(){
-                function stringify(obj){
-                    var parts = [];
-                    for (var k in obj) {
-                        if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
-                        var v = obj[k];
-                        if (v == null) { parts.push(encodeURIComponent(k) + '='); continue; }
-                        if (Array.isArray(v)) {
-                            for (var i = 0; i < v.length; i++) parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v[i]));
-                        } else {
-                            parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
-                        }
-                    }
-                    return parts.join('&');
-                }
-                function parse(str){
-                    var out = {};
-                    String(str).replace(/^\?/, '').split('&').forEach(function(p){
-                        if (!p) return;
-                        var i = p.indexOf('=');
-                        var k = i < 0 ? p : p.slice(0, i);
-                        var v = i < 0 ? '' : p.slice(i + 1);
-                        try { out[decodeURIComponent(k)] = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { out[k] = v; }
-                    });
-                    return out;
-                }
-                return { stringify: stringify, parse: parse };
-            })();
-            __modules['querystring'] = __modules['qs'];
-            // cheerio stub：返回空结果的兼容实现（插件可加载，HTML 抓取类功能受限）
-            // 注意：元素用普通对象而非函数对象——函数的 length 属性只读，严格模式下赋值会抛 TypeError
-            __modules['cheerio'] = (function(){
-                function makeEl(html){
-                    var el = {};
-                    el.length = 0;
-                    el.text = function(){ return ''; };
-                    el.html = function(){ return html || ''; };
-                    el.attr = function(){ return el; };
-                    el.find = function(){ return makeEl(''); };
-                    el.each = function(){ return el; };
-                    el.map = function(){ return { get: function(){ return []; } }; };
-                    el.get = function(){ return []; };
-                    el.toArray = function(){ return []; };
-                    el.first = function(){ return el; };
-                    el.eq = function(){ return el; };
-                    el.parent = function(){ return el; };
-                    el.children = function(){ return el; };
-                    el.val = function(){ return ''; };
-                    // 支持 for...of / 展开运算符（空结果迭代器）
-                    el[Symbol.iterator] = function(){
-                        return { next: function(){ return { done: true, value: undefined }; } };
-                    };
-                    return el;
-                }
-                return {
-                    load: function(html){
-                        var $ = function(){ return makeEl(html || ''); };
-                        $.html = function(){ return html || ''; };
-                        $.text = function(){ return ''; };
-                        return $;
-                    }
-                };
-            })();
-            """);
     }
 
     /// <summary>axios 底层 HTTP（返回 JSON 字符串: { body, status, contentType, headers }）。</summary>
@@ -465,12 +532,12 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         await _engineGate.WaitAsync();
         try
         {
-            var f = _exports.Get(fn);
+            var f = Exports.Get(fn);
             if (f.IsUndefined() || !f.IsCallable()) return JsValue.Undefined;
             JsValue res;
             try
             {
-                res = _engine.Invoke(f, args);
+                res = Engine.Invoke(f, args);
             }
             catch (Jint.Runtime.JavaScriptException ex)
             {
@@ -534,7 +601,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         await _engineGate.WaitAsync();
         try
         {
-            return _engine.Invoke(_jsonStringify, value).AsString();
+            return Engine.Invoke(_jsonStringify, value).AsString();
         }
         finally
         {
@@ -860,7 +927,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             {
                 try
                 {
-                    return _engine.Invoke(_jsonParse, track.PluginData);
+                    return Engine.Invoke(_jsonParse, track.PluginData);
                 }
                 catch
                 {
@@ -878,7 +945,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
                 cover = track.CoverUrl,
                 sourceUrl = track.SourceUrl
             }, CamelCase);
-            return _engine.Invoke(_jsonParse, json);
+            return Engine.Invoke(_jsonParse, json);
         }
         finally
         {
@@ -938,7 +1005,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         _engineGate.Wait();
         try
         {
-            try { return !_exports.Get(func).IsUndefined(); }
+            try { return !Exports.Get(func).IsUndefined(); }
             catch { return false; }
         }
         finally
