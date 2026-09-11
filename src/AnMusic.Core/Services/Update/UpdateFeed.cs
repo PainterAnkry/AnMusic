@@ -5,7 +5,19 @@ using System.Text.Json;
 namespace AnMusic.Services.Update;
 
 /// <summary>从 Release JSON 解析出的更新信息。</summary>
-public sealed record UpdateInfo(string LatestVersion, string? AssetUrl, string? AssetName);
+/// <param name="LatestVersion">最新版本号（已去掉 tag 里的 v 前缀）。</param>
+/// <param name="AssetUrl">安装包下载地址（优先安装版，其次便携版）。</param>
+/// <param name="AssetName">安装包文件名。</param>
+/// <param name="Notes">Release 说明正文（Markdown 原文，供"私信/更新公告"展示）。</param>
+/// <param name="HtmlUrl">Release 页面地址（"查看完整说明"用）。</param>
+/// <param name="PublishedAt">发布时间（ISO 8601 原文，展示前由调用方格式化）。</param>
+public sealed record UpdateInfo(
+    string LatestVersion,
+    string? AssetUrl,
+    string? AssetName,
+    string Notes = "",
+    string HtmlUrl = "",
+    string PublishedAt = "");
 
 /// <summary>
 /// 更新检查的纯逻辑部分（与 UI 无关，便于单测）：
@@ -21,8 +33,20 @@ public static class UpdateFeed
         if (string.IsNullOrEmpty(version)) return null;
 
         var (url, name) = PickInstallerAsset(release);
-        return new UpdateInfo(version, url, name);
+        return new UpdateInfo(
+            version,
+            url,
+            name,
+            GetString(release, "body"),
+            GetString(release, "html_url"),
+            GetString(release, "published_at"));
     }
+
+    /// <summary>取字符串字段（缺失或类型不符时返回空串）。</summary>
+    private static string GetString(JsonElement element, string name)
+        => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? ""
+            : "";
 
     /// <summary>从 assets 里挑安装包：优先 Setup（安装版），其次 Portable（便携版）。</summary>
     public static (string? Url, string? Name) PickInstallerAsset(JsonElement release)

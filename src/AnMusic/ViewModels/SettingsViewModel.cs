@@ -28,7 +28,7 @@ public partial class SettingsViewModel : ObservableObject
     private int _skinIndex;
 
     /// <summary>当前皮肤名称。</summary>
-    public string SkinName => ThemeService.Find(ThemeService.CurrentSkinId)?.Name ?? "浅色";
+    public string SkinName => ThemeService.Current.Name;
 
     /// <summary>当前是否深色底（供主窗口调整背景图不透明度等逻辑复用）。</summary>
     public bool IsDarkTheme => ThemeService.IsDark;
@@ -71,7 +71,7 @@ public partial class SettingsViewModel : ObservableObject
     private void SelectSkin(SkinOptionViewModel? option)
     {
         if (option is null) return;
-        ApplySkin(ThemeService.Find(option.Id) ?? ThemeService.Skins[0]);
+        ApplySkin(ThemeService.Find(option.Id) ?? ThemeService.Default);
     }
 
     /// <summary>刷新皮肤格子的选中态。</summary>
@@ -129,6 +129,24 @@ public partial class SettingsViewModel : ObservableObject
         StatusText = string.IsNullOrEmpty(url)
             ? "代理已关闭（跟随系统设置）"
             : $"代理已启用：{url}";
+    }
+
+    /// <summary>
+    /// 公告源地址（announcements.json 的完整 URL）；空 = 用内置的 GitHub 官方仓库。
+    /// </summary>
+    /// <remarks>
+    /// 想换成自建服务器 / Gitee 镜像时改这里即可，不用发新版本。
+    /// </remarks>
+    [ObservableProperty]
+    private string _announcementUrl = "";
+
+    partial void OnAnnouncementUrlChanged(string value)
+    {
+        var url = value?.Trim() ?? "";
+        _settingsService.Update(s => s.AnnouncementUrl = url);
+        StatusText = url.Length == 0
+            ? "公告源已恢复为 GitHub 官方仓库"
+            : $"公告源已更新：{url}";
     }
 
     /// <summary>缓存占用概览（封面 / 在线歌词 / B站音频 / 插件音频）。</summary>
@@ -301,13 +319,7 @@ public partial class SettingsViewModel : ObservableObject
                 return;
             }
 
-            // 发布里的安装包（优先安装版，其次便携版）
-            _updateAssetUrl = info.AssetUrl;
-            _updateAssetName = info.AssetName;
-            UpdateAvailable = _updateAssetUrl is not null;
-            UpdateCheckText = UpdateAvailable
-                ? $"发现新版本 v{_latestVersion}"
-                : $"发现新版本 v{_latestVersion}（未找到安装包，请到 GitHub 下载）";
+            PrepareUpdate(info);
         }
         catch (Exception ex)
         {
@@ -318,6 +330,24 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsUpdateBusy = false;
         }
+    }
+
+    /// <summary>
+    /// 用一份已解析的发布信息武装"下载并安装"流程。
+    /// </summary>
+    /// <remarks>
+    /// 供「私信」面板复用：私信自己查到了新版，这里就把安装包地址与文案同步好，
+    /// 于是两个入口共用同一套下载/进度/启动安装逻辑（不再写第二遍）。
+    /// </remarks>
+    public void PrepareUpdate(Services.Update.UpdateInfo info)
+    {
+        _latestVersion = info.LatestVersion;
+        _updateAssetUrl = info.AssetUrl;
+        _updateAssetName = info.AssetName;
+        UpdateAvailable = _updateAssetUrl is not null;
+        UpdateCheckText = UpdateAvailable
+            ? $"发现新版本 v{_latestVersion}"
+            : $"发现新版本 v{_latestVersion}（未找到安装包，请到 GitHub 下载）";
     }
 
     /// <summary>下载安装包并在确认后启动安装程序（安装前先退出 AnMusic）。</summary>
@@ -541,7 +571,7 @@ public partial class SettingsViewModel : ObservableObject
         _shortcuts = shortcutService;
 
         var s = settingsService.Settings;
-        _skinIndex = Math.Max(0, ThemeService.Skins.ToList().FindIndex(x => x.Id == (ThemeService.Find(s.Theme)?.Id ?? "Light")));
+        _skinIndex = Math.Max(0, ThemeService.Skins.ToList().FindIndex(x => x.Id == ThemeService.Current.Id));
         foreach (var skin in ThemeService.Skins) Skins.Add(new SkinOptionViewModel(skin));
         foreach (var name in new[] { "通用", "外观", "播放", "歌词", "快捷键", "音源", "关于" })
             SettingsCategories.Add(new SettingsCategoryItem(name));
@@ -555,9 +585,13 @@ public partial class SettingsViewModel : ObservableObject
         _wallpaperIndex = Math.Clamp(s.WallpaperIndex, 0, 2);
         _lyricFontSize = Math.Clamp(s.LyricFontSize, 12, 24);
         _lyricColorIndex = Math.Clamp(s.LyricColorIndex, 0, 5);
-        _accentColorIndex = Math.Clamp(s.AccentColorIndex, 0, 5);
+        // 强调色：存的是 -1（从没单独选过）时显示"当前生效的那一套"，而不是空选中
+        _accentColorIndex = s.AccentColorIndex < 0
+            ? ThemeService.Current.AccentIndex
+            : Math.Clamp(s.AccentColorIndex, 0, ThemeService.MaxAccentIndex);
         _closeBehaviorIndex = s.CloseBehavior;
         _proxyUrl = s.ProxyUrl ?? "";
+        _announcementUrl = s.AnnouncementUrl ?? "";
         _shortcutsEnabled = s.ShortcutsEnabled;
 
         RefreshSourceLists();

@@ -14,11 +14,21 @@ public static class ThemeService
 {
     private const string ThemeFolder = "Themes/";
 
+    /// <summary>
+    /// 默认皮肤：未选择过皮肤时（首次运行 / 设置里清空）用它。
+    /// </summary>
+    /// <remarks>
+    /// 「星海蓝」是围绕应用图标 AnMusic.png 配的品牌皮肤（深靛蓝底 + 品牌蓝强调），
+    /// 所以新装即与图标同一套观感。
+    /// </remarks>
+    public const string DefaultSkinId = "StarSea";
+
     /// <summary>全部皮肤（顺序即设置页/皮肤面板展示顺序）。</summary>
     public static readonly IReadOnlyList<Skin> Skins =
     [
         new("Light",     "浅色",   false, "#F6F7F9", "#2B7DE9", 0),
         new("Dark",      "深色",   true,  "#17191D", "#3B8CFF", 0),
+        new("StarSea",   "星海蓝", true,  "#0A0F42", "#4C8DFF", 6),
         new("DeepSpace", "深空蓝", true,  "#0D1420", "#06B6D4", 5),
         new("Midnight",  "午夜紫", true,  "#141020", "#8B5CF6", 1),
         new("Forest",    "护眼绿", false, "#F2F7F0", "#10B981", 2),
@@ -26,38 +36,47 @@ public static class ThemeService
         new("Sakura",    "樱雾粉", false, "#FDF5F7", "#EC4899", 4),
     ];
 
-    /// <summary>当前皮肤 Id。</summary>
-    public static string CurrentSkinId { get; private set; } = "Light";
+    /// <summary>默认皮肤对象（配置缺失时的落点）。</summary>
+    public static Skin Default => Find(DefaultSkinId)!;
 
-    /// <summary>当前皮肤（找不到时回落到浅色）。</summary>
-    public static Skin Current => Find(CurrentSkinId) ?? Skins[0];
+    /// <summary>当前皮肤 Id。</summary>
+    public static string CurrentSkinId { get; private set; } = DefaultSkinId;
+
+    /// <summary>当前皮肤（找不到时回落到默认皮肤）。</summary>
+    public static Skin Current => Find(CurrentSkinId)!;
 
     public static bool IsDark { get; private set; }
 
     /// <summary>皮肤切换完成（用于刷新界面上的皮肤预览选中态）。</summary>
     public static event Action<Skin>? SkinChanged;
 
-    /// <summary>按 Id 查皮肤；未知 Id 返回 null（兼容旧配置里的 "Dark"/"Light"）。</summary>
+    /// <summary>
+    /// 按 Id 查皮肤。
+    /// </summary>
+    /// <remarks>
+    /// 空值 / 未知 Id 一律回落到 <see cref="Default"/>：设置里没存过皮肤（首次运行）、
+    /// 或存的是已经删掉的皮肤名，都应该直接看到品牌默认皮肤，而不是空白或报错。
+    /// 历史配置里的 "light"/"dark" 小写写法仍按浅色/深色认。
+    /// </remarks>
     public static Skin? Find(string? id)
     {
-        if (string.IsNullOrWhiteSpace(id)) return null;
+        if (string.IsNullOrWhiteSpace(id)) return Default;
         foreach (var skin in Skins)
         {
             if (string.Equals(skin.Id, id, StringComparison.OrdinalIgnoreCase)) return skin;
         }
-        // 历史配置可能存了小写或旧写法，统一兜底
         return id.ToLowerInvariant() switch
         {
             "light" => Skins[0],
             "dark" => Skins[1],
-            _ => null
+            _ => Default
         };
     }
 
-    /// <summary>应用皮肤（未知 Id 回落浅色）。</summary>
+    /// <summary>应用皮肤（未知 Id 回落默认皮肤）。</summary>
     public static void ApplySkin(string? skinId)
     {
-        var skin = Find(skinId) ?? Skins[0];
+        var skin = Find(skinId) ?? Default;
         var app = Application.Current;
         if (app is null) return;
 
@@ -84,7 +103,7 @@ public static class ThemeService
     /// <summary>兼容旧调用：true = 深色，false = 浅色。</summary>
     public static void Apply(bool dark) => ApplySkin(dark ? "Dark" : "Light");
 
-    /// <summary>6 套强调色方案：主色、悬浮色、浅色。</summary>
+    /// <summary>7 套强调色方案：主色、悬浮色、浅色。</summary>
     private static readonly (Color Accent, Color AccentHover, Color AccentSoft)[] AccentPalettes =
     {
         (Color.FromRgb(0x2B, 0x7D, 0xE9), Color.FromRgb(0x4C, 0x93, 0xF0), Color.FromRgb(0xE3, 0xEE, 0xFC)), // 0 科技蓝
@@ -93,11 +112,15 @@ public static class ThemeService
         (Color.FromRgb(0xF5, 0x9E, 0x0B), Color.FromRgb(0xFB, 0xB7, 0x34), Color.FromRgb(0xFD, 0xF2, 0xDC)), // 3 日落橙
         (Color.FromRgb(0xE9, 0x1E, 0x63), Color.FromRgb(0xF0, 0x62, 0x92), Color.FromRgb(0xFC, 0xE3, 0xEC)), // 4 玫瑰红
         (Color.FromRgb(0x06, 0xB6, 0xD4), Color.FromRgb(0x22, 0xD3, 0xEE), Color.FromRgb(0xDC, 0xF7, 0xFC)), // 5 海洋青
+        (Color.FromRgb(0x4C, 0x8D, 0xFF), Color.FromRgb(0x6E, 0xA5, 0xFF), Color.FromRgb(0xE4, 0xED, 0xFF)), // 6 品牌蓝（取自图标）
     };
 
     /// <summary>强调色方案显示名。</summary>
     public static readonly IReadOnlyList<string> AccentNames =
-        ["科技蓝", "暗夜紫", "森林绿", "日落橙", "玫瑰红", "海洋青"];
+        ["科技蓝", "暗夜紫", "森林绿", "日落橙", "玫瑰红", "海洋青", "品牌蓝"];
+
+    /// <summary>强调色下标上限（夹取用，随方案增减自动跟随）。</summary>
+    public static int MaxAccentIndex => AccentPalettes.Length - 1;
 
     /// <summary>应用强调色方案（0-5）。</summary>
     public static void ApplyAccent(int index)

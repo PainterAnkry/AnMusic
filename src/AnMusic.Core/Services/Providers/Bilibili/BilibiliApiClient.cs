@@ -4,8 +4,28 @@ using System.Text.Json;
 
 namespace AnMusic.Services.Providers.Bilibili;
 
-/// <summary>B 站搜索结果视频项。</summary>
-public sealed record BiliVideo(string Bvid, string Title, string Author, TimeSpan Duration, string CoverUrl);
+/// <summary>B 站搜索结果视频项（<paramref name="Parts"/> 为分P 数，&gt;1 表示这是多分P 视频）。</summary>
+public sealed record BiliVideo(string Bvid, string Title, string Author, TimeSpan Duration, string CoverUrl, int Parts = 1);
+
+/// <summary>B 站视频的一个分P（<paramref name="Cid"/> 是该分P 的播放单元标识）。</summary>
+public sealed record BiliPart(string Cid, int Page, string Title, TimeSpan Duration);
+
+/// <summary>B 站视频详情：视频级 cid（= 第 1 P）与分P 列表。</summary>
+public sealed record BiliVideoInfo(
+    string Cid,
+    string Title,
+    string Author,
+    TimeSpan Duration,
+    string Cover,
+    IReadOnlyList<BiliPart> Parts)
+{
+    /// <summary>取第 <paramref name="page"/> P 的 cid；越界或没有分P 列表时退回视频级 cid。</summary>
+    public string CidOfPage(int page)
+        => Parts.FirstOrDefault(p => p.Page == page)?.Cid is { Length: > 0 } cid ? cid : Cid;
+
+    /// <summary>分P 数（没有分P 列表时按 1 P 处理）。</summary>
+    public int PartCount => Parts.Count == 0 ? 1 : Parts.Count;
+}
 
 /// <summary>B 站 API 调用异常（含风控提示）。</summary>
 public sealed class BilibiliApiException : Exception
@@ -145,25 +165,61 @@ public sealed class BilibiliApiClient
             var title = CleanTitle(item.TryGetProperty("title", out var t) ? t.GetString() : null);
             var author = item.TryGetProperty("author", out var a) ? a.GetString() ?? "" : "";
             var length = ParseLength(item.TryGetProperty("length", out var l) ? l.GetString() : null);
-            var cover = item.TryGetProperty("pic", out var p) ? p.GetString() : null;
+            // 封面是协议相对地址（//i0.hdslb.com/...），必须补全协议才能下载
+            var cover = CoverUrl.Normalize(item.TryGetProperty("pic", out var p) ? p.GetString() : null);
+            // videos = 分P 数（多分P 视频搜索结果里只有这一条，需要用户主动展开全集）
+            var parts = item.TryGetProperty("videos", out var v) && v.ValueKind == JsonValueKind.Number
+                ? Math.Max(1, v.GetInt32()) : 1;
 
-            videos.Add(new BiliVideo(bvid, title, author, length, cover ?? ""));
+            videos.Add(new BiliVideo(bvid, title, author, length, cover, parts));
         }
         return videos;
     }
 
-    /// <summary>获取视频详情（cid、标题、UP 主、时长、封面）。</summary>
-    public async Task<(string Cid, string Title, string Author, TimeSpan Duration, string Cover)> GetVideoInfoAsync(string bvid, CancellationToken ct = default)
+    /// <summary>获取视频详情（cid、标题、UP 主、时长、封面、分P 列表）。</summary>
+    public async Task<BiliVideoInfo> GetVideoInfoAsync(string bvid, CancellationToken ct = default)
     {
         var referer = $"https://www.bilibili.com/video/{bvid}/";
         var data = await GetDataAsync($"/x/web-interface/view?bvid={Uri.EscapeDataString(bvid)}", ct, referer);
-        var cid = data.GetProperty("cid").GetInt64().ToString();
+        return ParseVideoInfo(data);
+    }
+
+    /// <summary>
+    /// 解析 /x/web-interface/view 的 data 段。
+    /// </summary>
+    /// <remarks>
+    /// 单独拆出来是为了能用真实接口响应做回归测试（分P 解析一旦退化成"只认第 1 P"，
+    /// 用户看到的就是"点全集每一集都在放同一段"）。用到的字段：
+    /// <c>cid</c>（= 第 1 P 的 cid）、<c>title</c>、<c>owner.name</c>、<c>duration</c>（总时长）、
+    /// <c>pic</c>（封面）、<c>pages[]</c>（每个分P 的 <c>cid</c> / <c>page</c> / <c>part</c> / <c>duration</c>）。
+    /// </remarks>
+    public static BiliVideoInfo ParseVideoInfo(JsonElement data)
+    {
+        var cid = data.TryGetProperty("cid", out var cidEl) && cidEl.ValueKind == JsonValueKind.Number
+            ? cidEl.GetInt64().ToString()
+            : "";
         var title = CleanTitle(data.TryGetProperty("title", out var t) ? t.GetString() : null);
         var author = data.TryGetProperty("owner", out var o) && o.TryGetProperty("name", out var n)
             ? n.GetString() ?? "" : "";
-        var durationSec = data.TryGetProperty("duration", out var d) ? d.GetInt32() : 0;
-        var cover = data.TryGetProperty("pic", out var p) ? p.GetString() ?? "" : "";
-        return (cid, title, author, TimeSpan.FromSeconds(durationSec), cover);
+        var durationSec = data.TryGetProperty("duration", out var d) && d.ValueKind == JsonValueKind.Number
+            ? d.GetInt32() : 0;
+        var cover = CoverUrl.Normalize(data.TryGetProperty("pic", out var p) ? p.GetString() : null);
+
+        var parts = new List<BiliPart>();
+        if (data.TryGetProperty("pages", out var pages) && pages.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var page in pages.EnumerateArray())
+            {
+                if (!page.TryGetProperty("cid", out var pcid) || pcid.ValueKind != JsonValueKind.Number) continue;
+                parts.Add(new BiliPart(
+                    pcid.GetInt64().ToString(),
+                    page.TryGetProperty("page", out var pn) && pn.ValueKind == JsonValueKind.Number ? pn.GetInt32() : parts.Count + 1,
+                    page.TryGetProperty("part", out var pt) ? pt.GetString() ?? "" : "",
+                    TimeSpan.FromSeconds(page.TryGetProperty("duration", out var pd) && pd.ValueKind == JsonValueKind.Number ? pd.GetInt32() : 0)));
+            }
+        }
+
+        return new BiliVideoInfo(cid, title, author, TimeSpan.FromSeconds(durationSec), cover, parts);
     }
 
     /// <summary>取 DASH 音频流中码率最高的 baseUrl（未登录可用）。</summary>
@@ -197,10 +253,14 @@ public sealed class BilibiliApiClient
     }
 
     /// <summary>下载音频流到本地缓存，返回文件路径（已缓存直接返回）。</summary>
-    public async Task<string> DownloadAudioAsync(string audioUrl, string bvid, CancellationToken ct = default)
+    /// <param name="cacheKey">
+    /// 缓存键：用分P 的 cid（一个 cid = 一个播放单元）——同一视频的第 1 P 与后续分P 因此
+    /// 各占一份缓存，而"从搜索结果直接播放"与"从分P 列表播放第 1 P"共用同一份。
+    /// </param>
+    public async Task<string> DownloadAudioAsync(string audioUrl, string cacheKey, CancellationToken ct = default)
     {
         Directory.CreateDirectory(CacheDir);
-        var destPath = Path.Combine(CacheDir, $"{bvid}.m4s");
+        var destPath = Path.Combine(CacheDir, $"{SanitizeKey(cacheKey)}.m4s");
         if (File.Exists(destPath) && new FileInfo(destPath).Length > 0)
             return destPath;
 
@@ -212,6 +272,15 @@ public sealed class BilibiliApiClient
         }
         File.Move(tmpPath, destPath, true);
         return destPath;
+    }
+
+    /// <summary>缓存文件名安全化（cid 为纯数字，这里只是兜底）。</summary>
+    private static string SanitizeKey(string key)
+    {
+        var sb = new System.Text.StringBuilder(key.Length);
+        foreach (var c in key)
+            sb.Append(char.IsLetterOrDigit(c) || c is '_' or '-' ? c : '_');
+        return sb.Length == 0 ? "bili" : sb.ToString();
     }
 
     /// <summary>获取合集（专辑）视频列表，返回该合集内所有视频。</summary>
@@ -237,9 +306,9 @@ public sealed class BilibiliApiClient
                 var author = item.TryGetProperty("owner", out var o) && o.TryGetProperty("name", out var n)
                     ? n.GetString() ?? "" : "";
                 var length = ParseLength(item.TryGetProperty("duration", out var l) ? l.GetInt32().ToString() : null);
-                var cover = item.TryGetProperty("cover", out var p) ? p.GetString() : null;
+                var cover = CoverUrl.Normalize(item.TryGetProperty("cover", out var p) ? p.GetString() : null);
 
-                videos.Add(new BiliVideo(bvid, title, author, length, cover ?? ""));
+                videos.Add(new BiliVideo(bvid, title, author, length, cover));
             }
 
             // 检查是否有下一页

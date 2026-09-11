@@ -50,12 +50,19 @@ public partial class MainViewModel
 
     private static string BuildShareLinkByProvider(Track track) => track.ProviderId switch
     {
-        "bilibili" => $"https://www.bilibili.com/video/{track.Id}",
+        "bilibili" => BiliVideoUrl(track.Id),
         "netease" => $"https://music.163.com/#/song?id={track.Id}",
         "qqmusic" => $"https://y.qq.com/n/ryqq/songDetail/{track.Id}",
         "local-file" => track.FilePath ?? "",
         _ => "" // 第三方 .js 插件源没有统一的网页地址，只分享歌曲信息
     };
+
+    /// <summary>B 站视频页链接：分P 曲目的 Id 形如 <c>BV1xx_p3</c>，要还原成 <c>?p=3</c>。</summary>
+    private static string BiliVideoUrl(string id)
+    {
+        var (bvid, page) = BiliTrackId.Parse(id);
+        return BiliTrackId.ToVideoUrl(bvid, page);
+    }
 
     /// <summary>
     /// 打开一条 AnMusic 分享链接：优先按 id 命中（本地文件直接用路径），

@@ -111,6 +111,25 @@ public sealed class StringNotEmptyToCollapsedConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// ProviderId 等于 ConverterParameter 时显示：用于只在特定音源曲目上出现的菜单项
+/// （如 B 站曲目的「查看全集（分P）」）。
+/// </summary>
+public sealed class ProviderIdToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var want = parameter?.ToString();
+        var match = !string.IsNullOrEmpty(want)
+                    && value is string id
+                    && string.Equals(id, want, StringComparison.OrdinalIgnoreCase);
+        return match ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 public sealed class PathToImageConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

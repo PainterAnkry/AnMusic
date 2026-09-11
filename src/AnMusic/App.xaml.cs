@@ -67,7 +67,10 @@ public partial class App : Application
         // 应用已保存的皮肤与强调色
         var settings = _serviceProvider.GetRequiredService<UserSettingsService>().Settings;
         ThemeService.ApplySkin(settings.Theme);
-        ThemeService.ApplyAccent(settings.AccentColorIndex);
+        // 强调色：-1 = 从没单独选过，跟随皮肤自带的配套色（品牌皮肤即品牌蓝）
+        ThemeService.ApplyAccent(settings.AccentColorIndex < 0
+            ? ThemeService.Current.AccentIndex
+            : settings.AccentColorIndex);
 
         // 网络代理（空 = 跟随系统）：所有 HTTP 请求统一走 HttpService
         Services.Net.HttpService.ConfigureProxy(settings.ProxyUrl);
@@ -84,6 +87,10 @@ public partial class App : Application
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
         _mainWindow = mainWindow;
         mainWindow.Show();
+
+        // 启动后延迟查一次版本：有新版本就在标题栏「私信」上亮小红点（失败静默）
+        var inbox = _serviceProvider.GetRequiredService<InboxViewModel>();
+        _ = inbox.CheckOnStartupAsync();
 
         // 本次启动若带着分享链接（命令行参数 / 上一实例转交），打开对应曲目
         if (e.Args.FirstOrDefault(Services.ShareLink.IsShareLink) is { } startupLink)
@@ -206,6 +213,8 @@ public partial class App : Application
         services.AddSingleton<EqualizerViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<ListenTogetherViewModel>();
+        // 标题栏「私信」（版本升级通知）：依赖设置页的更新流程，故注册在其后
+        services.AddSingleton<InboxViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // 窗口

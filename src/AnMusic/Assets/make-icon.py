@@ -1,101 +1,80 @@
 """AnMusic 图标生成脚本。
 
-设计：圆角方块 + 品牌渐变底色（科技蓝 → 夜紫）+ 白色双八分音符，
-音符由「A」的斜杠笔势构成：两根符干 + 顶部连线，整体既像音符又暗含 AnMusic 的 A。
+源图：仓库根目录的 AnMusic.png（1254×1254 品牌图：深蓝紫渐变底 + 白色音符/耳机 + 青粉渐变字）。
+本脚本把它加工成应用真正使用的两个文件（都在本目录）：
 
-用法：python make-icon.py          # 生成 app-icon.png(256) 与多尺寸 app.ico
+  app.ico       多尺寸图标（256/128/64/48/32/24/16），供 exe、窗口、任务栏、安装包使用
+  app-icon.png  256×256 预览图（README / 商店图示用）
+
+用法（在本目录直接跑，也可从仓库根跑）：
+    python make-icon.py                 # 默认取 ../../../AnMusic.png
+    python make-icon.py path/to/x.png   # 指定源图
+
+处理细节：
+* 源图自带透明留白（约 3%），先裁到不透明外接框再补 1% 透明边，
+  这样任务栏/标题栏里的小尺寸图标不会显得又小又空；
+* 各尺寸统一用 LANCZOS 降采样，避免小尺寸出现锯齿；
+* 非正方形源图会补成正方形（居中），保证图标不被拉伸变形。
 """
-from PIL import Image, ImageDraw
+import sys
+from pathlib import Path
+
+from PIL import Image
 
 SIZES = [256, 128, 64, 48, 32, 24, 16]
 
-# 品牌渐变（与默认强调色一致）：左上 #2B7DE9 → 右下 #6C4BE0
-C_TOP = (43, 125, 233)
-C_BOTTOM = (108, 75, 224)
+# 源图相对本脚本的默认位置：src/AnMusic/Assets/ → 仓库根
+DEFAULT_SOURCE = Path(__file__).resolve().parents[3] / "AnMusic.png"
+
+# 裁掉透明边后保留的透明留白（占边长比例）
+PADDING_RATIO = 0.01
 
 
-def lerp(a, b, t):
-    return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+def load_square(source: Path) -> Image.Image:
+    """读入源图并整理成"正方形、内容饱满"的 RGBA 画布。"""
+    im = Image.open(source).convert("RGBA")
+
+    # 1) 裁掉整片透明留白：阈值取 8 以忽略抗锯齿边缘的零星像素
+    solid = im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+    if solid:
+        im = im.crop(solid)
+
+    # 2) 补成正方形（居中），避免后续缩放时被拉伸
+    side = max(im.size)
+    if im.size != (side, side):
+        square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+        square.paste(im, ((side - im.width) // 2, (side - im.height) // 2))
+        im = square
+
+    # 3) 四边留一点点透明边距，圆角不会顶到画布边上
+    pad = round(side * PADDING_RATIO)
+    canvas = Image.new("RGBA", (side + pad * 2, side + pad * 2), (0, 0, 0, 0))
+    canvas.paste(im, (pad, pad))
+    return canvas
 
 
-def rounded_mask(size, radius_ratio=0.22):
-    """圆角方块遮罩（4x 超采样抗锯齿）。"""
-    ss = 4
-    big = Image.new("L", (size * ss, size * ss), 0)
-    ImageDraw.Draw(big).rounded_rectangle(
-        [0, 0, size * ss - 1, size * ss - 1],
-        radius=int(size * ss * radius_ratio),
-        fill=255,
-    )
-    return big.resize((size, size), Image.LANCZOS)
+def main() -> None:
+    source = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_SOURCE
+    if not source.is_file():
+        raise SystemExit(f"找不到源图：{source}\n用法：python make-icon.py [源图路径]")
 
+    out_dir = Path(__file__).resolve().parent
+    base = load_square(source)
+    images = [base.resize((s, s), Image.LANCZOS) for s in SIZES]
 
-def diagonal_gradient(size):
-    """对角线性渐变。"""
-    img = Image.new("RGB", (size, size))
-    px = img.load()
-    for y in range(size):
-        for x in range(size):
-            t = (x + y) / (2 * (size - 1))
-            px[x, y] = lerp(C_TOP, C_BOTTOM, t)
-    return img
+    # 预览图（不透明背景上更好看清圆角与留白）
+    preview = Image.new("RGBA", images[0].size, (0, 0, 0, 0))
+    preview.alpha_composite(images[0])
+    preview.save(out_dir / "app-icon.png")
 
-
-def draw_notes(size, scale=1.0):
-    """白色（微透明）双八分音符：两根符干 + 符头 + 顶部符杠，符杠略带 A 的斜势。
-
-    坐标为 0~1 归一化，乘 size 后绘制，保证任意尺寸比例一致。
-    """
-    ss = 4
-    layer = Image.new("RGBA", (size * ss, size * ss), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-
-    def s(v):
-        # 以中心为原点、按 scale 缩放后再做整体微调（让图形在方块里更饱满居中）
-        return ((0.5 + (v[0] - 0.5) * scale + 0.008) * size * ss,
-                (0.5 + (v[1] - 0.5) * scale - 0.012) * size * ss)
-
-    def rect(x0, y0, x1, y1, r):
-        p0, p1 = s((x0, y0)), s((x1, y1))
-        d.rounded_rectangle([p0, p1], radius=r * size * ss, fill=(255, 255, 255, 255))
-
-    def ellipse(cx, cy, rx, ry):
-        p0, p1 = s((cx - rx, cy - ry)), s((cx + rx, cy + ry))
-        d.ellipse([p0, p1], fill=(255, 255, 255, 255))
-
-    stem_w = 0.056
-    # 左符干与符头（符头略扁，更易在小尺寸辨认）
-    rect(0.392, 0.238, 0.392 + stem_w, 0.706, stem_w / 2)
-    ellipse(0.350, 0.706, 0.080, 0.066)
-    # 右符干与符头（略低，形成八分音符的错落）
-    rect(0.612, 0.238, 0.612 + stem_w, 0.626, stem_w / 2)
-    ellipse(0.570, 0.626, 0.080, 0.066)
-    # 顶部符杠：上沿水平、下沿右高左低，形成 A 的斜势
-    d.polygon(
-        [s((0.386, 0.238)), s((0.666, 0.238)), s((0.666, 0.352)), s((0.386, 0.400))],
-        fill=(255, 255, 255, 255),
-    )
-
-    return layer.resize((size, size), Image.LANCZOS)
-
-
-def render(size):
-    base = diagonal_gradient(size).convert("RGBA")
-    base.putalpha(rounded_mask(size))
-    notes = draw_notes(size, scale=1.16)
-    base.alpha_composite(notes)
-    return base
-
-
-def main():
-    images = [render(s) for s in SIZES]
-    images[0].save("app-icon.png")  # 256 预览图（README / 商店图示用）
+    # 多尺寸 ico：PIL 会为每个尺寸各存一张（256 用 PNG 压缩，小尺寸用 BMP）
     images[0].save(
-        "app.ico",
+        out_dir / "app.ico",
         format="ICO",
         sizes=[(s, s) for s in SIZES],
-        append_images=images[1:],
     )
+
+    print(f"源图：{source}  ({Image.open(source).size[0]}×{Image.open(source).size[1]})")
     print("已生成 app-icon.png 与 app.ico：", ", ".join(f"{s}x{s}" for s in SIZES))
 
 

@@ -594,6 +594,25 @@
                            FontSize="11" Margin="0,4,0,0"/>
             </StackPanel>
 
+            <!-- 公告源：仓库根目录 announcements.json；填自己的地址即可换成自建/Gitee -->
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock Text="公告源地址" Style="{StaticResource SettingLabel}"/>
+                    <TextBlock Text="标题栏「私信」里的公告从这里读取；留空 = 用 GitHub 官方仓库的 announcements.json"
+                               Style="{StaticResource SettingDesc}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <TextBox Grid.Column="1" Width="260" Padding="8,5" FontSize="12"
+                         VerticalAlignment="Center"
+                         Background="{DynamicResource BgControl}" BorderThickness="0"
+                         Foreground="{DynamicResource FgPrimary}"
+                         Text="{Binding AnnouncementUrl, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="例如 https://raw.githubusercontent.com/你/AnMusic/main/announcements.json"/>
+            </Grid>
+
             <!-- 用户协议（点击查看） -->
             <!-- ===== 分区：Agreement ===== -->
             </StackPanel>

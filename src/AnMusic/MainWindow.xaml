@@ -34,6 +34,7 @@
         <converters:SrcBiliCheckedConverter x:Key="SrcBiliCk"/>
         <converters:AllFalseToVisibilityConverter x:Key="AllFalseToVis"/>
         <converters:BoolToAccentConverter x:Key="BoolToAccent"/>
+        <converters:ProviderIdToVisibilityConverter x:Key="ProviderIdToVis"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- ContextMenu/Popup 不在窗口视觉树中，AncestorType 绑定失效；经代理访问 MainViewModel 命令 -->
         <converters:BindingProxy x:Key="VmProxy" Data="{Binding}"/>
@@ -52,6 +53,11 @@
                         <MenuItem Header="⏭  下一首播放"
                                   Command="{Binding Data.PlayNextCommand, Source={StaticResource VmProxy}}"
                                   CommandParameter="{Binding}"/>
+                        <!-- 仅 B 站曲目：多分P 视频搜索结果只有一条，这里展开全集（分P 列表） -->
+                        <MenuItem Header="📺  查看全集（分P）"
+                                  Command="{Binding Data.OpenBilibiliPartsCommand, Source={StaticResource VmProxy}}"
+                                  CommandParameter="{Binding}"
+                                  Visibility="{Binding ProviderId, Converter={StaticResource ProviderIdToVis}, ConverterParameter=bilibili}"/>
                         <MenuItem Header="❤  加入/移出 我喜欢"
                                   Command="{Binding Data.ToggleFavoriteCommand, Source={StaticResource VmProxy}}"
                                   CommandParameter="{Binding}"/>
@@ -250,6 +256,26 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <!-- 私信弹层里的小按钮（下载并安装 / 查看完整说明 / 重新检查 / 检查更新） -->
+        <Style x:Key="InboxActionBtn" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource BgPanel}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FgNormal}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource RoundedButtonTemplate}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <!-- 搜索来源筛选标签（搜索框正下方横向标签栏）：选中项高亮 -->
         <Style x:Key="SrcTab" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
@@ -430,6 +456,106 @@
                                            Foreground="{DynamicResource FgMuted}" Margin="0,4,0,0"/>
                                 <TextBlock Text="{Binding TotalListeningText, StringFormat=累计听歌 {0}}" FontSize="10"
                                            Foreground="{DynamicResource FgMuted}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <!-- 私信：版本升级等应用内通知（有未读时右上角亮小圆点） -->
+                    <Button x:Name="InboxButton" Style="{StaticResource CaptionBtn}" Click="InboxButton_Click"
+                            ToolTip="{Binding Inbox.ToolTipText}">
+                        <Grid Width="24" Height="34">
+                            <TextBlock Text="&#xE715;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentWarm}"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,2,0"
+                                     Visibility="{Binding Inbox.HasUnread, Converter={StaticResource BoolToVis}}"/>
+                        </Grid>
+                    </Button>
+                    <Popup x:Name="InboxPopup" PlacementTarget="{Binding ElementName=InboxButton}" Placement="Bottom"
+                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource BgPanel}" CornerRadius="10"
+                                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
+                                Padding="14,12" Margin="0,4,8,8" Width="340">
+                            <StackPanel>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Inbox.CurrentVersion, StringFormat=v{0}}"
+                                               Foreground="{DynamicResource FgMuted}" FontSize="10.5"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="私信" Foreground="{DynamicResource FgPrimary}"
+                                               FontWeight="Bold" FontSize="13"/>
+                                </DockPanel>
+                                <TextBlock Text="{Binding Inbox.SummaryText}" Foreground="{DynamicResource FgMuted}"
+                                           FontSize="10.5" Margin="0,2,0,8"/>
+
+                                <!-- 消息卡片：图标 + 标题 + 正文（超长可滚动）+ 操作按钮 -->
+                                <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding Inbox.Messages}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{DynamicResource BgControl}" CornerRadius="8"
+                                                        Padding="10,9" Margin="0,0,0,8">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="BorderThickness" Value="0"/>
+                                                            <Style.Triggers>
+                                                                <!-- 重要公告：强调色描边 -->
+                                                                <DataTrigger Binding="{Binding IsImportant}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel>
+                                                        <DockPanel>
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding TimeText}"
+                                                                       Foreground="{DynamicResource FgMuted}" FontSize="10"
+                                                                       VerticalAlignment="Center"/>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Ellipse Width="6" Height="6" Fill="{DynamicResource AccentWarm}"
+                                                                         VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                         Visibility="{Binding IsUnread, Converter={StaticResource BoolToVis}}"/>
+                                                                <TextBlock Text="{Binding Icon}" FontSize="12"
+                                                                           VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                                <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="12.5"
+                                                                           Foreground="{DynamicResource FgPrimary}"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding Body}" Foreground="{DynamicResource FgSecondary}"
+                                                                   FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                                   LineHeight="17"/>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                                                    Visibility="{Binding HasActions, Converter={StaticResource BoolToVis}}">
+                                                            <Button Content="⬇ 下载并安装" Style="{StaticResource InboxActionBtn}"
+                                                                    Command="{Binding Data.Inbox.InstallCommand, Source={StaticResource VmProxy}}"
+                                                                    Visibility="{Binding CanInstall, Converter={StaticResource BoolToVis}}"
+                                                                    ToolTip="下载安装包，完成后启动安装向导（歌单/收藏/设置都保留）"/>
+                                                            <Button Content="{Binding LinkText}" Style="{StaticResource InboxActionBtn}"
+                                                                    Margin="6,0,0,0"
+                                                                    Command="{Binding Data.Inbox.OpenReleaseCommand, Source={StaticResource VmProxy}}"
+                                                                    CommandParameter="{Binding ReleaseUrl}"
+                                                                    Visibility="{Binding ReleaseUrl, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                                            <Button Content="重新检查" Style="{StaticResource InboxActionBtn}"
+                                                                    Command="{Binding Data.Inbox.CheckCommand, Source={StaticResource VmProxy}}"
+                                                                    Visibility="{Binding CanRetry, Converter={StaticResource BoolToVis}}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+
+                                <DockPanel Margin="0,2,0,0">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Inbox.StatusText}"
+                                               Foreground="{DynamicResource FgMuted}" FontSize="10.5"
+                                               VerticalAlignment="Center"/>
+                                    <Button Content="检查更新" Style="{StaticResource InboxActionBtn}"
+                                            Command="{Binding Inbox.CheckCommand}"
+                                            IsEnabled="{Binding Inbox.CanCheck}"
+                                            ToolTip="到 GitHub 查询最新版本"/>
+                                </DockPanel>
                             </StackPanel>
                         </Border>
                     </Popup>
@@ -1028,7 +1154,7 @@
                                 Padding="4">
                             <StackPanel>
                                 <Button Command="{Binding ShowSearchCommand}"
-                                        Visibility="{Binding IsSearchView, Converter={StaticResource BoolToVis}}">
+                                        Visibility="{Binding IsSearchSectionVisible, Converter={StaticResource BoolToVis}}">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
                                             <Setter Property="Content" Value="🔍  搜索结果"/>
@@ -1164,6 +1290,25 @@
                     </ListBox>
                 </Border>
 
+                <!-- B 站分P 全集说明行（仅该视图显示）：来源视频 + 返回入口 -->
+                <Border Grid.Row="1" Background="{DynamicResource BgPanel}" Padding="16,6"
+                        Visibility="{Binding IsBilibiliPartsView, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Left" Command="{Binding GoBackCommand}"
+                                Style="{StaticResource PlayerBtn}" Height="26" FontSize="12"
+                                Padding="10,0" Margin="0,0,12,0" ToolTip="返回上一个页面（搜索结果/歌单…）">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="返回" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="{Binding BilibiliPartsHeader}" Foreground="{DynamicResource FgSecondary}"
+                                   FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding BilibiliPartsHeader}"/>
+                    </DockPanel>
+                </Border>
+
                 <!-- 搜索状态条 -->
                 <Border Grid.Row="2" Padding="12,5" Background="{DynamicResource AccentSoft}">
                     <StackPanel Orientation="Horizontal">
@@ -1261,15 +1406,18 @@
                             </GridViewColumn.Header>
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <!-- 点击专辑名 = 搜索该专辑 -->
+                                    <!-- 点击专辑名 = 搜索该专辑；B 站曲目的这一列是来源标记，点击改为打开全集（分P） -->
                                     <TextBlock Text="{Binding Album}" TextTrimming="CharacterEllipsis"
                                                Tag="Album" Cursor="Hand"
-                                               MouseLeftButtonDown="CellSearch_Click"
-                                               ToolTip="点击搜索该专辑">
+                                               MouseLeftButtonDown="CellSearch_Click">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                                                <Setter Property="ToolTip" Value="点击搜索该专辑"/>
                                                 <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ProviderId}" Value="bilibili">
+                                                        <Setter Property="ToolTip" Value="点击查看全集（分P）"/>
+                                                    </DataTrigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
                                                         <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                                                         <Setter Property="TextDecorations" Value="Underline"/>

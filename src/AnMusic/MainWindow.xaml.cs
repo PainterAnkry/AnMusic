@@ -464,10 +464,21 @@ public partial class MainWindow : Window
     /// <summary>
     /// 列表里点击歌手名 / 专辑名：按该字段直接搜索（内部就是普通搜索，
     /// 与右键菜单"查看歌手/查看专辑"走同一条路径）。
+    /// B 站曲目的「专辑」列例外 —— 那是来源标记，点击改为打开该视频的分P 全集。
     /// </summary>
     private void CellSearch_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: Models.Track track } element) return;
+
+        // B 站曲目的「专辑」列是来源标记（"B站视频"/"B站视频 · 共 12P"），拿去搜索没有意义：
+        // 点它改为打开该视频的全部剧集（分P）——多分P 视频的搜索结果只有第 1 P
+        if (element.Tag as string == "Album" && track.ProviderId == "bilibili")
+        {
+            e.Handled = true;
+            _viewModel.OpenBilibiliPartsCommand.Execute(track);
+            return;
+        }
+
         var keyword = element.Tag as string switch
         {
             "Artist" => track.Artist,
@@ -726,6 +737,13 @@ public partial class MainWindow : Window
     /// <summary>标题栏 🎨 皮肤按钮：开关皮肤选择面板。</summary>
     private void SkinButton_Click(object sender, RoutedEventArgs e)
         => SkinPopup.IsOpen = !SkinPopup.IsOpen;
+
+    /// <summary>标题栏 私信 按钮：开关通知面板；打开即视为已读（小红点消失）。</summary>
+    private void InboxButton_Click(object sender, RoutedEventArgs e)
+    {
+        InboxPopup.IsOpen = !InboxPopup.IsOpen;
+        if (InboxPopup.IsOpen) _viewModel.Inbox.MarkRead();
+    }
 
     /// <summary>选中某个皮肤后收起面板（切换即时生效，无需确认）。</summary>
     private void SkinOption_Click(object sender, RoutedEventArgs e)

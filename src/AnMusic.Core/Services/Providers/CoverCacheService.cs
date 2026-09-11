@@ -67,6 +67,12 @@ public sealed class CoverCacheService
         if (string.IsNullOrEmpty(url))
             return null;
 
+        // 音源常给出协议相对地址（B 站 //i0.hdslb.com/...，MusicFree 插件同样常见），
+        // 直接交给 HttpClient 会以 "invalid request URI" 失败 —— 这里统一兜底补全协议
+        url = CoverUrl.Normalize(url);
+        if (url.Length == 0)
+            return null;
+
         try
         {
             var fileName = "url_" + Convert.ToHexStringLower(SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(url))) + ".jpg";

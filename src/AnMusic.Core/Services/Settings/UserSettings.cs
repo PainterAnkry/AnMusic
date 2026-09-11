@@ -5,8 +5,14 @@ namespace AnMusic.Services.Settings;
 /// </summary>
 public sealed class UserSettings
 {
-    /// <summary>主题："Dark" 或 "Light"。</summary>
-    public string Theme { get; set; } = "Light";
+    /// <summary>
+    /// 皮肤 Id（如 "StarSea" / "Light" / "Dark"）。
+    /// </summary>
+    /// <remarks>
+    /// 空 = 用户从未选过皮肤，由各端决定自己的默认皮肤（桌面端为品牌皮肤「星海蓝」，
+    /// 安卓端沿用浅色）。不在这里硬编码某端的默认值，免得两端互相改对方的默认外观。
+    /// </remarks>
+    public string Theme { get; set; } = "";
 
     /// <summary>音乐库扫描目录（启动时自动加载）。</summary>
     public string? MusicDirectory { get; set; }
@@ -81,9 +87,36 @@ public sealed class UserSettings
     /// <summary>需要在其他程序窗口中也生效的动作 Id（全局热键，需含修饰键）。</summary>
     public List<string>? GlobalShortcutIds { get; set; }
 
-    /// <summary>主题强调色方案索引：0=科技蓝, 1=暗夜紫, 2=森林绿, 3=日落橙, 4=玫瑰红, 5=海洋青。</summary>
-    public int AccentColorIndex { get; set; }
+    /// <summary>
+    /// 主题强调色方案索引：0=科技蓝, 1=暗夜紫, 2=森林绿, 3=日落橙, 4=玫瑰红, 5=海洋青, 6=品牌蓝。
+    /// </summary>
+    /// <remarks>
+    /// -1 = 用户从未单独选过强调色：按"跟随皮肤自带的配套强调色"处理（各端自行换算，
+    /// 不认识的下标一律夹取到合法区间，因此旧版本读到 -1 也不会出错）。
+    /// </remarks>
+    public int AccentColorIndex { get; set; } = -1;
 
     /// <summary>关闭行为：0=每次询问, 1=后台运行, 2=直接关闭。</summary>
     public int CloseBehavior { get; set; }
+
+    /// <summary>
+    /// 已经看过更新通知的版本号（"私信"里点开过就不再亮红点）。
+    /// </summary>
+    /// <remarks>空 = 没看过任何版本；只影响小红点，不影响设置页的检查更新。</remarks>
+    public string LastSeenUpdateVersion { get; set; } = "";
+
+    /// <summary>
+    /// 已经读过的公告 Id 列表（"私信"里点开过就不再算未读）。
+    /// </summary>
+    /// <remarks>只保留最近若干条，避免长期使用后无限增长。</remarks>
+    public List<string>? SeenAnnouncementIds { get; set; }
+
+    /// <summary>
+    /// 公告源地址（announcements.json 的完整 URL）。
+    /// </summary>
+    /// <remarks>
+    /// 留空 = 用内置的 GitHub 官方仓库地址。想换成自建服务器 / Gitee 镜像时，
+    /// 在设置页填一个地址即可，不需要发新版本。
+    /// </remarks>
+    public string AnnouncementUrl { get; set; } = "";
 }

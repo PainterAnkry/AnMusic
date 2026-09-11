@@ -18,7 +18,12 @@ namespace AnMusic.ViewModels;
 public enum SearchSource { Local, NetEase, QQMusic, Bilibili }
 
 /// <summary>主内容区显示的视图。</summary>
-public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads }
+/// <remarks>
+/// BilibiliParts 是"B 站分P 全集"这类一次性列表：它必须是独立视图 ——
+/// 早期实现复用了 SearchResults，导致从搜索结果点进分P 后再点「返回」，
+/// 目标视图还是 SearchResults（等于原地不动），搜索结果也已经被分P 列表覆盖掉了。
+/// </remarks>
+public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads, BilibiliParts }
 
 /// <summary>
 /// 主 ViewModel：装配各子 ViewModel，管理歌单、我喜欢、最近播放、搜索与导航。
@@ -60,6 +65,24 @@ public partial class MainViewModel : ObservableObject
     public LyricViewModel Lyrics { get; }
     public SettingsViewModel Settings { get; }
     public ListenTogetherViewModel ListenTogether { get; }
+
+    /// <summary>标题栏「私信」：应用内通知中心（版本升级提示）。</summary>
+    public InboxViewModel Inbox { get; }
+
+    /// <summary>B 站分P 全集列表（一次性视图，与搜索结果互不干扰）。</summary>
+    public ObservableCollection<Track> BilibiliPartTracks { get; } = [];
+
+    /// <summary>分P 视图顶部的说明行（"《视频名》共 12 P"）。</summary>
+    [ObservableProperty]
+    private string _bilibiliPartsHeader = "";
+
+    /// <summary>B 站一次性列表的内容区标题（分P 全集 / B站合集）。</summary>
+    [ObservableProperty]
+    private string _bilibiliListTitle = "分P 全集";
+
+    /// <summary>分P 列表是否正在加载（空状态文案用）。</summary>
+    [ObservableProperty]
+    private bool _isLoadingParts;
 
     public ObservableCollection<Playlist> UserPlaylists { get; } = [];
     public ObservableCollection<Track> Favorites { get; } = [];
@@ -297,6 +320,7 @@ public partial class MainViewModel : ObservableObject
         ViewMode.ListeningStats => "听歌排行",
         ViewMode.Radio => "个性电台",
         ViewMode.Downloads => "下载管理",
+        ViewMode.BilibiliParts => BilibiliListTitle,
         _ => "全部音乐"
     };
 
@@ -310,6 +334,12 @@ public partial class MainViewModel : ObservableObject
     public bool IsListeningStatsView => ViewMode == ViewMode.ListeningStats;
     public bool IsRadioView => ViewMode == ViewMode.Radio;
     public bool IsDownloadView => ViewMode == ViewMode.Downloads;
+
+    /// <summary>B 站分P 全集视图（一次性列表，与搜索结果分开）。</summary>
+    public bool IsBilibiliPartsView => ViewMode == ViewMode.BilibiliParts;
+
+    /// <summary>侧边栏「搜索结果」入口是否显示：分P 全集也算搜索这一支，入口不能凭空消失。</summary>
+    public bool IsSearchSectionVisible => IsSearchView || IsBilibiliPartsView;
 
     /// <summary>曲目列表是否可见（设置页/下载页用各自的面板）。</summary>
     public bool IsTrackListVisible => !IsShowingSettings && ViewMode != ViewMode.Downloads;
@@ -377,6 +407,9 @@ public partial class MainViewModel : ObservableObject
             ViewMode.ListeningStats => "暂无听歌统计\n多听几首歌后这里会展示时长排行",
             ViewMode.Radio => "正在生成个性电台…",
             ViewMode.Downloads => "",
+            ViewMode.BilibiliParts => IsLoadingParts
+                ? "正在加载分P 列表…"
+                : "没取到这个视频的分P 信息\n返回上一页后可重试",
             _ => ""
         };
 
@@ -395,6 +428,7 @@ public partial class MainViewModel : ObservableObject
         ViewMode.ListeningStats => (System.Collections.IList)ListeningStatsTracks,
         ViewMode.Radio => (System.Collections.IList)RadioTracks,
         ViewMode.Downloads => (System.Collections.IList)System.Array.Empty<Track>(), // 下载页有自己的列表
+        ViewMode.BilibiliParts => (System.Collections.IList)BilibiliPartTracks,
         _ => Library.Tracks
     };
 
@@ -403,12 +437,14 @@ public partial class MainViewModel : ObservableObject
         LocalFileProvider localFiles, UserSettingsService settingsService,
         Func<Views.DesktopLyricsWindow> desktopLyricsWindowFactory,
         Func<Views.MiniPlayerWindow> miniPlayerWindowFactory,
-        ListenTogetherViewModel listenTogether)
+        ListenTogetherViewModel listenTogether,
+        InboxViewModel inbox)
     {
         _playbackBar = playbackBar;
         _queue = queue;
         _registry = registry;
         Library = library;
+        Inbox = inbox;
         Lyrics = lyrics;
         Settings = settings;
         ListenTogether = listenTogether;
@@ -420,7 +456,7 @@ public partial class MainViewModel : ObservableObject
         LoadUserData();
 
         // 空状态响应各数据集合变化
-        foreach (var col in new System.Collections.IList[] { Library.Tracks, Favorites, Recent, RankingTracks, ListeningStatsTracks, RadioTracks })
+        foreach (var col in new System.Collections.IList[] { Library.Tracks, Favorites, Recent, RankingTracks, ListeningStatsTracks, RadioTracks, BilibiliPartTracks })
         {
             if (col is System.Collections.Specialized.INotifyCollectionChanged ncc)
                 ncc.CollectionChanged += (_, _) => RefreshEmptyState();
@@ -588,6 +624,8 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsListeningStatsView));
         OnPropertyChanged(nameof(IsRadioView));
         OnPropertyChanged(nameof(IsDownloadView));
+        OnPropertyChanged(nameof(IsBilibiliPartsView));
+        OnPropertyChanged(nameof(IsSearchSectionVisible));
         OnPropertyChanged(nameof(IsTrackListVisible));
         RefreshEmptyState();
     }
@@ -1256,42 +1294,90 @@ public partial class MainViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(seasonId)) return;
         if (_registry.Find("bilibili") is not BilibiliMusicProvider bili) return;
 
-        // 合集为一次性全量视图：作废旧搜索分页会话，且不提供“加载更多”
-        _searchSession++;
-        var session = _searchSession;
-        _searchProvider = null;
-        _searchEnded = true;
-        _searchPool.Clear();
-        _seenSearchIds.Clear();
-        _searchShownCount = 0;
-        IsSearchMoreVisible = false;
-        SearchResults.Clear();
-        SetViewMode(ViewMode.SearchResults);
+        await ShowBilibiliListViewAsync(
+            "B站合集",
+            $"📺 B 站合集 {seasonId}",
+            $"正在加载 B 站合集 {seasonId}…",
+            ct => bili.GetCollectionVideosAsync(seasonId, ct),
+            count => $"合集共 {count} 个视频",
+            "合集为空或加载失败");
+    }
 
-        IsSearching = true;
-        SearchStatus = $"正在加载 B 站合集 {seasonId}...";
+    /// <summary>
+    /// 打开 B 站视频的分P（全集）列表。
+    /// </summary>
+    /// <remarks>
+    /// 多分P 视频在搜索结果里只有一条（第 1 P），这里按 bvid 拉出全部分P 并以一次性视图展示：
+    /// 曲目就是普通 Track，因此播放 / 下载 / 收藏 / 加入歌单 / 排序过滤等既有能力全部可用，
+    /// 双击任意一集即以"整个全集"为队列从该集开始播放。
+    /// 视图是独立的 <see cref="ViewMode.BilibiliParts"/> —— 不动搜索结果，返回时原样还在。
+    /// </remarks>
+    [RelayCommand]
+    private async Task OpenBilibiliPartsAsync(Track? track)
+    {
+        if (track is null) return;
+        if (_registry.Find("bilibili") is not BilibiliMusicProvider bili)
+        {
+            SearchStatus = "B站源未加载";
+            return;
+        }
 
+        var (bvid, _) = BiliTrackId.Parse(track.Id);
+        if (bvid.Length == 0) return;
+
+        await ShowBilibiliListViewAsync(
+            "分P 全集",
+            "",
+            $"正在加载《{track.Title}》的全集…",
+            ct => bili.GetVideoPartsAsync(bvid, ct),
+            count => count <= 1
+                ? "该视频只有 1 个分P"
+                : $"《{track.Title}》共 {count} P —— 双击任意一集即可从该集开始连续播放",
+            "没取到这个视频的分P 信息");
+    }
+
+    /// <summary>
+    /// 用一次性列表视图展示一批 B 站曲目（分P 全集 / 合集）。
+    /// </summary>
+    /// <param name="title">内容区标题。</param>
+    /// <param name="headerSuffix">顶部说明行的前缀；空则加载完成后按条数补全。</param>
+    /// <param name="loadingStatus">加载中的状态栏文案。</param>
+    /// <param name="loader">取数委托。</param>
+    /// <param name="statusOf">按条数生成状态栏文案。</param>
+    /// <param name="emptyStatus">取不到内容时的状态栏文案。</param>
+    private async Task ShowBilibiliListViewAsync(
+        string title,
+        string headerSuffix,
+        string loadingStatus,
+        Func<CancellationToken, Task<IReadOnlyList<Track>>> loader,
+        Func<int, string> statusOf,
+        string emptyStatus)
+    {
+        // 独立视图 + 独立集合：搜索结果保持原样，返回时不会"回不去"
+        BilibiliListTitle = title;
+        BilibiliPartTracks.Clear();
+        BilibiliPartsHeader = headerSuffix;
+        SetViewMode(ViewMode.BilibiliParts);
+
+        IsLoadingParts = true;
+        SearchStatus = loadingStatus;
         try
         {
-            var tracks = await bili.GetCollectionVideosAsync(seasonId);
-            if (session != _searchSession) return;
-            foreach (var t in tracks)
-            {
-                _searchPool.Add(t);
-                _seenSearchIds.Add($"{t.ProviderId}:{t.Id}");
-            }
-            SyncSearchShown(tracks.Count);
-            SearchStatus = tracks.Count == 0
-                ? "合集为空或加载失败"
-                : $"合集共 {tracks.Count} 个视频";
+            var tracks = await loader(CancellationToken.None);
+            foreach (var t in tracks) BilibiliPartTracks.Add(t);
+
+            if (tracks.Count > 0 && BilibiliPartsHeader.Length == 0)
+                BilibiliPartsHeader = $"📺 共 {tracks.Count} 项";
+            SearchStatus = tracks.Count == 0 ? emptyStatus : statusOf(tracks.Count);
         }
         catch (Exception ex)
         {
-            if (session == _searchSession) SearchStatus = $"加载合集失败: {ex.Message}";
+            SearchStatus = $"加载失败: {ex.Message}";
         }
         finally
         {
-            if (session == _searchSession) IsSearching = false;
+            IsLoadingParts = false;
+            RefreshEmptyState();
         }
     }
 
