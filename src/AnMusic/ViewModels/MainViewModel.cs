@@ -18,7 +18,7 @@ namespace AnMusic.ViewModels;
 public enum SearchSource { Local, NetEase, QQMusic, Bilibili }
 
 /// <summary>主内容区显示的视图。</summary>
-public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio }
+public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads }
 
 /// <summary>
 /// 主 ViewModel：装配各子 ViewModel，管理歌单、我喜欢、最近播放、搜索与导航。
@@ -219,6 +219,7 @@ public partial class MainViewModel : ObservableObject
         // 两个页面互斥：打开设置时收起歌词遮罩
         if (value && IsLyricsOpen) IsLyricsOpen = false;
         OnPropertyChanged(nameof(IsContentAreaVisible));
+        OnPropertyChanged(nameof(IsTrackListVisible));
         RefreshEmptyState();
     }
 
@@ -295,6 +296,7 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Ranking => "排行榜",
         ViewMode.ListeningStats => "听歌排行",
         ViewMode.Radio => "个性电台",
+        ViewMode.Downloads => "下载管理",
         _ => "全部音乐"
     };
 
@@ -307,6 +309,10 @@ public partial class MainViewModel : ObservableObject
     public bool IsRankingView => ViewMode == ViewMode.Ranking;
     public bool IsListeningStatsView => ViewMode == ViewMode.ListeningStats;
     public bool IsRadioView => ViewMode == ViewMode.Radio;
+    public bool IsDownloadView => ViewMode == ViewMode.Downloads;
+
+    /// <summary>曲目列表是否可见（设置页/下载页用各自的面板）。</summary>
+    public bool IsTrackListVisible => !IsShowingSettings && ViewMode != ViewMode.Downloads;
 
     /// <summary>按时段的小问候（早安 / 中午好 / 晚安），显示在内容区标题右侧。</summary>
     [ObservableProperty]
@@ -327,11 +333,20 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _emptyStateText = "音乐库还是空的\n点击右上角「📂 打开文件夹」选择你的音乐目录";
 
+    /// <summary>
+    /// 是否处于"等待中"（搜索/扫描音乐库/在线缓冲）：用于显示加载转圈而不是静态图标。
+    /// </summary>
+    public bool IsBusyWaiting => IsSearching || Library.IsLoading || _playbackBar.IsBuffering;
+
     /// <summary>是否显示空状态引导（列表为空且未在加载时显示）。</summary>
     [ObservableProperty]
     private bool _isEmptyStateVisible;
 
-    partial void OnIsSearchingChanged(bool value) => RefreshEmptyState();
+    partial void OnIsSearchingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsBusyWaiting));
+        RefreshEmptyState();
+    }
 
     /// <summary>根据当前视图与数据状态刷新空列表引导文案/可见性。</summary>
     public void RefreshEmptyState()
@@ -344,7 +359,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var empty = (CurrentTracks?.Count ?? 0) == 0;
+        var empty = (CurrentTracks?.Count ?? 0) == 0 && ViewMode != ViewMode.Downloads;
         var loading = ViewMode == ViewMode.AllTracks && Library.IsLoading;
 
         EmptyStateText = ViewMode switch
@@ -361,6 +376,7 @@ public partial class MainViewModel : ObservableObject
             ViewMode.Ranking => "正在加载排行榜…",
             ViewMode.ListeningStats => "暂无听歌统计\n多听几首歌后这里会展示时长排行",
             ViewMode.Radio => "正在生成个性电台…",
+            ViewMode.Downloads => "",
             _ => ""
         };
 
@@ -378,6 +394,7 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Ranking => (System.Collections.IList)RankingTracks,
         ViewMode.ListeningStats => (System.Collections.IList)ListeningStatsTracks,
         ViewMode.Radio => (System.Collections.IList)RadioTracks,
+        ViewMode.Downloads => (System.Collections.IList)System.Array.Empty<Track>(), // 下载页有自己的列表
         _ => Library.Tracks
     };
 
@@ -409,7 +426,14 @@ public partial class MainViewModel : ObservableObject
                 ncc.CollectionChanged += (_, _) => RefreshEmptyState();
         }
         // 音乐库扫描状态变化时刷新空引导
-        Library.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(LibraryViewModel.IsLoading)) RefreshEmptyState(); };
+        Library.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(LibraryViewModel.IsLoading))
+            {
+                OnPropertyChanged(nameof(IsBusyWaiting));
+                RefreshEmptyState();
+            }
+        };
         // ViewMode 切换 / 搜索状态变化由 partial methods 联动 RefreshEmptyState
 
         // 每次成功开始播放（含自动切歌、单曲循环重播）都记一次播放次数
@@ -420,6 +444,8 @@ public partial class MainViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(PlaybackBarViewModel.CurrentTrack))
                 OnPropertyChanged(nameof(IsCurrentFavorited));
+            if (e.PropertyName == nameof(PlaybackBarViewModel.IsBuffering))
+                OnPropertyChanged(nameof(IsBusyWaiting));
             else if (e.PropertyName == nameof(PlaybackBarViewModel.PositionSeconds))
                 RecordPlayTime();
         };
@@ -561,6 +587,8 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsRankingView));
         OnPropertyChanged(nameof(IsListeningStatsView));
         OnPropertyChanged(nameof(IsRadioView));
+        OnPropertyChanged(nameof(IsDownloadView));
+        OnPropertyChanged(nameof(IsTrackListVisible));
         RefreshEmptyState();
     }
 
@@ -629,6 +657,13 @@ public partial class MainViewModel : ObservableObject
         ("3778678", "热歌榜"),
         ("2884035", "原创榜")
     ];
+
+    /// <summary>下载管理：独立页面（与排行榜同级），展示下载队列与状态。</summary>
+    [RelayCommand]
+    private void ShowDownloads()
+    {
+        SetViewMode(ViewMode.Downloads); // 下载列表本身是实时集合，无需重建
+    }
 
     /// <summary>排行榜：从插件源动态加载榜单列表（优先网易云插件，其次 QQ 插件，受限时回退内置榜单）。</summary>
     [RelayCommand]

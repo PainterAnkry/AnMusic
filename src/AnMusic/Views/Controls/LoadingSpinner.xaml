@@ -1,0 +1,22 @@
+<UserControl x:Class="AnMusic.Views.Controls.LoadingSpinner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             IsHitTestVisible="False"
+             d:DesignHeight="40" d:DesignWidth="40">
+    <!-- Viewbox 让调用方用 Width/Height 控制大小，内部始终按 40x40 绘制 -->
+    <Viewbox Stretch="Uniform">
+        <Grid Width="40" Height="40">
+            <!-- 底环 -->
+            <Ellipse Stroke="{DynamicResource BgControlHover}" StrokeThickness="4.5"/>
+            <!-- 旋转的强调色弧线（旋转由代码后置驱动，见 LoadingSpinner.xaml.cs） -->
+            <Grid x:Name="ArcHost" RenderTransformOrigin="0.5,0.5">
+                <Path Stroke="{DynamicResource Accent}" StrokeThickness="4.5"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Data="M 20,2.3 A 17.7,17.7 0 1 1 4.2,11.3"/>
+            </Grid>
+        </Grid>
+    </Viewbox>
+</UserControl>

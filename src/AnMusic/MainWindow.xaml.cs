@@ -752,13 +752,6 @@ public partial class MainWindow : Window
         QueuePopup.IsOpen = true;
     }
 
-    /// <summary>下载管理（侧栏入口）：切换下载面板，入口高亮联动。</summary>
-    private void DownloadButton_Click(object sender, RoutedEventArgs e)
-    {
-        DownloadPopup.IsOpen = !DownloadPopup.IsOpen;
-        _viewModel.IsDownloadPanelOpen = DownloadPopup.IsOpen;
-    }
-
     /// <summary>队列面板双击行 → 播放该曲目。</summary>
     private void QueueList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {

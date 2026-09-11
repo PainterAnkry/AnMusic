@@ -1006,13 +1006,13 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
-                                <!-- 下载管理（面板从右侧弹出，与底部按钮组解耦保持对称） -->
-                                <Button x:Name="DownloadSidebarBtn" Click="DownloadButton_Click">
+                                <!-- 下载管理：独立页面（与排行榜同级） -->
+                                <Button Command="{Binding ShowDownloadsCommand}">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
                                             <Setter Property="Content" Value="📥  下载管理"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsDownloadPanelOpen}" Value="True">
+                                                <DataTrigger Binding="{Binding IsDownloadView}" Value="True">
                                                     <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                                                     <Setter Property="FontWeight" Value="Bold"/>
                                                 </DataTrigger>
@@ -1020,75 +1020,6 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
-                        <Popup x:Name="DownloadPopup" PlacementTarget="{Binding ElementName=DownloadSidebarBtn}"
-                               Placement="Right" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                            <Border Background="{DynamicResource BgPanel}" CornerRadius="8"
-                                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
-                                    Padding="12,10" MinWidth="330" MaxHeight="400" Margin="6,0,0,0">
-                                <DockPanel>
-                                    <TextBlock DockPanel.Dock="Top" Text="下载管理 · 右键歌曲可加入队列，任务自动逐个下载"
-                                               FontWeight="Bold" FontSize="12"
-                                               Foreground="{DynamicResource FgPrimary}" Margin="0,0,0,6"/>
-                                    <TextBlock Text="暂无下载任务"
-                                               FontSize="12" Foreground="{DynamicResource FgMuted}"
-                                               HorizontalAlignment="Center" Margin="0,10">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding DownloadTasks.Count}" Value="0">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                        <ItemsControl ItemsSource="{Binding DownloadTasks}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Margin="2,2">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                                            <TextBlock FontSize="12" Foreground="{DynamicResource FgNormal}"
-                                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}">
-                                                                <Run Text="{Binding Title, Mode=OneWay}"/>
-                                                                <Run Text=" - " Foreground="{DynamicResource FgMuted}"/>
-                                                                <Run Text="{Binding Artist, Mode=OneWay}" Foreground="{DynamicResource FgMuted}"/>
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding StateText}" FontSize="10"
-                                                                       Foreground="{DynamicResource FgMuted}"
-                                                                       TextTrimming="CharacterEllipsis" MaxWidth="220"
-                                                                       ToolTip="{Binding Message}"/>
-                                                        </StackPanel>
-                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Button Content="重试" ToolTip="重新下载"
-                                                                    Visibility="{Binding CanRetry, Converter={StaticResource BoolToVis}}"
-                                                                    Command="{Binding Data.RetryDownloadTaskCommand, Source={StaticResource VmProxy}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Style="{StaticResource QueueMiniBtn}"/>
-                                                            <Button Content="打开" ToolTip="打开所在文件夹"
-                                                                    Visibility="{Binding CanOpen, Converter={StaticResource BoolToVis}}"
-                                                                    Command="{Binding Data.OpenDownloadResultCommand, Source={StaticResource VmProxy}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Style="{StaticResource QueueMiniBtn}"/>
-                                                            <Button Content="✕" ToolTip="移除任务"
-                                                                    Visibility="{Binding IsQueuedOrRunning, Converter={StaticResource InvBoolToVis}}"
-                                                                    Command="{Binding Data.RemoveDownloadTaskCommand, Source={StaticResource VmProxy}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Style="{StaticResource QueueMiniBtn}"/>
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
-                                </DockPanel>
-                            </Border>
-                        </Popup>
                             </StackPanel>
                         </Border>
                         <!-- 下组 = 我的音乐（搜索结果/全部音乐/最近播放/我喜欢） -->
@@ -1235,8 +1166,14 @@
 
                 <!-- 搜索状态条 -->
                 <Border Grid.Row="2" Padding="12,5" Background="{DynamicResource AccentSoft}">
-                    <TextBlock Text="{Binding SearchStatus}" Foreground="{DynamicResource FgSecondary}" FontSize="12"
-                               Visibility="{Binding SearchStatus, Converter={StaticResource StrNotEmptyToVis}}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <!-- 搜索进行中：小转圈 + 状态文案 -->
+                        <controls:LoadingSpinner Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,7,0"
+                                                 Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="{Binding SearchStatus}" Foreground="{DynamicResource FgSecondary}" FontSize="12"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding SearchStatus, Converter={StaticResource StrNotEmptyToVis}}"/>
+                    </StackPanel>
                 </Border>
 
                 <Grid Grid.Row="3" x:Name="ContentArea">
@@ -1245,7 +1182,7 @@
                           Background="{DynamicResource BgMainAlpha}" BorderThickness="0"
                           ItemContainerStyle="{StaticResource TrackListStyle}"
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                          Visibility="{Binding IsShowingSettings, Converter={StaticResource InvBoolToVis}}"
+                          Visibility="{Binding IsTrackListVisible, Converter={StaticResource BoolToVis}}"
                           MouseDoubleClick="TrackList_MouseDoubleClick"
                           ContextMenuOpening="TrackList_ContextMenuOpening">
                 <ListView.View>
@@ -1366,13 +1303,125 @@
                         IsHitTestVisible="True"
                         Visibility="{Binding IsEmptyStateVisible, Converter={StaticResource BoolToVis}}">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420" Margin="24,0,24,40">
-                        <TextBlock Text="🎧" FontSize="46" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+                        <!-- 搜索/扫描/缓冲等"在途"状态：显示转圈动画（其余情况显示耳机图标） -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,0,0,14">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsBusyWaiting}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <controls:LoadingSpinner Width="40" Height="40" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="🎧" FontSize="46" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,14">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsBusyWaiting}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <TextBlock Text="{Binding EmptyStateText}"
                                    Foreground="{DynamicResource FgMuted}" FontSize="13.5"
                                    TextAlignment="Center" TextWrapping="Wrap" LineHeight="22"
                                    HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Border>
+                    <!-- 下载管理页（独立页面，与排行榜同级） -->
+                    <DockPanel Visibility="{Binding IsDownloadView, Converter={StaticResource BoolToVis}}"
+                               Margin="0,4,0,0">
+                        <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource BgPanel}">
+                            <DockPanel>
+                                <TextBlock Text="{Binding DownloadTasks.Count, StringFormat={}{0} 个任务}"
+                                           DockPanel.Dock="Right" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource FgMuted}" FontSize="12" Margin="10,0,0,0"/>
+                                <TextBlock Text="下载管理" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource FgPrimary}" VerticalAlignment="Center"/>
+                                <TextBlock Text="右键歌曲选「下载到本地」加入队列，任务会自动逐个下载"
+                                           Foreground="{DynamicResource FgMuted}" FontSize="12"
+                                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- 空状态 -->
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,60">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DownloadTasks.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="📥" FontSize="42" Opacity="0.3" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                            <TextBlock Text="还没有下载任务" Foreground="{DynamicResource FgMuted}" FontSize="13.5"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="在列表里右键任意歌曲 → 下载到本地，即可在这里看到进度"
+                                       Foreground="{DynamicResource FgMuted}" FontSize="11.5"
+                                       HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                        </StackPanel>
+
+                        <!-- 任务列表：每行显示标题/歌手、状态与操作 -->
+                        <ListView ItemsSource="{Binding DownloadTasks}" BorderThickness="0"
+                                  Background="{DynamicResource BgMainAlpha}"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Padding" Value="16,9"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                            <TextBlock FontSize="13" Foreground="{DynamicResource FgNormal}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}">
+                                                <Run Text="{Binding Title, Mode=OneWay}"/>
+                                                <Run Text=" - " Foreground="{DynamicResource FgMuted}"/>
+                                                <Run Text="{Binding Artist, Mode=OneWay}" Foreground="{DynamicResource FgMuted}"/>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding StateText}" FontSize="11.5" Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource FgMuted}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="重试" ToolTip="重新下载"
+                                                    Visibility="{Binding CanRetry, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding Data.RetryDownloadTaskCommand, Source={StaticResource VmProxy}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource QueueMiniBtn}"/>
+                                            <Button Content="打开文件夹" ToolTip="打开下载所在目录"
+                                                    Visibility="{Binding CanOpen, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding Data.OpenDownloadResultCommand, Source={StaticResource VmProxy}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource QueueMiniBtn}"/>
+                                            <Button Content="✕" ToolTip="移除任务"
+                                                    Visibility="{Binding IsQueuedOrRunning, Converter={StaticResource InvBoolToVis}}"
+                                                    Command="{Binding Data.RemoveDownloadTaskCommand, Source={StaticResource VmProxy}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource QueueMiniBtn}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </DockPanel>
                 </Grid>
 
                 <!-- 搜索分页：结果超过一批时显示“加载更多”（网易云/QQ音乐/B站） -->
