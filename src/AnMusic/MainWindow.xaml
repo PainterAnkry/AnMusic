@@ -1336,9 +1336,13 @@
                     </StackPanel>
                 </Border>
                     <!-- 下载管理页（独立页面，与排行榜同级） -->
-                    <DockPanel Visibility="{Binding IsDownloadView, Converter={StaticResource BoolToVis}}"
-                               Margin="0,4,0,0">
-                        <Border DockPanel.Dock="Top" Padding="16,10" Background="{DynamicResource BgPanel}">
+                    <Grid Visibility="{Binding IsDownloadView, Converter={StaticResource BoolToVis}}"
+                          Margin="0,4,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Padding="16,10" Background="{DynamicResource BgPanel}">
                             <DockPanel>
                                 <TextBlock Text="{Binding DownloadTasks.Count, StringFormat={}{0} 个任务}"
                                            DockPanel.Dock="Right" VerticalAlignment="Center"
@@ -1351,8 +1355,9 @@
                             </DockPanel>
                         </Border>
 
-                        <!-- 空状态 -->
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,60">
+                        <!-- 空状态：整块居中于内容区（图标与文字都水平居中） -->
+                        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    MaxWidth="360" Margin="24,0,24,60">
                             <StackPanel.Style>
                                 <Style TargetType="StackPanel">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -1368,11 +1373,12 @@
                                        HorizontalAlignment="Center"/>
                             <TextBlock Text="在列表里右键任意歌曲 → 下载到本地，即可在这里看到进度"
                                        Foreground="{DynamicResource FgMuted}" FontSize="11.5"
+                                       TextWrapping="Wrap" TextAlignment="Center"
                                        HorizontalAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
 
                         <!-- 任务列表：每行显示标题/歌手、状态与操作 -->
-                        <ListView ItemsSource="{Binding DownloadTasks}" BorderThickness="0"
+                        <ListView Grid.Row="1" ItemsSource="{Binding DownloadTasks}" BorderThickness="0"
                                   Background="{DynamicResource BgMainAlpha}"
                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListView.ItemContainerStyle>
@@ -1421,7 +1427,7 @@
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
-                    </DockPanel>
+                    </Grid>
                 </Grid>
 
                 <!-- 搜索分页：结果超过一批时显示“加载更多”（网易云/QQ音乐/B站） -->
