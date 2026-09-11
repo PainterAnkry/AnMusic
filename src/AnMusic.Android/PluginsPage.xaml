@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.PluginsPage"
+             x:DataType="vm:PluginsViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:IsNotEmptyConverter x:Key="IsNotEmpty" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="音源插件"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="↻"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnReloadClicked" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
+
+                <!-- ══════════ 粘贴链接安装 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="16,16">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="安装插件" Style="{DynamicResource AmSectionTitle}" />
+                        <Label Text="AnMusic 不内置在线曲库。从下面粘一个 .js 链接，或选个预设源，应用会立刻下载并加入音源列表。"
+                               Style="{DynamicResource AmCaptionText}" />
+
+                        <Entry x:Name="UrlEntry"
+                               Text="{Binding InstallUrl}"
+                               Placeholder="https://.../netease.js"
+                               Style="{DynamicResource AmFieldEntry}"
+                               ReturnType="Send"
+                               Completed="OnUrlCompleted" />
+
+                        <Button Text="下载并安装"
+                                Style="{DynamicResource AmPrimaryButton}"
+                                Command="{Binding InstallUrlCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource IsNotEmpty}, ConverterParameter=invert}" />
+
+                        <!-- 预设源：点一下就自动粘到输入框，省得手抄 -->
+                        <Label Text="常用公开源（点击即可填入）" Style="{DynamicResource AmCaptionText}" Margin="0,6,0,0" />
+                        <FlexLayout x:Name="PresetChips" Wrap="Wrap" Direction="Row" BindableLayout.ItemsSource="{x:Static vm:PluginsViewModel.Presets}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PluginPreset">
+                                    <Border Style="{DynamicResource AmChip}" Margin="0,4,8,0" Padding="12,5">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnPresetTapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label Text="{Binding Name}" Style="{DynamicResource AmChipText}" FontSize="12" />
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 已安装列表 ══════════ -->
+                <Label Text="已加载" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{DynamicResource AmCard}" Padding="0,4">
+                    <CollectionView ItemsSource="{Binding Plugins}" SelectionMode="None">
+                        <CollectionView.EmptyView>
+                            <Label Text="（空空如也）"
+                                   Style="{DynamicResource AmCaptionText}"
+                                   HorizontalOptions="Center"
+                                   Margin="0,16,0,16" />
+                        </CollectionView.EmptyView>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PluginItem">
+                                <Grid Padding="14,10" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                    <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                        <Label Text="{Binding DisplayName}" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                                        <Label Text="{Binding FileName}" Style="{DynamicResource AmCaptionText}" FontSize="11" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1"
+                                           Text="{Binding Version}"
+                                           Style="{DynamicResource AmCaptionText}"
+                                           VerticalOptions="Center"
+                                           Margin="0,0,6,0" />
+                                    <Button Grid.Column="2"
+                                            Text="🗑"
+                                            Style="{DynamicResource AmRowMenuButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PluginsViewModel}}, Path=DeletePluginCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </Border>
+
+                <!-- ══════════ 错误日志 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="16,14" IsVisible="{Binding HasErrors}">
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0" Text="加载错误日志" Style="{DynamicResource AmSectionTitle}" />
+                            <Button Grid.Column="1" Text="清空"
+                                    Style="{DynamicResource AmGhostButton}"
+                                    HeightRequest="30" FontSize="12" Padding="14,0"
+                                    Command="{Binding ClearErrorLogCommand}" />
+                        </Grid>
+                        <Label Text="{Binding ErrorLog}"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               LineBreakMode="WordWrap"
+                               TextColor="{DynamicResource AmDanger}"
+                               Padding="0,4" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="{Binding StatusText}"
+                       Style="{DynamicResource AmCaptionText}"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

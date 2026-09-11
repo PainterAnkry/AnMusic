@@ -1,9 +1,9 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.0**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.1**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.0-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.1-orange)
 
 ## 功能特性
 
@@ -119,37 +119,54 @@ AnMusic/
 │   │   ├── Services/Audio/       # NAudio 引擎、均衡器
 │   │   └── Themes/               # 皮肤
 │   └── AnMusic.Android/          # 安卓端（.NET MAUI，net10.0-android）
-│       ├── ViewModels/           # 曲库/播放 ViewModel
-│       ├── Services/             # MediaPlayer 引擎、媒体库扫描、平台上下文
-│       └── Pages                 # MainPage（曲库）、PlayerPage（播放详情）
+│       ├── ViewModels/           # 曲库/播放/搜索/设置/下载/排行/一起听
+│       ├── Services/             # MediaPlayer 引擎、后台播放服务、媒体库扫描、主题、平台上下文
+│       ├── Resources/Styles/     # Colors.xaml + Styles.xaml（Am* 设计令牌）
+│       └── Platforms/Android/    # MainActivity、AndroidManifest、FileProvider 配置
 └── tests/
 ```
 
 ### 跨端架构
 
-业务逻辑集中在 **AnMusic.Core**（音源解析、歌词匹配、播放队列、用户数据、设置），
+业务逻辑集中在 **AnMusic.Core**（音源解析、歌词匹配、播放队列、用户数据、设置、听歌统计），
 桌面端与安卓端各自只实现两部分：
 
 | 关注点 | 桌面端 | 安卓端 |
 |---|---|---|
 | UI 框架 | WPF + XAML 皮肤 | .NET MAUI |
 | 音频引擎 | NAudio 3.1（`NAudioEngine`） | 系统 MediaPlayer（`AndroidAudioEngine`） |
+| 后台播放 | 播放器常驻进程 | 前台服务 + MediaSession + 通知栏（`PlaybackService`） |
 | 数据根目录 | `%AppData%\AnMusic` | 应用私有目录 `files/AnMusic` |
-| 本地音乐发现 | 递归扫描音乐文件夹 | MediaStore 查询 + 目录枚举 |
+| 本地音乐发现 | 递归扫描音乐文件夹 | MediaStore 查询 + 目录枚举 + TagLib 内嵌封面提取 |
 | 平台适配 | `DesktopPlatformContext` | `AndroidPlatformContext` |
+| 主题 | MaterialDesign 皮肤 | `ThemeService`（7 皮肤 × 6 强调色，DynamicResource 运行时切换） |
 
 两端共用同一份 `userdata.json` / `settings.json` 结构，数据可互相迁移。
+
+**改动时要注意的三条约束**（都是踩过坑的）：
+
+1. `AppPaths` 的子路径、各服务的 `CacheDir` / `FilePath` 必须是**延迟求值属性**，
+   不能是 `static readonly` 字段 —— 安卓端要到 `MauiProgram` 才切换数据根。
+2. 主题色只能用 `{DynamicResource}`，用 `{StaticResource}` 会导致运行时换肤不生效。
+3. 安卓端命名空间是 `AnMusic.Android.*`，引用 `Android.*` 时必须写 `global::Android.*`。
 
 ### 构建安卓端
 
 需要 JDK 17、Android SDK（API 36）与 `maui-android` 工作负载：
 
 ```bash
-dotnet workload install maui-android
-dotnet build src/AnMusic.Android/AnMusic.Android.csproj -c Release
+# 一键构建（自动加载环境变量、按 csproj 版本号命名产物）
+./build-android.sh sign      # 构建 + 用项目密钥库签名到 installer/
+./build-android.sh install   # 构建并用 adb 安装到设备
 ```
 
-产物：`src/AnMusic.Android/bin/Release/net10.0-android/com.painterankry.anmusic-Signed.apk`
+签名用到 `AndroidTools/anmusic.keystore`（可用 `ANMUSIC_KEYSTORE` /
+`ANMUSIC_KEY_PASS` 覆盖）。注意 `dotnet build` 自带的 `*-Signed.apk` 用的是
+**Android 调试密钥**，不能用于发布。
+
+> Release 配置需要 `Microsoft.NETCore.App.Runtime.Mono.win-x64` 10.0.11，
+> 该包只随 MSI 版本的工作负载分发、不在 nuget.org 上。若用轻量工作负载安装方式，
+> 请用 Debug 配置 + `./build-android.sh sign` 重签。
 
 ## 数据存储
 

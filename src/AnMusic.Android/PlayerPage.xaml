@@ -7,61 +7,92 @@
              x:Class="AnMusic.Android.PlayerPage"
              x:DataType="vm:PlayerViewModel"
              Shell.NavBarIsVisible="False"
-             BackgroundColor="{StaticResource AmBg}">
+             BackgroundColor="{DynamicResource AmBg}">
 
     <ContentPage.Resources>
-        <conv:HasValueConverter x:Key="HasValue" />
-        <conv:InvertBoolConverter x:Key="InvertBool" />
-        <conv:DurationConverter x:Key="Duration" />
+        <ResourceDictionary>
+            <conv:HasValueConverter x:Key="HasValue" />
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+            <conv:DurationConverter x:Key="Duration" />
+            <conv:BoldWhenTrueConverter x:Key="CurrentLineWeight" />
+        </ResourceDictionary>
     </ContentPage.Resources>
 
     <!-- ══════════════════════════════════════════════════════════
          播放详情页三视图：
-           CoverView  封面（默认）
+           CoverView  封面（默认，点封面切歌词）
            LyricView  歌词
-           QueueView  当前播放队列
+           QueueView  当前播放列表
          顶部与底部控制条常驻，中间区域切换。
          ══════════════════════════════════════════════════════════ -->
     <Grid RowDefinitions="Auto,*,Auto">
 
         <!-- ══ 顶栏 ══ -->
         <Grid Grid.Row="0"
-              ColumnDefinitions="Auto,*,Auto,Auto"
-              ColumnSpacing="2"
-              Padding="8,8,8,0">
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto,Auto">
 
             <Button Grid.Column="0"
                     Text="⌄"
-                    Style="{StaticResource AmIconButton}"
+                    Style="{DynamicResource AmIconButton}"
                     FontSize="24"
                     Clicked="OnCloseClicked" />
 
-            <VerticalStackLayout Grid.Column="1"
-                                 Spacing="1"
-                                 VerticalOptions="Center">
+            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
                 <Label Text="{Binding Title}"
-                       Style="{StaticResource AmTitleText}"
+                       Style="{DynamicResource AmTitleText}"
                        FontSize="15"
                        HorizontalTextAlignment="Center"
                        FontAttributes="Bold" />
                 <Label Text="{Binding PlayStateText}"
-                       Style="{StaticResource AmCaptionText}"
+                       Style="{DynamicResource AmCaptionText}"
                        HorizontalTextAlignment="Center" />
             </VerticalStackLayout>
 
             <Button Grid.Column="2"
                     x:Name="FavoriteButton"
                     Text="♡"
-                    Style="{StaticResource AmIconButton}"
+                    Style="{DynamicResource AmIconButton}"
                     FontSize="20"
                     Clicked="OnFavoriteClicked" />
 
             <Button Grid.Column="3"
                     Text="⋯"
-                    Style="{StaticResource AmIconButton}"
+                    Style="{DynamicResource AmIconButton}"
                     FontSize="19"
                     Clicked="OnMoreClicked" />
         </Grid>
+
+        <!-- ══ 定时关闭提示条 ══ -->
+        <Border Grid.Row="1"
+                x:Name="SleepBanner"
+                IsVisible="{Binding HasSleepTimer}"
+                BackgroundColor="{DynamicResource AmPrimarySoft}"
+                StrokeThickness="0"
+                StrokeShape="RoundRectangle 16"
+                Padding="14,7"
+                Margin="20,4,20,0"
+                HorizontalOptions="Center">
+            <HorizontalStackLayout Spacing="8">
+                <Label Text="⏱"
+                       FontSize="13"
+                       TextColor="{DynamicResource AmPrimary}"
+                       VerticalOptions="Center" />
+                <Label Text="{Binding SleepTimerText}"
+                       FontSize="12"
+                       TextColor="{DynamicResource AmPrimary}"
+                       VerticalOptions="Center" />
+                <Button Text="取消"
+                        FontSize="12"
+                        TextColor="{DynamicResource AmPrimary}"
+                        BackgroundColor="Transparent"
+                        Padding="0"
+                        HeightRequest="22"
+                        MinimumHeightRequest="0"
+                        VerticalOptions="Center"
+                        Clicked="OnCancelSleepClicked" />
+            </HorizontalStackLayout>
+        </Border>
 
         <!-- ══ 中间可切换区域 ══ -->
         <Grid Grid.Row="1" Padding="20,8">
@@ -71,47 +102,57 @@
                                  Spacing="18"
                                  VerticalOptions="Center">
 
-                <Border WidthRequest="290"
-                        HeightRequest="290"
-                        HorizontalOptions="Center"
-                        BackgroundColor="{StaticResource AmCoverPlaceholder}"
-                        StrokeThickness="0"
-                        StrokeShape="RoundRectangle 16">
-                    <Grid>
-                        <!-- 无封面时的占位音符 -->
-                        <Label Text="♪"
-                               FontSize="76"
-                               TextColor="#FFFFFF"
-                               HorizontalOptions="Center"
-                               VerticalOptions="Center"
-                               IsVisible="{Binding CoverPath, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+                <Grid HorizontalOptions="Center">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnCoverTapped" />
+                    </Grid.GestureRecognizers>
 
-                        <Image x:Name="CoverImage"
-                               Source="{Binding CoverPath}"
-                               Aspect="AspectFill"
-                               WidthRequest="290"
-                               HeightRequest="290"
-                               IsVisible="{Binding CoverPath, Converter={StaticResource HasValue}}" />
-                    </Grid>
-                </Border>
+                    <Border WidthRequest="292"
+                            HeightRequest="292"
+                            BackgroundColor="{DynamicResource AmCoverPlaceholder}"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 146">
+                        <Grid>
+                            <!-- 无封面时的占位音符 -->
+                            <Label Text="♪"
+                                   FontSize="76"
+                                   TextColor="{DynamicResource AmTextOnPrimary}"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"
+                                   IsVisible="{Binding CoverPath, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+
+                            <!-- 圆形封面：用 EllipseGeometry 裁切，转动时不会露出四角 -->
+                            <Image x:Name="CoverImage"
+                                   Source="{Binding CoverPath}"
+                                   Aspect="AspectFill"
+                                   WidthRequest="292"
+                                   HeightRequest="292"
+                                   IsVisible="{Binding CoverPath, Converter={StaticResource HasValue}}">
+                                <Image.Clip>
+                                    <EllipseGeometry Center="146,146" RadiusX="146" RadiusY="146" />
+                                </Image.Clip>
+                            </Image>
+                        </Grid>
+                    </Border>
+                </Grid>
 
                 <VerticalStackLayout Spacing="6">
                     <Label Text="{Binding Title}"
                            FontSize="19"
                            FontAttributes="Bold"
-                           TextColor="{StaticResource AmTextPrimary}"
+                           TextColor="{DynamicResource AmTextPrimary}"
                            HorizontalTextAlignment="Center"
                            LineBreakMode="TailTruncation" />
                     <Label Text="{Binding Artist}"
                            FontSize="13"
-                           TextColor="{StaticResource AmTextSecondary}"
+                           TextColor="{DynamicResource AmTextSecondary}"
                            HorizontalTextAlignment="Center"
                            LineBreakMode="TailTruncation" />
                 </VerticalStackLayout>
 
                 <!-- 切到歌词 -->
                 <Button Text="查看歌词 ⌃"
-                        Style="{StaticResource AmOutlineButton}"
+                        Style="{DynamicResource AmOutlineButton}"
                         HorizontalOptions="Center"
                         Clicked="OnShowLyricsClicked" />
             </VerticalStackLayout>
@@ -120,7 +161,7 @@
             <Grid x:Name="LyricView" IsVisible="False" RowDefinitions="*,Auto">
 
                 <Label Text="{Binding LyricStatus}"
-                       Style="{StaticResource AmCaptionText}"
+                       Style="{DynamicResource AmCaptionText}"
                        HorizontalOptions="Center"
                        VerticalOptions="Center"
                        IsVisible="{Binding HasLyrics, Converter={StaticResource InvertBool}}" />
@@ -131,28 +172,49 @@
                                 VerticalOptions="Center"
                                 VerticalScrollBarVisibility="Never">
                     <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:LyricLine">
+                        <DataTemplate x:DataType="vm:LyricDisplayLine">
                             <VerticalStackLayout Padding="16,9" Spacing="3">
                                 <Label Text="{Binding Text}"
-                                       TextColor="{StaticResource AmTextTertiary}"
-                                       FontSize="15"
+                                       TextColor="{Binding TextColor}"
+                                       FontSize="{Binding FontSize}"
+                                       FontAttributes="{Binding IsCurrent, Converter={StaticResource CurrentLineWeight}}"
                                        HorizontalTextAlignment="Center" />
                                 <Label Text="{Binding Translation}"
-                                       TextColor="{StaticResource AmTextTertiary}"
+                                       TextColor="{Binding TranslationColor}"
                                        FontSize="12"
                                        HorizontalTextAlignment="Center"
-                                       IsVisible="{Binding Translation, Converter={StaticResource HasValue}}" />
+                                       IsVisible="{Binding HasTranslation}" />
                             </VerticalStackLayout>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
 
-                <Button Grid.Row="1"
-                        Text="⌄ 收起歌词"
-                        Style="{StaticResource AmOutlineButton}"
-                        HorizontalOptions="Center"
-                        Margin="0,8,0,0"
-                        Clicked="OnHideLyricsClicked" />
+                <Grid Grid.Row="1"
+                      ColumnDefinitions="*,Auto,*"
+                      Margin="0,8,0,0">
+                    <Button Grid.Column="0"
+                            Text="⌄ 收起歌词"
+                            Style="{DynamicResource AmOutlineButton}"
+                            HorizontalOptions="Center"
+                            Clicked="OnHideLyricsClicked" />
+
+                    <!-- 「译」切换译文对照：没有歌词时没什么可翻，直接隐藏 -->
+                    <Button x:Name="TranslateButton"
+                            Grid.Column="1"
+                            Text="{Binding TranslationLabel}"
+                            Command="{Binding ToggleTranslationCommand}"
+                            IsVisible="{Binding HasLyrics}"
+                            Style="{DynamicResource AmOutlineButton}"
+                            WidthRequest="56"
+                            HorizontalOptions="Center"
+                            Margin="10,0" />
+
+                    <Button Grid.Column="2"
+                            Text="搜索歌词"
+                            Style="{DynamicResource AmOutlineButton}"
+                            HorizontalOptions="Center"
+                            Clicked="OnSearchLyricClicked" />
+                </Grid>
             </Grid>
 
             <!-- ── ③ 播放队列视图 ── -->
@@ -161,33 +223,49 @@
                 <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Padding="0,0,0,8">
                     <Label Grid.Column="0"
                            Text="当前播放"
-                           Style="{StaticResource AmSectionTitle}" />
-                    <Label Grid.Column="2"
+                           Style="{DynamicResource AmSectionTitle}" />
+                    <Label Grid.Column="1"
                            Text="{Binding QueueCountText}"
-                           Style="{StaticResource AmCaptionText}"
+                           Style="{DynamicResource AmCaptionText}"
+                           HorizontalTextAlignment="Center"
                            VerticalOptions="Center" />
+                    <Button Grid.Column="2"
+                            Text="清空"
+                            FontSize="12"
+                            TextColor="{DynamicResource AmTextTertiary}"
+                            BackgroundColor="Transparent"
+                            Padding="0"
+                            Command="{Binding ClearQueueCommand}" />
                 </Grid>
 
                 <CollectionView Grid.Row="1"
                                 x:Name="QueueList"
                                 ItemsSource="{Binding Queue}"
                                 SelectionMode="None">
+                    <CollectionView.EmptyView>
+                        <Label Text="播放列表是空的"
+                               Style="{DynamicResource AmCaptionText}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               Margin="0,40,0,0" />
+                    </CollectionView.EmptyView>
+
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:Track">
-                            <Grid Padding="0,9" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Grid Padding="0,9" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Tapped="OnQueueItemTapped" />
                                 </Grid.GestureRecognizers>
 
                                 <Border Grid.Column="0"
                                         WidthRequest="40" HeightRequest="40"
-                                        BackgroundColor="{StaticResource AmCoverPlaceholder}"
+                                        BackgroundColor="{DynamicResource AmCoverPlaceholder}"
                                         StrokeThickness="0"
                                         StrokeShape="RoundRectangle 6">
                                     <Grid>
                                         <Label Text="♪"
                                                FontSize="16"
-                                               TextColor="#FFFFFF"
+                                               TextColor="{DynamicResource AmTextOnPrimary}"
                                                HorizontalOptions="Center"
                                                VerticalOptions="Center"
                                                IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
@@ -198,14 +276,19 @@
                                 </Border>
 
                                 <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                    <Label Text="{Binding Title}" Style="{StaticResource AmTitleText}" FontSize="14" />
-                                    <Label Text="{Binding Artist}" Style="{StaticResource AmSubText}" />
+                                    <Label Text="{Binding Title}" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                                    <Label Text="{Binding Artist}" Style="{DynamicResource AmSubText}" />
                                 </VerticalStackLayout>
 
                                 <Label Grid.Column="2"
                                        Text="{Binding Duration, Converter={StaticResource Duration}}"
-                                       Style="{StaticResource AmCaptionText}"
+                                       Style="{DynamicResource AmCaptionText}"
                                        VerticalOptions="Center" />
+
+                                <Button Grid.Column="3"
+                                        Text="⋯"
+                                        Style="{DynamicResource AmRowMenuButton}"
+                                        Clicked="OnQueueItemMenuClicked" />
                             </Grid>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
@@ -213,39 +296,36 @@
 
                 <Button Grid.Row="2"
                         Text="⌄ 收起列表"
-                        Style="{StaticResource AmOutlineButton}"
+                        Style="{DynamicResource AmOutlineButton}"
                         HorizontalOptions="Center"
                         Margin="0,8,0,0"
                         Clicked="OnHideQueueClicked" />
             </Grid>
         </Grid>
 
-        <!-- ══ 底部：进度 + 控制 ══ -->
-        <VerticalStackLayout Grid.Row="2" Padding="24,4,24,16" Spacing="6">
+        <!-- ══ 底部：进度 + 控制 ══
+             注意：这里不再提供音量调节 —— 音量交给系统媒体音量键处理，
+             播放页放音量滑块既冗余又容易和进度条混淆。 -->
+        <VerticalStackLayout Grid.Row="3" Padding="24,4,24,18" Spacing="6">
 
-            <!-- 进度条 -->
             <Slider x:Name="ProgressSlider"
                     Minimum="0"
                     Maximum="{Binding DurationForSlider}"
                     Value="{Binding PositionSeconds}"
-                    Style="{StaticResource AmProgress}"
+                    Style="{DynamicResource AmProgress}"
                     DragStarted="OnSeekDragStarted"
                     DragCompleted="OnSeekDragCompleted" />
 
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <Label Grid.Column="0"
-                       Text="{Binding PositionText}"
-                       Style="{StaticResource AmCaptionText}" />
-                <Label Grid.Column="2"
-                       Text="{Binding DurationText}"
-                       Style="{StaticResource AmCaptionText}" />
+                <Label Grid.Column="0" Text="{Binding PositionText}" Style="{DynamicResource AmCaptionText}" />
+                <Label Grid.Column="2" Text="{Binding DurationText}" Style="{DynamicResource AmCaptionText}" />
             </Grid>
 
             <!--
                 控制行：五个控件全部在同一行。
                 上一版把「播放模式 + 上一首 + 播放暂停」放在一行、
                 「音量 + 下一首」放在另一行，导致前进/后退视觉上不在同一行。
-                现在统一为：模式 / 上一首 / 播放暂停 / 下一首 / 队列 单行五列。
+                现在统一为：模式 / 上一首 / 播放暂停 / 下一首 / 列表 单行五列。
             -->
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,*"
                   ColumnSpacing="6"
@@ -254,19 +334,19 @@
                 <Button Grid.Column="0"
                         Text="{Binding PlayModeIcon}"
                         Command="{Binding CyclePlayModeCommand}"
-                        Style="{StaticResource AmIconButton}"
+                        Style="{DynamicResource AmIconButton}"
                         FontSize="18"
                         HorizontalOptions="Center"
-                        TextColor="{StaticResource AmTextSecondary}" />
+                        TextColor="{DynamicResource AmTextSecondary}" />
 
                 <Button Grid.Column="1"
                         Text="⏮"
                         Command="{Binding PreviousCommand}"
-                        Style="{StaticResource AmIconButton}"
+                        Style="{DynamicResource AmIconButton}"
                         FontSize="28"
                         WidthRequest="56"
                         HeightRequest="56"
-                        TextColor="{StaticResource AmTextPrimary}"
+                        TextColor="{DynamicResource AmTextPrimary}"
                         VerticalOptions="Center" />
 
                 <Button Grid.Column="2"
@@ -277,40 +357,27 @@
                         HeightRequest="66"
                         CornerRadius="33"
                         Padding="0"
-                        BackgroundColor="{StaticResource AmPrimary}"
-                        TextColor="#FFFFFF"
+                        BackgroundColor="{DynamicResource AmPrimary}"
+                        TextColor="{DynamicResource AmTextOnPrimary}"
                         VerticalOptions="Center" />
 
                 <Button Grid.Column="3"
                         Text="⏭"
                         Command="{Binding NextCommand}"
-                        Style="{StaticResource AmIconButton}"
+                        Style="{DynamicResource AmIconButton}"
                         FontSize="28"
                         WidthRequest="56"
                         HeightRequest="56"
-                        TextColor="{StaticResource AmTextPrimary}"
+                        TextColor="{DynamicResource AmTextPrimary}"
                         VerticalOptions="Center" />
 
                 <Button Grid.Column="4"
+                        x:Name="QueueButton"
                         Text="☰"
-                        Style="{StaticResource AmIconButton}"
+                        Style="{DynamicResource AmIconButton}"
                         FontSize="19"
                         HorizontalOptions="Center"
-                        TextColor="{StaticResource AmTextSecondary}"
-                        Clicked="OnShowQueueClicked" />
-            </Grid>
-
-            <!-- 音量（次要操作，收在下面一行） -->
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2,0,0">
-                <Label Grid.Column="0"
-                       Text="🔊"
-                       FontSize="14"
-                       TextColor="{StaticResource AmTextTertiary}"
-                       VerticalOptions="Center" />
-                <Slider Grid.Column="1"
-                        Minimum="0" Maximum="1"
-                        Value="{Binding Volume}"
-                        Style="{StaticResource AmProgress}" />
+                        Clicked="OnToggleQueueClicked" />
             </Grid>
         </VerticalStackLayout>
     </Grid>

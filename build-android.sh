@@ -9,12 +9,28 @@
 # 用法：
 #   ./build-android.sh              # Debug 构建（默认，出可安装 APK）
 #   ./build-android.sh release      # 尝试 Release 构建
+#   ./build-android.sh sign         # 构建 + 用项目密钥库重签并输出到 installer/
 #   ./build-android.sh install      # 构建后用 adb 安装到已连接的设备
+#
+# 环境变量（sign 用，均有默认值）：
+#   ANMUSIC_KEYSTORE  密钥库路径，默认 C:/Users/Ankry/AndroidTools/anmusic.keystore
+#   ANMUSIC_KEY_ALIAS 别名，默认 anmusic
+#   ANMUSIC_KEY_PASS  密钥库口令，默认 anmusic123
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ANMUSIC_ENV_FILE:-C:/Users/Ankry/AndroidTools/env.sh}"
+
+# Git Bash 的 pwd 给出的是 /c/Users/... 形式，MSBuild / apksigner 这类
+# Windows 原生程序不认，必须转成 C:\Users\... 再传过去。
+win_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
@@ -25,14 +41,67 @@ else
 fi
 
 MODE="${1:-debug}"
-PROJECT="$REPO_ROOT/src/AnMusic.Android/AnMusic.Android.csproj"
+PROJECT_REL="src/AnMusic.Android/AnMusic.Android.csproj"
+PROJECT="$REPO_ROOT/$PROJECT_REL"
+DEBUG_OUT="$REPO_ROOT/src/AnMusic.Android/bin/Debug/net10.0-android"
+
+# 从 csproj 读版本号，避免产物名与工程版本脱节
+read_version() {
+  sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p' \
+    "$PROJECT" | head -1 | tr -d '[:space:]'
+}
+
+# 统一在仓库根目录执行，给 dotnet 传相对路径最稳（Git Bash 会自行转换）
+cd "$REPO_ROOT"
+
+do_debug() {
+  echo "==> Debug 构建"
+  dotnet build "$PROJECT_REL" -c Debug
+}
+
+# 用项目密钥库签名。
+# 注意：dotnet build 产出的 *-Signed.apk 用的是 Android **调试**密钥，
+# 不能用于发布，这里必须重签。
+do_sign() {
+  do_debug
+
+  local version keystore alias pass apk out
+  version="$(read_version)"
+  keystore="${ANMUSIC_KEYSTORE:-C:/Users/Ankry/AndroidTools/anmusic.keystore}"
+  alias="${ANMUSIC_KEY_ALIAS:-anmusic}"
+  pass="${ANMUSIC_KEY_PASS:-anmusic123}"
+
+  apk="$DEBUG_OUT/com.painterankry.anmusic.apk"
+  out="$REPO_ROOT/installer/AnMusic-Android-${version}-dev.apk"
+
+  if [[ ! -f "$apk" ]]; then
+    echo "错误：未找到构建产物 $apk" >&2
+    exit 1
+  fi
+  if [[ ! -f "$keystore" ]]; then
+    echo "错误：未找到密钥库 $keystore" >&2
+    exit 1
+  fi
+
+  echo "==> 用项目密钥库签名 v$version -> $out"
+  "$ANDROID_HOME/build-tools/36.0.0/apksigner.bat" sign \
+    --ks "$(win_path "$keystore")" \
+    --ks-key-alias "$alias" \
+    --ks-pass "pass:$pass" \
+    --key-pass "pass:$pass" \
+    --out "$(win_path "$out")" \
+    "$(win_path "$apk")"
+
+  echo "==> 验证签名"
+  "$ANDROID_HOME/build-tools/36.0.0/apksigner.bat" verify --print-certs "$(win_path "$out")" | head -2
+  ls -la "$out"
+}
 
 case "$MODE" in
   debug)
-    echo "==> Debug 构建"
-    dotnet build "$PROJECT" -c Debug
-    OUT_DIR="$REPO_ROOT/src/AnMusic.Android/bin/Debug/net10.0-android"
-    echo "==> 产物：$OUT_DIR/com.painterankry.anmusic-Signed.apk"
+    do_debug
+    echo "==> 产物：$DEBUG_OUT/com.painterankry.anmusic-Signed.apk"
+    echo "    注意：这个是调试密钥签的，发布前请用 ./build-android.sh sign 重签。"
     ;;
 
   release)
@@ -42,20 +111,23 @@ case "$MODE" in
     # （见 dotnet/metadata/workloads/<band>/installertype = msi）。
     # 若本机是 MSI 方式安装工作负载则 Release 可正常构建；
     # 用 --skip-manifest-update 装的轻量工作负载会在此步失败，改用 Debug 即可。
-    dotnet build "$PROJECT" -c Release
-    OUT_DIR="$REPO_ROOT/src/AnMusic.Android/bin/Release/net10.0-android"
-    echo "==> 产物目录：$OUT_DIR"
+    dotnet build "$PROJECT_REL" -c Release
+    echo "==> 产物目录：$REPO_ROOT/src/AnMusic.Android/bin/Release/net10.0-android"
+    ;;
+
+  sign)
+    do_sign
     ;;
 
   install)
-    "$0" debug
-    APK="$REPO_ROOT/src/AnMusic.Android/bin/Debug/net10.0-android/com.painterankry.anmusic-Signed.apk"
+    do_debug
+    APK="$DEBUG_OUT/com.painterankry.anmusic-Signed.apk"
     echo "==> 安装到设备：$APK"
-    "$ANDROID_HOME/platform-tools/adb.exe" install -r "$APK"
+    "$ANDROID_HOME/platform-tools/adb.exe" install -r "$(win_path "$APK")"
     ;;
 
   *)
-    echo "未知参数：$MODE（可选：debug / release / install）" >&2
+    echo "未知参数：$MODE（可选：debug / release / sign / install）" >&2
     exit 1
     ;;
 esac

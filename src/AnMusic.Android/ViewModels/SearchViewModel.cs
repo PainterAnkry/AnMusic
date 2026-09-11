@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using AnMusic.Models;
 using AnMusic.Services;
+using AnMusic.Services.Playlist;
 using AnMusic.Services.Providers;
 using AnMusic.Services.Providers.JsPlugin;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -28,6 +29,7 @@ public sealed partial class SearchViewModel : ObservableObject
     private readonly ProviderRegistry _registry;
     private readonly JsPluginLoader _loader;
     private readonly PlayerViewModel _player;
+    private readonly UserDataStore _store;
 
     /// <summary>当前搜索的取消源，切换关键词时取消上一次。</summary>
     private CancellationTokenSource? _cts;
@@ -35,11 +37,16 @@ public sealed partial class SearchViewModel : ObservableObject
     public SearchViewModel(
         ProviderRegistry registry,
         JsPluginLoader loader,
-        PlayerViewModel player)
+        PlayerViewModel player,
+        UserDataStore store)
     {
         _registry = registry;
         _loader = loader;
         _player = player;
+        _store = store;
+
+        // 搜索历史是跨端持久化数据（Core 的 userdata.json），与桌面端共用同一份
+        foreach (var word in _store.SearchHistory) History.Add(word);
 
         ReloadSources();
     }
@@ -102,7 +109,23 @@ public sealed partial class SearchViewModel : ObservableObject
 
     #region 搜索
 
-    /// <summary>执行搜索。</summary>
+    /// <summary>当前已拉取到的页码（插件源从 1 开始）。</summary>
+    private int _currentPage;
+
+    /// <summary>当前搜索是否还有下一页可拉（本地源与不支持分页的源恒为 false）。</summary>
+    [ObservableProperty] private bool _hasMore;
+
+    [ObservableProperty] private bool _isLoadingMore;
+
+    /// <summary>「加载更多」按钮文案。</summary>
+    public string LoadMoreText => IsLoadingMore ? "正在加载…" : "加载更多";
+
+    partial void OnIsLoadingMoreChanged(bool value) => OnPropertyChanged(nameof(LoadMoreText));
+
+    /// <summary>当前可用插件源是否支持分页（只有插件源能翻页）。</summary>
+    private static bool SupportsPaging(IMusicProvider provider) => provider is JsPluginProvider;
+
+    /// <summary>执行搜索（重置到第一页）。</summary>
     [RelayCommand]
     private async Task SearchAsync()
     {
@@ -126,6 +149,8 @@ public sealed partial class SearchViewModel : ObservableObject
 
         IsSearching = true;
         Results.Clear();
+        _currentPage = 0;
+        HasMore = false;
         StatusText = "搜索中…";
         OnPropertyChanged(nameof(ResultCountText));
 
@@ -138,21 +163,16 @@ public sealed partial class SearchViewModel : ObservableObject
                 return;
             }
 
-            // 插件源支持分页接口时优先用，能拿到更多结果
-            IReadOnlyList<Track> tracks;
-            if (provider is JsPluginProvider jsPlugin)
-                tracks = await jsPlugin.SearchPageAsync(word, page: 1, ct);
-            else
-                tracks = await provider.SearchAsync(word, ct);
-
+            var tracks = await FetchPageAsync(provider, word, 1, ct);
             if (ct.IsCancellationRequested) return;
 
-            foreach (var t in tracks) Results.Add(t);
+            _currentPage = 1;
+            AppendDeduped(tracks);
 
-            StatusText = Results.Count == 0
-                ? $"「{word}」没有找到结果"
-                : $"已找到 {Results.Count} 首";
+            // 插件源按页拉，返回满页就认为还有下一页；本地源一次给全，没有"更多"
+            HasMore = SupportsPaging(provider) && tracks.Count > 0;
 
+            UpdateResultStatus(word);
             PushHistory(word);
         }
         catch (OperationCanceledException)
@@ -173,6 +193,96 @@ public sealed partial class SearchViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 「加载更多」：继续按当前音源拉下一页并追加。
+    /// 跨页按 <c>ProviderId:Id</c> 去重 —— 插件源分页之间常有重叠条目，
+    /// 不去重会在列表里出现同一首歌多次。
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadMoreAsync()
+    {
+        if (IsLoadingMore || IsSearching || !HasMore) return;
+
+        var word = Keyword?.Trim() ?? string.Empty;
+        var source = SelectedSource;
+        if (string.IsNullOrEmpty(word) || source is null) return;
+
+        var provider = _registry.Find(source.Id);
+        if (provider is null || !SupportsPaging(provider))
+        {
+            HasMore = false;
+            return;
+        }
+
+        _cts ??= new CancellationTokenSource();
+        var ct = _cts.Token;
+
+        IsLoadingMore = true;
+
+        try
+        {
+            var nextPage = _currentPage + 1;
+            var tracks = await FetchPageAsync(provider, word, nextPage, ct);
+            if (ct.IsCancellationRequested) return;
+
+            var added = AppendDeduped(tracks);
+            _currentPage = nextPage;
+
+            // 空页或整页都是重复的，说明已经到底了
+            if (tracks.Count == 0 || added == 0) HasMore = false;
+
+            UpdateResultStatus(word);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            // 保留已加载的结果，只提示这次失败，用户可以再点一次重试
+            StatusText = $"加载更多失败：{ex.Message}";
+            AppPaths.LogError("加载更多搜索结果", ex, $"{source.Id}:{word}:p{_currentPage + 1}");
+        }
+        finally
+        {
+            IsLoadingMore = false;
+            OnPropertyChanged(nameof(ResultCountText));
+        }
+    }
+
+    /// <summary>按来源类型选择合适的取数方式（插件源走分页接口）。</summary>
+    private static Task<IReadOnlyList<Track>> FetchPageAsync(
+        IMusicProvider provider, string word, int page, CancellationToken ct)
+        => provider is JsPluginProvider jsPlugin
+            ? jsPlugin.SearchPageAsync(word, page, ct)
+            : provider.SearchAsync(word, ct);
+
+    /// <summary>追加去重，返回实际新增条数。</summary>
+    private int AppendDeduped(IReadOnlyList<Track> tracks)
+    {
+        var seen = new HashSet<string>(
+            Results.Select(t => $"{t.ProviderId}:{t.Id}"),
+            StringComparer.Ordinal);
+
+        var added = 0;
+        foreach (var t in tracks)
+        {
+            if (!seen.Add($"{t.ProviderId}:{t.Id}")) continue;
+            Results.Add(t);
+            added++;
+        }
+
+        return added;
+    }
+
+    private void UpdateResultStatus(string word)
+    {
+        StatusText = Results.Count == 0
+            ? $"「{word}」没有找到结果"
+            : HasMore
+                ? $"已找到 {Results.Count} 首"
+                : $"已找到 {Results.Count} 首（已到底）";
+    }
+
     /// <summary>点历史词直接搜。</summary>
     [RelayCommand]
     private async Task SearchWithAsync(string? word)
@@ -182,9 +292,22 @@ public sealed partial class SearchViewModel : ObservableObject
         await SearchAsync();
     }
 
-    /// <summary>清空搜索历史。</summary>
+    /// <summary>清空搜索历史（同时落盘 —— 历史是跨端共用数据，只在内存里清会"复活"）。</summary>
     [RelayCommand]
-    private void ClearHistory() => History.Clear();
+    private void ClearHistory()
+    {
+        History.Clear();
+
+        try
+        {
+            _store.SearchHistory = [];
+            _store.Save();
+        }
+        catch (Exception ex)
+        {
+            AppPaths.LogError("清空搜索历史", ex);
+        }
+    }
 
     /// <summary>清空结果（返回初始态）。</summary>
     [RelayCommand]
@@ -192,6 +315,8 @@ public sealed partial class SearchViewModel : ObservableObject
     {
         Results.Clear();
         HasSearched = false;
+        HasMore = false;
+        _currentPage = 0;
         StatusText = "输入关键词开始搜索";
         OnPropertyChanged(nameof(ShowEmpty));
         OnPropertyChanged(nameof(ResultCountText));
@@ -203,6 +328,16 @@ public sealed partial class SearchViewModel : ObservableObject
         if (existing is not null) History.Remove(existing);
         History.Insert(0, word);
         while (History.Count > 20) History.RemoveAt(History.Count - 1);
+
+        try
+        {
+            _store.SearchHistory = History.ToList();
+            _store.Save();
+        }
+        catch (Exception ex)
+        {
+            AppPaths.LogError("保存搜索历史", ex);
+        }
     }
 
     #endregion

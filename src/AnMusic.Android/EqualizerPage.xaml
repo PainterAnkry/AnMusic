@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="AnMusic.Android.EqualizerPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="均衡器"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="复位"
+                    Style="{DynamicResource AmTextButton}"
+                    WidthRequest="46"
+                    Clicked="OnResetClicked" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
+
+                <!-- 开关 -->
+                <Border Style="{DynamicResource AmCard}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Grid.Column="0" Style="{DynamicResource AmRowStack}">
+                            <Label Text="启用均衡器" Style="{DynamicResource AmTitleText}" FontSize="15" />
+                            <Label x:Name="StatusLabel" Style="{DynamicResource AmCaptionText}" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                x:Name="EnableSwitch"
+                                Style="{DynamicResource AmSwitch}"
+                                VerticalOptions="Center"
+                                Toggled="OnEnableToggled" />
+                    </Grid>
+                </Border>
+
+                <!-- 预设 -->
+                <Label Text="预设音效" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+                <Border x:Name="PresetCard" Style="{DynamicResource AmCard}">
+                    <FlexLayout x:Name="PresetChips"
+                                Wrap="Wrap"
+                                Direction="Row"
+                                JustifyContent="Start"
+                                AlignItems="Start" />
+                </Border>
+
+                <!-- 频段 -->
+                <Label Text="频段增益" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+                <Border Style="{DynamicResource AmCard}">
+                    <VerticalStackLayout x:Name="BandStack" Spacing="14" />
+                </Border>
+
+                <Label Text="提示：先播放一首歌再调节，未播放时系统尚未建立音频会话。"
+                       Style="{DynamicResource AmCaptionText}" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

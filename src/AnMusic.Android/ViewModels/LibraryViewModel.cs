@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using AnMusic.Android.Services;
 using AnMusic.Models;
 using AnMusic.Services;
+using AnMusic.Services.Formatting;
 using AnMusic.Services.Playlist;
 using AnMusic.Services.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -52,6 +53,17 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         LoadFromStore();
 
+        // 自定义扫描目录：跨会话保留，持久化在 Preferences（不污染 userdata.json）
+        try
+        {
+            var raw = Preferences.Default.Get(UserDirsPrefKey, string.Empty);
+            if (!string.IsNullOrEmpty(raw))
+                foreach (var d in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    UserExtraScanDirs.Add(d.Trim());
+        }
+        catch { /* 读取失败当作无 */ }
+        UserExtraScanDirs.CollectionChanged += (_, _) => PersistUserDirs();
+
         // 当前播放曲目变化时刷新列表高亮
         _player.PropertyChanged += (_, e) =>
         {
@@ -60,7 +72,29 @@ public sealed partial class LibraryViewModel : ObservableObject
         };
     }
 
+    private void PersistUserDirs()
+    {
+        try { Preferences.Default.Set(UserDirsPrefKey, string.Join('\n', UserExtraScanDirs)); }
+        catch { }
+    }
+
     #region 状态
+
+    /// <summary>
+    /// 播放器 ViewModel。底部迷你播放条绑定的是 <c>Player.*</c>，
+    /// 早期版本漏了这个属性，导致整条播放条只有底色、没有歌曲信息和按钮。
+    /// </summary>
+    public PlayerViewModel Player => _player;
+
+    /// <summary>顶部标题栏的问候语（按当前时段变化）。</summary>
+    public string Greeting => DateTime.Now.Hour switch
+    {
+        < 6 => "夜深了",
+        < 12 => "早上好",
+        < 14 => "中午好",
+        < 18 => "下午好",
+        _ => "晚上好",
+    };
 
     [ObservableProperty] private LibraryTab _currentTab = LibraryTab.All;
     [ObservableProperty] private bool _isScanning;
@@ -83,6 +117,14 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     /// <summary>最近播放（来自 Core 的持久化数据）。</summary>
     public ObservableCollection<Track> Recent { get; } = [];
+
+    /// <summary>
+    /// 用户在「导入」页追加的自定义扫描目录。
+    /// 每次扫描会与平台默认音乐目录合并一起扫；持久化在 Preferences 中，跨会话保留。
+    /// </summary>
+    public ObservableCollection<string> UserExtraScanDirs { get; } = [];
+
+    private const string UserDirsPrefKey = "user_extra_scan_dirs";
 
     /// <summary>页面标题。</summary>
     public string HeaderText => CurrentTab switch
@@ -114,6 +156,8 @@ public sealed partial class LibraryViewModel : ObservableObject
     partial void OnCurrentTabChanged(LibraryTab value)
     {
         SelectedPlaylist = null;
+        SortField = string.Empty;
+        SortDescending = false;
         ApplyFilter();
         OnPropertyChanged(nameof(HeaderText));
         OnPropertyChanged(nameof(CountText));
@@ -127,6 +171,80 @@ public sealed partial class LibraryViewModel : ObservableObject
     }
 
     partial void OnIsScanningChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
+
+    #endregion
+
+    #region 排序
+
+    /// <summary>排序字段（空 = 默认顺序，即扫描/歌单自带顺序）。</summary>
+    [ObservableProperty] private string _sortField = string.Empty;
+
+    [ObservableProperty] private bool _sortDescending;
+
+    /// <summary>排序按钮上的文字。</summary>
+    public string SortLabel
+    {
+        get
+        {
+            var name = SortField switch
+            {
+                TrackSortComparer.FieldTitle => "歌名",
+                TrackSortComparer.FieldArtist => "歌手",
+                TrackSortComparer.FieldAlbum => "专辑",
+                TrackSortComparer.FieldDuration => "时长",
+                _ => "排序",
+            };
+            if (string.IsNullOrEmpty(SortField)) return "排序";
+            return $"{name} {(SortDescending ? "↓" : "↑")}";
+        }
+    }
+
+    /// <summary>是否处于自定义排序状态（排序按钮高亮用）。</summary>
+    public bool IsSorted => !string.IsNullOrEmpty(SortField);
+
+    /// <summary>弹出排序方式选择（安卓没有表头可点，用底部菜单代替桌面端的表头排序）。</summary>
+    [RelayCommand]
+    private async Task ChangeSortAsync()
+    {
+        var fields = new (string Label, string Field)[]
+        {
+            ("默认顺序", string.Empty),
+            ("按歌名", TrackSortComparer.FieldTitle),
+            ("按歌手", TrackSortComparer.FieldArtist),
+            ("按专辑", TrackSortComparer.FieldAlbum),
+            ("按时长", TrackSortComparer.FieldDuration),
+        };
+
+        var labels = fields
+            .Select(f => f.Field == SortField && f.Field.Length > 0
+                ? $"{f.Label}（当前 · {(SortDescending ? "降序" : "升序")}）"
+                : f.Label)
+            .ToArray();
+
+        var choice = await MainThread.InvokeOnMainThreadAsync(() =>
+            Shell.Current.DisplayActionSheet("排序方式", "取消", null, labels));
+
+        if (string.IsNullOrEmpty(choice) || choice == "取消") return;
+
+        var index = Array.FindIndex(labels, l => l == choice);
+        if (index < 0) return;
+
+        var (_, field) = fields[index];
+        if (field == SortField && field.Length > 0)
+        {
+            // 重复选同一字段 = 切换升降序
+            SortDescending = !SortDescending;
+        }
+        else
+        {
+            SortField = field;
+            SortDescending = false;
+        }
+
+        OnPropertyChanged(nameof(SortLabel));
+        OnPropertyChanged(nameof(IsSorted));
+        ApplyFilter();
+    }
 
     #endregion
 
@@ -149,7 +267,10 @@ public sealed partial class LibraryViewModel : ObservableObject
             }
 
             ScanStatus = "正在扫描…";
-            var dirs = _platform.LocalMusicDirectories;
+            var dirs = _platform.LocalMusicDirectories.ToList();
+            foreach (var d in UserExtraScanDirs)
+                if (!string.IsNullOrWhiteSpace(d) && Directory.Exists(d) && !dirs.Contains(d))
+                    dirs.Add(d);
 
             var tracks = await Task.Run(() => _scanner.Scan(dirs));
 
@@ -216,7 +337,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         });
     }
 
-    /// <summary>按关键词筛选当前列表。</summary>
+    /// <summary>按关键词筛选 + 按当前排序规则排序后写入 <see cref="VisibleTracks"/>。</summary>
     private void ApplyFilter()
     {
         var source = CurrentTab switch
@@ -235,12 +356,32 @@ public sealed partial class LibraryViewModel : ObservableObject
                 t.Artist.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
                 t.Album.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 
+        var list = filtered.ToList();
+
+        // 复用 Core 的比较器（与桌面端表头排序同一套规则），不再另写一遍
+        if (!string.IsNullOrEmpty(SortField) && list.Count > 0)
+            list.Sort(new TrackSortComparer(SortField, SortDescending));
+
         VisibleTracks.Clear();
-        foreach (var t in filtered) VisibleTracks.Add(t);
+        foreach (var t in list) VisibleTracks.Add(t);
 
         OnPropertyChanged(nameof(CountText));
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(PlayAllText));
+    }
+
+    /// <summary>
+    /// 外部（下载完成后）向曲库补入新曲目时调用，刷新当前可见列表与计数。
+    /// </summary>
+    public void NotifyLibraryChanged()
+    {
+        if (CurrentTab == LibraryTab.All) ApplyFilter();
+        else
+        {
+            OnPropertyChanged(nameof(CountText));
+            OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(PlayAllText));
+        }
     }
 
     #endregion
@@ -398,6 +539,28 @@ public sealed partial class LibraryViewModel : ObservableObject
         SaveStore();
         ApplyFilter();
     }
+
+    /// <summary>重命名歌单。</summary>
+    [RelayCommand]
+    private async Task RenamePlaylistAsync(Playlist? playlist)
+    {
+        if (playlist is null) return;
+
+        var name = await MainThread.InvokeOnMainThreadAsync(() =>
+            Shell.Current.DisplayPromptAsync(
+                "重命名歌单", "输入新的歌单名称", "保存", "取消", playlist.Name,
+                keyboard: Keyboard.Text));
+
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        playlist.Name = name.Trim();
+        SaveStore();
+        OnPropertyChanged(nameof(HeaderText));
+        PlaylistsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>歌单增删改后触发（主页面据此刷新歌单胶囊条的选中态）。</summary>
+    public event EventHandler? PlaylistsChanged;
 
     #endregion
 

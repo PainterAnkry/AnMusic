@@ -95,3 +95,13 @@ public sealed class AudioReadPermission : Permissions.BasePlatformPermission
         }
     }
 }
+
+/// <summary>
+/// 通知权限（安卓 13 / API 33 起 POST_NOTIFICATIONS 变为运行时权限）。
+/// 播放控制通知在这个版本之后没有授权就不会显示——用户会以为"后台播放坏了"，所以要显式申请。
+/// </summary>
+public sealed class PostNotificationPermission : Permissions.BasePlatformPermission
+{
+    public override (string androidPermission, bool isRuntime)[] RequiredPermissions =>
+        [(global::Android.Manifest.Permission.PostNotifications, true)];
+}

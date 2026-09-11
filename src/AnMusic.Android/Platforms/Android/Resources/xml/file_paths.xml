@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  FileProvider 可共享目录声明。
+  用途：把下载到 cache 目录的 APK 通过 content:// URI 交给系统安装器，
+  安卓 7.0(N) 起禁止用 file:// URI 跨进程传递文件（FileUriExposedException），
+  必须经 FileProvider 授权。
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="apk" path="." />
+    <external-cache-path name="external_apk" path="." />
+</paths>

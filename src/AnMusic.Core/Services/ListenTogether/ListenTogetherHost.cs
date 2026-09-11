@@ -63,7 +63,9 @@ public sealed class ListenTogetherTrackInfo
         Artist = t.Artist,
         Album = t.Album,
         DurationSeconds = t.Duration.TotalSeconds,
-        FilePath = t.FilePath ?? string.Empty,
+        // 只传本地曲目的路径：在线曲目传过去的会是房主机器上的播放缓冲路径，
+        // 成员端会误以为本地已有文件而跳过缓冲，结果播不出来
+        FilePath = t.IsLocalTrack ? t.FilePath ?? string.Empty : string.Empty,
         CoverUrl = t.CoverUrl ?? string.Empty,
         CoverKey = t.CoverKey,
         ProviderId = t.ProviderId ?? "local-file",
@@ -124,7 +126,7 @@ public sealed class ListenTogetherHost : IAsyncDisposable
     private const int MaxMembers = 4;
     private const int PollTimeoutMs = 30_000;
 
-    private readonly HttpListener _listener = new();
+    private HttpListener _listener = new();
     private readonly object _gate = new();
     private readonly List<Member> _members = [];
     private readonly List<ListenTogetherCommand> _commands = [];
@@ -140,14 +142,23 @@ public sealed class ListenTogetherHost : IAsyncDisposable
     /// <summary>监听端口。</summary>
     public int Port { get; }
 
-    /// <summary>本机主机名（一般为 localhost / 127.0.0.1）。</summary>
-    public string Host { get; } = "localhost";
+    /// <summary>
+    /// 实际对外通告的主机地址：优先局域网 IP（其它设备才连得上），
+    /// 局域网地址绑定失败时退回 localhost（仅同机可用）。
+    /// </summary>
+    public string Host { get; private set; } = "localhost";
 
     /// <summary>房主昵称（房主也是成员之一，占用第一个名额）。</summary>
     public string HostName { get; }
 
     /// <summary>邀请链接：anmusic://jointogether/{host}:{port}/{roomId}。</summary>
     public string InviteLink => $"anmusic://jointogether/{Host}:{Port}/{RoomId}";
+
+    /// <summary>邀请链接是否为局域网可达（false = 只绑到了 localhost，其它设备连不上）。</summary>
+    public bool IsLanReachable => !IsLoopback(Host);
+
+    /// <summary>房主端构造时指定的绑定地址（空 = 自动探测局域网 IP）。</summary>
+    private readonly string? _preferredBind;
 
     /// <summary>房间当前人数（含房主）。</summary>
     public int MemberCount
@@ -176,28 +187,49 @@ public sealed class ListenTogetherHost : IAsyncDisposable
     /// <summary>当前是否在播放（快照）。</summary>
     public bool CurrentIsPlaying { get; private set; }
 
-    public ListenTogetherHost(string roomId, int port, string hostName)
+    public ListenTogetherHost(string roomId, int port, string hostName, string? bindAddress = null)
     {
         RoomId = roomId;
         Port = port;
         HostName = string.IsNullOrWhiteSpace(hostName) ? "房主" : hostName;
+        _preferredBind = string.IsNullOrWhiteSpace(bindAddress) ? null : bindAddress;
     }
 
-    /// <summary>启动 HTTP 监听。返回是否成功。</summary>
+    /// <summary>
+    /// 启动 HTTP 监听。返回是否成功。
+    /// </summary>
+    /// <remarks>
+    /// 依次尝试：用户指定地址 → 局域网 IPv4 → localhost。
+    /// 绑到局域网地址才能让其它设备加入（手机 ↔ 电脑互听）；
+    /// Windows 上非 localhost 前缀可能因缺少 URL ACL 而 Access Denied，
+    /// 此时自动退回 localhost，功能降级为同机可用而不是直接失败。
+    /// </remarks>
     public async Task<bool> StartAsync()
     {
-        var prefix = $"http://localhost:{Port}/room/{RoomId}/";
-        try
+        var started = false;
+
+        foreach (var candidate in BindCandidates())
         {
-            _listener.Prefixes.Clear();
-            _listener.Prefixes.Add(prefix);
-            _listener.Start();
+            // 每次尝试都用全新的监听器：Start 失败后实例状态不可靠，复用会留下脏前缀
+            var listener = new HttpListener();
+            try
+            {
+                listener.Prefixes.Clear();
+                listener.Prefixes.Add($"http://{candidate}:{Port}/room/{RoomId}/");
+                listener.Start();
+
+                _listener = listener;
+                Host = candidate;
+                started = true;
+                break;
+            }
+            catch (Exception)
+            {
+                try { listener.Close(); } catch { }
+            }
         }
-        catch (Exception)
-        {
-            // 端口被占用或权限不足
-            return false;
-        }
+
+        if (!started) return false;
 
         lock (_gate)
         {
@@ -214,6 +246,51 @@ public sealed class ListenTogetherHost : IAsyncDisposable
         await Task.CompletedTask;
         return true;
     }
+
+    /// <summary>候选绑定地址（按优先级）。</summary>
+    private IEnumerable<string> BindCandidates()
+    {
+        if (_preferredBind is { } preferred) yield return preferred;
+
+        foreach (var ip in LanAddresses()) yield return ip;
+
+        yield return "localhost";
+    }
+
+    /// <summary>本机可用的局域网 IPv4 地址（排除回环）。</summary>
+    private static IEnumerable<string> LanAddresses()
+    {
+        System.Net.NetworkInformation.NetworkInterface[] interfaces;
+        try
+        {
+            interfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+        }
+        catch
+        {
+            yield break;
+        }
+
+        foreach (var ni in interfaces)
+        {
+            if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+            if (ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+
+            System.Net.NetworkInformation.UnicastIPAddressInformationCollection addrs;
+            try { addrs = ni.GetIPProperties().UnicastAddresses; }
+            catch { continue; }
+
+            foreach (var addr in addrs)
+            {
+                if (addr.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                if (System.Net.IPAddress.IsLoopback(addr.Address)) continue;
+                yield return addr.Address.ToString();
+            }
+        }
+    }
+
+    private static bool IsLoopback(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || (System.Net.IPAddress.TryParse(host, out var ip) && System.Net.IPAddress.IsLoopback(ip));
 
     /// <summary>停止服务器并清理等待中的长轮询。</summary>
     public async Task StopAsync()

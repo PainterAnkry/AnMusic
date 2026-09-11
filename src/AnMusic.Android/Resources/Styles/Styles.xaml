@@ -3,73 +3,103 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <!-- ══════════════════════════════════════════════════════════════
-         AnMusic 安卓端控件样式（网易云音乐风格 · 浅色）
+         AnMusic 安卓端控件样式
+         ──────────────────────────────────────────────────────────────
+         规则：
+           1. 颜色一律 {DynamicResource}，保证运行时换肤立刻生效。
+           2. 页面里不再写一次性样式；缺什么就在这里加一个 Am* 键。
          ══════════════════════════════════════════════════════════════ -->
 
     <!-- ══ 全局默认 ══ -->
 
     <Style TargetType="Page" ApplyToDerivedTypes="True">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmBg}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmBg}" />
     </Style>
 
     <Style TargetType="Label">
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
         <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <Style TargetType="ActivityIndicator">
+        <Setter Property="Color" Value="{DynamicResource AmPrimary}" />
+    </Style>
+
+    <Style TargetType="Shell" ApplyToDerivedTypes="True">
+        <Setter Property="Shell.BackgroundColor" Value="{DynamicResource AmSurface}" />
+        <Setter Property="Shell.ForegroundColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="Shell.TitleColor" Value="{DynamicResource AmTextPrimary}" />
     </Style>
 
     <!-- ══ 文字层级 ══ -->
 
     <Style x:Key="AmPageTitle" TargetType="Label">
-        <Setter Property="FontSize" Value="21" />
+        <Setter Property="FontSize" Value="20" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
         <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="LineBreakMode" Value="TailTruncation" />
     </Style>
 
     <Style x:Key="AmSectionTitle" TargetType="Label">
-        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="FontAttributes" Value="Bold" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
     </Style>
 
     <Style x:Key="AmTitleText" TargetType="Label">
         <Setter Property="FontSize" Value="15" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
         <Setter Property="LineBreakMode" Value="TailTruncation" />
         <Setter Property="MaxLines" Value="1" />
     </Style>
 
     <Style x:Key="AmSubText" TargetType="Label">
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextTertiary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextTertiary}" />
         <Setter Property="LineBreakMode" Value="TailTruncation" />
         <Setter Property="MaxLines" Value="1" />
     </Style>
 
     <Style x:Key="AmBodyText" TargetType="Label">
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextSecondary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextSecondary}" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
     </Style>
 
     <Style x:Key="AmCaptionText" TargetType="Label">
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextTertiary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextTertiary}" />
+        <Setter Property="LineBreakMode" Value="WordWrap" />
+    </Style>
+
+    <Style x:Key="AmLinkText" TargetType="Label">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextColor" Value="{DynamicResource AmPrimary}" />
     </Style>
 
     <!-- ══ 卡片 ══ -->
 
     <Style x:Key="AmCard" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmSurface}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmSurface}" />
         <Setter Property="StrokeThickness" Value="0" />
-        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
         <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <!-- 承载「图标 + 标题/副标题 + 右侧箭头」列表的卡片：内边距交给行的样式 -->
+    <Style x:Key="AmSectionCard" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmSurface}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 14" />
+        <Setter Property="Padding" Value="0,4" />
     </Style>
 
     <!-- ══ 按钮 ══ -->
 
     <Style x:Key="AmPrimaryButton" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmPrimary}" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextOnPrimary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextOnPrimary}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="CornerRadius" Value="21" />
         <Setter Property="HeightRequest" Value="42" />
@@ -79,8 +109,8 @@
     </Style>
 
     <Style x:Key="AmGhostButton" TargetType="Button">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmChipBg}" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmChipBg}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="CornerRadius" Value="21" />
         <Setter Property="HeightRequest" Value="42" />
@@ -91,8 +121,8 @@
 
     <Style x:Key="AmOutlineButton" TargetType="Button">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource AmPrimary}" />
-        <Setter Property="BorderColor" Value="{StaticResource AmPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="BorderColor" Value="{DynamicResource AmPrimary}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="CornerRadius" Value="18" />
@@ -102,9 +132,16 @@
         <Setter Property="MinimumHeightRequest" Value="0" />
     </Style>
 
+    <!-- 卡片右上角的小操作按钮：统一 32 高、12 号字，所有设置项共用 -->
+    <Style x:Key="AmCardActionButton" TargetType="Button" BasedOn="{StaticResource AmOutlineButton}">
+        <Setter Property="HeightRequest" Value="32" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="14,0" />
+    </Style>
+
     <Style x:Key="AmIconButton" TargetType="Button">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
         <Setter Property="FontSize" Value="19" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="WidthRequest" Value="42" />
@@ -113,9 +150,20 @@
         <Setter Property="MinimumHeightRequest" Value="0" />
     </Style>
 
+    <!-- 纯文字按钮（顶栏右侧「搜索」「取消」之类） -->
+    <Style x:Key="AmTextButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinimumWidthRequest" Value="0" />
+        <Setter Property="MinimumHeightRequest" Value="0" />
+    </Style>
+
     <Style x:Key="AmRowMenuButton" TargetType="Button">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextTertiary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextTertiary}" />
         <Setter Property="FontSize" Value="17" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="WidthRequest" Value="38" />
@@ -126,7 +174,7 @@
 
     <Style x:Key="AmSegmentButton" TargetType="Button">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextSecondary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextSecondary}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="CornerRadius" Value="16" />
         <Setter Property="HeightRequest" Value="32" />
@@ -138,45 +186,64 @@
     <!-- ══ 输入 ══ -->
 
     <Style x:Key="AmSearchBar" TargetType="SearchBar">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmChipBg}" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource AmTextTertiary}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmChipBg}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AmTextTertiary}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="HeightRequest" Value="40" />
     </Style>
 
     <Style x:Key="AmSearchEntry" TargetType="Entry">
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextPrimary}" />
-        <Setter Property="PlaceholderColor" Value="{StaticResource AmTextTertiary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AmTextTertiary}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="HeightRequest" Value="40" />
+    </Style>
+
+    <!-- 设置项里的可编辑文本：比搜索框更宽松，避免字号被裁切 -->
+    <Style x:Key="AmFieldEntry" TargetType="Entry">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource AmTextTertiary}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="HeightRequest" Value="46" />
+        <Setter Property="MinimumHeightRequest" Value="46" />
+    </Style>
+
+    <!-- 圆角搜索胶囊容器 -->
+    <Style x:Key="AmSearchField" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmSurface}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 22" />
+        <Setter Property="Padding" Value="14,0" />
+        <Setter Property="HeightRequest" Value="44" />
     </Style>
 
     <!-- ══ 分隔线 ══ -->
 
     <Style x:Key="AmDividerLine" TargetType="BoxView">
         <Setter Property="HeightRequest" Value="1" />
-        <Setter Property="Color" Value="{StaticResource AmDivider}" />
+        <Setter Property="Color" Value="{DynamicResource AmDivider}" />
     </Style>
 
     <!-- ══ 进度 / 开关 ══ -->
 
     <Style x:Key="AmProgress" TargetType="Slider">
-        <Setter Property="MinimumTrackColor" Value="{StaticResource AmPrimary}" />
-        <Setter Property="MaximumTrackColor" Value="{StaticResource AmDivider}" />
-        <Setter Property="ThumbColor" Value="{StaticResource AmPrimary}" />
+        <Setter Property="MinimumTrackColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="MaximumTrackColor" Value="{DynamicResource AmDivider}" />
+        <Setter Property="ThumbColor" Value="{DynamicResource AmPrimary}" />
     </Style>
 
     <Style x:Key="AmSwitch" TargetType="Switch">
-        <Setter Property="OnColor" Value="{StaticResource AmPrimary}" />
+        <Setter Property="OnColor" Value="{DynamicResource AmPrimary}" />
         <Setter Property="ThumbColor" Value="#FFFFFF" />
     </Style>
 
     <!-- ══ 封面容器 ══ -->
 
     <Style x:Key="AmCoverSmall" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmCoverPlaceholder}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmCoverPlaceholder}" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="StrokeShape" Value="RoundRectangle 8" />
         <Setter Property="WidthRequest" Value="48" />
@@ -184,7 +251,7 @@
     </Style>
 
     <Style x:Key="AmCoverMedium" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmCoverPlaceholder}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmCoverPlaceholder}" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="StrokeShape" Value="RoundRectangle 10" />
         <Setter Property="WidthRequest" Value="56" />
@@ -194,7 +261,7 @@
     <!-- ══ 标签 / 徽标 ══ -->
 
     <Style x:Key="AmChip" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmChipBg}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmChipBg}" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="StrokeShape" Value="RoundRectangle 14" />
         <Setter Property="Padding" Value="12,5" />
@@ -202,11 +269,11 @@
 
     <Style x:Key="AmChipText" TargetType="Label">
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="TextColor" Value="{StaticResource AmTextSecondary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextSecondary}" />
     </Style>
 
     <Style x:Key="AmBadge" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{StaticResource AmPrimarySoft}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmPrimarySoft}" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="StrokeShape" Value="RoundRectangle 4" />
         <Setter Property="Padding" Value="5,1" />
@@ -214,13 +281,106 @@
 
     <Style x:Key="AmBadgeText" TargetType="Label">
         <Setter Property="FontSize" Value="10" />
-        <Setter Property="TextColor" Value="{StaticResource AmPrimary}" />
+        <Setter Property="TextColor" Value="{DynamicResource AmPrimary}" />
     </Style>
 
-    <!-- ══ ActivityIndicator ══ -->
+    <!-- ══ 通用列表行（图标 + 标题/副标题 + 右侧内容）══ -->
 
-    <Style TargetType="ActivityIndicator">
-        <Setter Property="Color" Value="{StaticResource AmPrimary}" />
+    <Style x:Key="AmListRow" TargetType="Grid">
+        <Setter Property="Padding" Value="14,13" />
+        <Setter Property="ColumnSpacing" Value="12" />
+    </Style>
+
+    <Style x:Key="AmListRowIcon" TargetType="Label">
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="WidthRequest" Value="26" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="AmChevron" TargetType="Label">
+        <Setter Property="Text" Value="›" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextTertiary}" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- 两行说明文字（标题 + 副标题） -->
+    <Style x:Key="AmRowStack" TargetType="VerticalStackLayout">
+        <Setter Property="Spacing" Value="3" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- ══ 侧边栏导航项 ══ -->
+
+    <Style x:Key="AmNavItem" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="HeightRequest" Value="46" />
+        <Setter Property="Margin" Value="10,2" />
+    </Style>
+
+    <Style x:Key="AmNavItemIcon" TargetType="Label">
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="WidthRequest" Value="28" />
+        <Setter Property="HorizontalTextAlignment" Value="Center" />
+        <Setter Property="VerticalOptions" Value="Center" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextSecondary}" />
+    </Style>
+
+    <Style x:Key="AmNavItemText" TargetType="Label">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <!-- ══ 头像 ══ -->
+
+    <Style x:Key="AmAvatar" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 28" />
+        <Setter Property="WidthRequest" Value="56" />
+        <Setter Property="HeightRequest" Value="56" />
+    </Style>
+
+    <!-- ══ 页面顶部栏 ══ -->
+
+    <Style x:Key="AmTopBar" TargetType="Grid">
+        <Setter Property="Padding" Value="6,8,12,4" />
+        <Setter Property="ColumnSpacing" Value="2" />
+    </Style>
+
+    <!-- ══ 分段控件（本地音乐 / 我喜欢 / 歌单 / 最近播放）══ -->
+
+    <Style x:Key="AmSegmentedBar" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmChipBg}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 18" />
+        <Setter Property="Padding" Value="3" />
+        <Setter Property="HeightRequest" Value="38" />
+    </Style>
+
+    <Style x:Key="AmSegmentedButton" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextSecondary}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="CornerRadius" Value="15" />
+        <Setter Property="HeightRequest" Value="32" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinimumWidthRequest" Value="0" />
+        <Setter Property="MinimumHeightRequest" Value="0" />
+    </Style>
+
+    <!-- ══ 底部迷你播放条 ══ -->
+
+    <Style x:Key="AmMiniBar" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmSurface}" />
+        <Setter Property="StrokeThickness" Value="0" />
+        <Setter Property="Padding" Value="12,9" />
     </Style>
 
 </ResourceDictionary>

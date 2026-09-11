@@ -4,20 +4,205 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:AnMusic.Android"
+    xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+    xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+    x:DataType="vm:UserViewModel"
     Title="AnMusic"
-    FlyoutBehavior="Disabled"
-    Shell.BackgroundColor="{StaticResource AmSurface}"
-    Shell.ForegroundColor="{StaticResource AmPrimary}"
-    Shell.TitleColor="{StaticResource AmTextPrimary}">
+    FlyoutBehavior="Flyout"
+    FlyoutWidth="304"
+    FlyoutBackgroundColor="{DynamicResource AmBg}"
+    Shell.BackgroundColor="{DynamicResource AmSurface}"
+    Shell.ForegroundColor="{DynamicResource AmPrimary}"
+    Shell.TitleColor="{DynamicResource AmTextPrimary}">
 
-    <!--
-        单页 Shell：播放器以底部迷你条 + 上滑详情页的形式呈现，贴近手机音乐 App 习惯。
-        其余页面（搜索 / 设置）以模态页打开，因此这里不配置多标签。
-        后续接入「发现 / 云村」等一级页面时，在此追加 ShellContent 即可。
-    -->
-    <ShellContent
-        Title="我的"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+    <Shell.Resources>
+        <ResourceDictionary>
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+        </ResourceDictionary>
+    </Shell.Resources>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         左侧边栏：用户卡 + 一级导航 + 快捷换肤 + 版本信息
+         侧边栏用自定义内容而非 Shell 默认列表，是为了完全掌控外观，
+         导航高亮由 AppShell.xaml.cs 统一维护。
+         ══════════════════════════════════════════════════════════════ -->
+    <Shell.FlyoutContent>
+        <Grid RowDefinitions="Auto,*,Auto" BackgroundColor="{DynamicResource AmBg}">
+
+            <!-- ── 用户卡 ── -->
+            <Grid Grid.Row="0"
+                  Padding="20,26,20,18"
+                  ColumnDefinitions="Auto,*"
+                  ColumnSpacing="14"
+                  BackgroundColor="{DynamicResource AmSurface}">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnUserCardTapped" />
+                </Grid.GestureRecognizers>
+
+                <Border Grid.Column="0"
+                        WidthRequest="54"
+                        HeightRequest="54"
+                        BackgroundColor="{DynamicResource AmPrimary}"
+                        StrokeThickness="0"
+                        StrokeShape="RoundRectangle 27"
+                        VerticalOptions="Center">
+                    <Grid>
+                        <Label Text="{Binding NicknameInitial}"
+                               FontSize="22"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmTextOnPrimary}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               IsVisible="{Binding HasAvatar, Converter={StaticResource InvertBool}}" />
+                        <Image Source="{Binding AvatarSource}"
+                               Aspect="AspectFill"
+                               WidthRequest="54"
+                               HeightRequest="54"
+                               IsVisible="{Binding HasAvatar}" />
+                    </Grid>
+                </Border>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="{Binding Nickname}"
+                           Style="{DynamicResource AmTitleText}"
+                           FontSize="17"
+                           FontAttributes="Bold" />
+                    <Label Text="查看个人资料 ›" Style="{DynamicResource AmCaptionText}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- ── 一级导航 ── -->
+            <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
+                <VerticalStackLayout Padding="0,10,0,10" Spacing="0">
+
+                    <Border x:Name="NavMain" ClassId="//MainPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//MainPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="🎵" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="我的音乐" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavSearch" ClassId="//SearchPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//SearchPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="🔍" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="搜索" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavDiscover" ClassId="//DiscoverPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//DiscoverPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="🧭" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="发现音乐" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavStats" ClassId="//StatsPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//StatsPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="📊" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="听歌排行" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavTogether" ClassId="//ListenTogetherPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//ListenTogetherPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="🎧" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="一起听" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavDownloads" ClassId="//DownloadsPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//DownloadsPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="⬇" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="下载管理" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <BoxView Style="{DynamicResource AmDividerLine}" Margin="22,8" />
+
+                    <Border x:Name="NavPlugins" ClassId="//PluginsPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//PluginsPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="🧩" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="音源插件" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavImport" ClassId="//ImportPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//ImportPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="📥" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="导入音乐" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <BoxView Style="{DynamicResource AmDividerLine}" Margin="22,8" />
+
+                    <Border x:Name="NavUser" ClassId="//UserPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//UserPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="👤" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="用户中心" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="NavSettings" ClassId="//SettingsPage" Style="{DynamicResource AmNavItem}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnNavTapped" CommandParameter="//SettingsPage" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <Label Grid.Column="0" Text="⚙" Style="{DynamicResource AmNavItemIcon}" />
+                            <Label Grid.Column="1" Text="设置" Style="{DynamicResource AmNavItemText}" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- ── 快捷换肤 + 版本 ── -->
+            <VerticalStackLayout Grid.Row="2" Padding="22,12,22,20" Spacing="10">
+                <BoxView Style="{DynamicResource AmDividerLine}" />
+                <Label Text="快捷换色" Style="{DynamicResource AmCaptionText}" />
+                <HorizontalStackLayout x:Name="AccentBar" Spacing="10" />
+                <Label x:Name="VersionLabel"
+                       Text="AnMusic"
+                       Style="{DynamicResource AmCaptionText}"
+                       Margin="0,4,0,0" />
+            </VerticalStackLayout>
+        </Grid>
+    </Shell.FlyoutContent>
+
+    <ShellContent Route="MainPage" ContentTemplate="{DataTemplate local:MainPage}" />
+    <ShellContent Route="SearchPage" ContentTemplate="{DataTemplate local:SearchPage}" />
+    <ShellContent Route="DiscoverPage" ContentTemplate="{DataTemplate local:DiscoverPage}" />
+    <ShellContent Route="StatsPage" ContentTemplate="{DataTemplate local:StatsPage}" />
+    <ShellContent Route="ListenTogetherPage" ContentTemplate="{DataTemplate local:ListenTogetherPage}" />
+    <ShellContent Route="DownloadsPage" ContentTemplate="{DataTemplate local:DownloadsPage}" />
+    <ShellContent Route="PluginsPage" ContentTemplate="{DataTemplate local:PluginsPage}" />
+    <ShellContent Route="ImportPage" ContentTemplate="{DataTemplate local:ImportPage}" />
+    <ShellContent Route="UserPage" ContentTemplate="{DataTemplate local:UserPage}" />
+    <ShellContent Route="SettingsPage" ContentTemplate="{DataTemplate local:SettingsPage}" />
 
 </Shell>

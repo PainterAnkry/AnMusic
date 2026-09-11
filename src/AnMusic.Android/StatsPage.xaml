@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:AnMusic.Models;assembly=AnMusic.Core"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.StatsPage"
+             x:DataType="vm:StatsViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:HasValueConverter x:Key="HasValue" />
+            <conv:DurationConverter x:Key="Duration" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="听歌排行"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
+            <Button Grid.Column="3"
+                    Text="清空"
+                    Style="{DynamicResource AmTextButton}"
+                    WidthRequest="46"
+                    Clicked="OnClearClicked" />
+        </Grid>
+
+        <!-- ══ 等级卡 ══ -->
+        <Border Grid.Row="1"
+                Style="{DynamicResource AmCard}"
+                Margin="16,2,16,10">
+            <VerticalStackLayout Spacing="12">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <Border Grid.Column="0"
+                            WidthRequest="52"
+                            HeightRequest="52"
+                            BackgroundColor="{DynamicResource AmPrimary}"
+                            StrokeThickness="0"
+                            StrokeShape="RoundRectangle 26"
+                            VerticalOptions="Center">
+                        <Label Text="{Binding LevelText}"
+                               FontSize="15"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmTextOnPrimary}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
+                    </Border>
+
+                    <VerticalStackLayout Grid.Column="1" Spacing="5" VerticalOptions="Center">
+                        <Label Text="{Binding LevelProgressText}" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                        <ProgressBar Progress="{Binding LevelProgressValue}"
+                                     ProgressColor="{DynamicResource AmPrimary}"
+                                     BackgroundColor="{DynamicResource AmDivider}"
+                                     HeightRequest="6" />
+                    </VerticalStackLayout>
+                </Grid>
+
+                <BoxView Style="{DynamicResource AmDividerLine}" />
+
+                <Grid ColumnDefinitions="*,*">
+                    <VerticalStackLayout Grid.Column="0" Spacing="3" HorizontalOptions="Center">
+                        <Label Text="{Binding TotalListeningText}"
+                               FontSize="17"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmPrimary}"
+                               HorizontalOptions="Center" />
+                        <Label Text="累计听歌" Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Grid.Column="1" Spacing="3" HorizontalOptions="Center">
+                        <Label Text="{Binding TotalPlayCountText}"
+                               FontSize="17"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmPrimary}"
+                               HorizontalOptions="Center" />
+                        <Label Text="累计播放次数" Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
+
+        <!-- ══ 排行列表 ══ -->
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
+            <Label Grid.Row="0"
+                   Text="{Binding SummaryText}"
+                   Style="{DynamicResource AmSectionTitle}"
+                   Margin="20,4,20,8" />
+
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding Ranking}"
+                            SelectionMode="None">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RankedTrack">
+                        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{DynamicResource AmSurface}">
+                            <Grid Grid.Row="0"
+                                  Padding="16,10"
+                                  ColumnDefinitions="Auto,Auto,*,Auto"
+                                  ColumnSpacing="12">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnItemTapped" />
+                                </Grid.GestureRecognizers>
+
+                                <Label Grid.Column="0"
+                                       Text="{Binding RankText}"
+                                       WidthRequest="26"
+                                       FontSize="14"
+                                       FontAttributes="Bold"
+                                       TextColor="{DynamicResource AmTextTertiary}"
+                                       VerticalOptions="Center"
+                                       HorizontalTextAlignment="Center" />
+
+                                <Border Grid.Column="1"
+                                        Style="{DynamicResource AmCoverSmall}"
+                                        VerticalOptions="Center">
+                                    <Grid>
+                                        <Label Text="♪"
+                                               FontSize="20"
+                                               TextColor="{DynamicResource AmTextOnPrimary}"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+                                        <Image Source="{Binding CoverKey}"
+                                               Aspect="AspectFill"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}}" />
+                                    </Grid>
+                                </Border>
+
+                                <VerticalStackLayout Grid.Column="2" Spacing="3" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}" Style="{DynamicResource AmTitleText}" />
+                                    <Label Text="{Binding Artist}" Style="{DynamicResource AmSubText}" />
+                                    <Label Text="{Binding ListenStatText}"
+                                           Style="{DynamicResource AmCaptionText}"
+                                           TextColor="{DynamicResource AmPrimary}" />
+                                </VerticalStackLayout>
+
+                                <Label Grid.Column="3"
+                                       Text="{Binding Duration, Converter={StaticResource Duration}}"
+                                       Style="{DynamicResource AmCaptionText}"
+                                       VerticalOptions="Center" />
+                            </Grid>
+
+                            <BoxView Grid.Row="1" Style="{DynamicResource AmDividerLine}" Margin="76,0,0,0" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout Padding="40,56" Spacing="12">
+                        <Label Text="📊" FontSize="46" HorizontalOptions="Center" />
+                        <Label Text="还没有听歌记录"
+                               FontSize="16"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmTextPrimary}"
+                               HorizontalOptions="Center" />
+                        <Label Text="播放几首歌之后，这里会按累计收听时长排出你的最爱"
+                               Style="{DynamicResource AmCaptionText}"
+                               HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+            </CollectionView>
+        </Grid>
+    </Grid>
+
+</ContentPage>

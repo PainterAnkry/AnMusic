@@ -7,383 +7,322 @@
              x:Class="AnMusic.Android.MainPage"
              x:DataType="vm:LibraryViewModel"
              Shell.NavBarIsVisible="False"
-             BackgroundColor="{StaticResource AmBg}">
+             BackgroundColor="{DynamicResource AmBg}">
 
     <ContentPage.Resources>
-        <conv:HasValueConverter x:Key="HasValue" />
-        <conv:InvertBoolConverter x:Key="InvertBool" />
-        <conv:EqualsConverter x:Key="Equals" />
+        <ResourceDictionary>
+            <conv:HasValueConverter x:Key="HasValue" />
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+            <conv:EqualsConverter x:Key="Equals" />
+            <conv:DurationConverter x:Key="Duration" />
+        </ResourceDictionary>
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-        <!-- ══ 顶部标题栏 ══ -->
+        <!-- ══════════ 顶部栏：侧边栏 / 标题 / 搜索 ══════════ -->
         <Grid Grid.Row="0"
-              ColumnDefinitions="Auto,*,Auto,Auto"
-              ColumnSpacing="4"
-              Padding="16,10,8,6"
-              BackgroundColor="{StaticResource AmBg}">
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
 
-            <Border Grid.Column="0"
-                    WidthRequest="28"
-                    HeightRequest="28"
-                    BackgroundColor="{StaticResource AmPrimary}"
-                    StrokeThickness="0"
-                    StrokeShape="RoundRectangle 8"
-                    VerticalOptions="Center">
-                <Label Text="♪"
-                       FontSize="16"
-                       TextColor="#FFFFFF"
-                       HorizontalOptions="Center"
-                       VerticalOptions="Center" />
-            </Border>
+            <Button Grid.Column="0"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
 
-            <Label Grid.Column="1"
-                   Text="{Binding HeaderText}"
-                   Style="{StaticResource AmPageTitle}"
-                   Margin="8,0,0,0" />
+            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                <Label Text="{Binding HeaderText}"
+                       Style="{DynamicResource AmPageTitle}"
+                       FontSize="19" />
+                <Label Text="{Binding CountText}"
+                       Style="{DynamicResource AmCaptionText}" />
+            </VerticalStackLayout>
 
             <Button Grid.Column="2"
                     Text="🔍"
-                    Style="{StaticResource AmIconButton}"
+                    Style="{DynamicResource AmIconButton}"
                     Clicked="OnOpenSearchClicked" />
-
-            <Button Grid.Column="3"
-                    Text="⚙"
-                    Style="{StaticResource AmIconButton}"
-                    Clicked="OnOpenSettingsClicked" />
         </Grid>
 
-        <!-- ══ 分段标签（本地音乐 / 我喜欢 / 歌单 / 最近）══ -->
-        <ScrollView Grid.Row="1"
-                    Orientation="Horizontal"
-                    HorizontalScrollBarVisibility="Never"
-                    Padding="16,0,16,8"
-                    BackgroundColor="{StaticResource AmBg}">
-            <HorizontalStackLayout Spacing="8">
+        <!-- ══════════ 分段控件 ══════════ -->
+        <Border Grid.Row="1"
+                Style="{DynamicResource AmSegmentedBar}"
+                Margin="16,2,16,10">
+            <Grid ColumnDefinitions="*,*,*,*">
                 <Button x:Name="TabAllBtn"
+                        Grid.Column="0"
                         Text="本地音乐"
-                        Style="{StaticResource AmSegmentButton}"
+                        Style="{DynamicResource AmSegmentedButton}"
                         Clicked="OnTabAllClicked" />
                 <Button x:Name="TabFavBtn"
+                        Grid.Column="1"
                         Text="我喜欢"
-                        Style="{StaticResource AmSegmentButton}"
+                        Style="{DynamicResource AmSegmentedButton}"
                         Clicked="OnTabFavoritesClicked" />
                 <Button x:Name="TabPlBtn"
+                        Grid.Column="2"
                         Text="歌单"
-                        Style="{StaticResource AmSegmentButton}"
+                        Style="{DynamicResource AmSegmentedButton}"
                         Clicked="OnTabPlaylistsClicked" />
                 <Button x:Name="TabRecentBtn"
+                        Grid.Column="3"
                         Text="最近播放"
-                        Style="{StaticResource AmSegmentButton}"
+                        Style="{DynamicResource AmSegmentedButton}"
                         Clicked="OnTabRecentClicked" />
-            </HorizontalStackLayout>
-        </ScrollView>
+            </Grid>
+        </Border>
 
-        <!-- ══ 主内容区 ══ -->
-        <Grid Grid.Row="2">
+        <!-- ══════════ 曲库内容 ══════════ -->
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
 
-            <!-- ── 搜索筛选层（点放大镜后展开）── -->
-            <Grid x:Name="FilterLayer"
-                  IsVisible="{Binding IsSearchVisible}"
-                  RowDefinitions="Auto,*"
-                  BackgroundColor="{StaticResource AmBg}">
+            <!-- 歌单横向选择条（仅「歌单」标签可见） -->
+            <ScrollView Grid.Row="0"
+                        x:Name="PlaylistStrip"
+                        Orientation="Horizontal"
+                        HorizontalScrollBarVisibility="Never"
+                        IsVisible="False"
+                        Padding="16,0,16,10">
+                <HorizontalStackLayout Spacing="8">
+                    <Button Text="＋ 新建歌单"
+                            Style="{DynamicResource AmOutlineButton}"
+                            HeightRequest="34"
+                            Clicked="OnCreatePlaylistClicked" />
 
-                <Border Grid.Row="0"
-                        Margin="16,4,16,8"
-                        BackgroundColor="{StaticResource AmSurface}"
-                        StrokeThickness="0"
-                        StrokeShape="RoundRectangle 20"
-                        Padding="14,0">
-                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                        <Label Grid.Column="0"
-                               Text="🔍"
-                               FontSize="15"
-                               TextColor="{StaticResource AmTextTertiary}"
-                               VerticalOptions="Center" />
-                        <Entry Grid.Column="1"
-                               x:Name="FilterEntry"
-                               Placeholder="搜索歌名 / 歌手 / 专辑"
-                               Text="{Binding FilterText}"
-                               Style="{StaticResource AmSearchEntry}" />
+                    <HorizontalStackLayout x:Name="PlaylistChips"
+                                           BindableLayout.ItemsSource="{Binding Playlists}"
+                                           Spacing="8">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:Playlist">
+                                <Border Style="{DynamicResource AmChip}"
+                                        HeightRequest="34"
+                                        Padding="14,0"
+                                        VerticalOptions="Center">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnPlaylistChipTapped" />
+                                    </Border.GestureRecognizers>
+                                    <Label Text="{Binding Name}"
+                                           Style="{DynamicResource AmChipText}"
+                                           VerticalOptions="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </HorizontalStackLayout>
+                </HorizontalStackLayout>
+            </ScrollView>
+
+            <CollectionView Grid.Row="1"
+                            x:Name="TrackList"
+                            ItemsSource="{Binding VisibleTracks}"
+                            SelectionMode="None">
+
+                <!-- 列表头：播放全部 / 随机 / 扫描 / 排序 -->
+                <CollectionView.Header>
+                    <Grid Padding="16,0,16,10"
+                          ColumnDefinitions="Auto,Auto,Auto,Auto,*"
+                          ColumnSpacing="8">
+                        <Button Grid.Column="0"
+                                Text="▶  播放全部"
+                                Command="{Binding PlayAllCommand}"
+                                Style="{DynamicResource AmGhostButton}"
+                                HeightRequest="34"
+                                FontSize="13"
+                                Padding="16,0">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button"
+                                             Binding="{Binding VisibleTracks.Count}"
+                                             Value="0">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+
+                        <Button Grid.Column="1"
+                                Text="随机"
+                                Command="{Binding ShuffleAllCommand}"
+                                Style="{DynamicResource AmGhostButton}"
+                                HeightRequest="34"
+                                FontSize="13"
+                                Padding="16,0" />
+
                         <Button Grid.Column="2"
-                                Text="取消"
-                                FontSize="14"
-                                TextColor="{StaticResource AmPrimary}"
-                                BackgroundColor="Transparent"
-                                Padding="0"
-                                WidthRequest="44"
-                                Clicked="OnCloseFilterClicked" />
-                    </Grid>
-                </Border>
+                                Text="扫描"
+                                Command="{Binding ScanCommand}"
+                                Style="{DynamicResource AmGhostButton}"
+                                HeightRequest="34"
+                                FontSize="13"
+                                Padding="16,0"
+                                IsVisible="{Binding CurrentTab, Converter={StaticResource Equals}, ConverterParameter=All}" />
 
-                <CollectionView Grid.Row="1"
-                                ItemsSource="{Binding VisibleTracks}"
-                                SelectionMode="None">
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Track">
-                            <Grid Padding="16,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12"
-                                  BackgroundColor="{StaticResource AmSurface}">
+                        <Button x:Name="SortBtn"
+                                Grid.Column="3"
+                                Text="{Binding SortLabel}"
+                                Command="{Binding ChangeSortCommand}"
+                                Style="{DynamicResource AmGhostButton}"
+                                HeightRequest="34"
+                                FontSize="13"
+                                Padding="14,0" />
+
+                        <Label Grid.Column="4"
+                               Text="{Binding ScanStatus}"
+                               Style="{DynamicResource AmCaptionText}"
+                               VerticalOptions="Center"
+                               HorizontalTextAlignment="End"
+                               LineBreakMode="TailTruncation" />
+                    </Grid>
+                </CollectionView.Header>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Track">
+                        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{DynamicResource AmSurface}">
+
+                            <Grid Grid.Row="0"
+                                  Padding="16,10"
+                                  ColumnDefinitions="Auto,*,Auto,Auto"
+                                  ColumnSpacing="12">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Tapped="OnTrackTapped" />
                                 </Grid.GestureRecognizers>
 
-                                <Border Grid.Column="0" Style="{StaticResource AmCoverSmall}">
-                                    <Image Source="{Binding CoverKey}"
-                                           Aspect="AspectFill"
-                                           IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}}" />
+                                <!-- 封面缩略图（无图时显示音符占位） -->
+                                <Border Grid.Column="0"
+                                        Style="{DynamicResource AmCoverSmall}"
+                                        VerticalOptions="Center">
+                                    <Grid>
+                                        <Label Text="♪"
+                                               FontSize="20"
+                                               TextColor="{DynamicResource AmTextOnPrimary}"
+                                               HorizontalOptions="Center"
+                                               VerticalOptions="Center"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+                                        <Image Source="{Binding CoverKey}"
+                                               Aspect="AspectFill"
+                                               IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}}" />
+                                    </Grid>
                                 </Border>
 
-                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                    <Label Text="{Binding Title}" Style="{StaticResource AmTitleText}" />
-                                    <Label Text="{Binding Artist}" Style="{StaticResource AmSubText}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}" Style="{DynamicResource AmTitleText}" />
+                                    <Label Text="{Binding Artist}" Style="{DynamicResource AmSubText}" />
                                 </VerticalStackLayout>
 
-                                <Button Grid.Column="2"
+                                <Label Grid.Column="2"
+                                       Text="{Binding Duration, Converter={StaticResource Duration}}"
+                                       Style="{DynamicResource AmCaptionText}"
+                                       VerticalOptions="Center" />
+
+                                <Button Grid.Column="3"
                                         Text="⋯"
-                                        Style="{StaticResource AmRowMenuButton}"
+                                        Style="{DynamicResource AmRowMenuButton}"
                                         Clicked="OnTrackMenuClicked" />
                             </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </Grid>
 
-            <!-- ── 曲库列表 ── -->
-            <Grid IsVisible="{Binding IsSearchVisible, Converter={StaticResource InvertBool}}"
-                  RowDefinitions="Auto,*">
-
-                <!-- 歌单横向选择条（仅歌单标签） -->
-                <ScrollView Grid.Row="0"
-                            x:Name="PlaylistStrip"
-                            Orientation="Horizontal"
-                            HorizontalScrollBarVisibility="Never"
-                            IsVisible="False"
-                            Padding="16,4,16,10">
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="＋ 新建歌单"
-                                Style="{StaticResource AmOutlineButton}"
-                                HeightRequest="34"
-                                Clicked="OnCreatePlaylistClicked" />
-
-                        <CollectionView x:Name="PlaylistList"
-                                        ItemsSource="{Binding Playlists}"
-                                        SelectionMode="Single"
-                                        SelectedItem="{Binding SelectedPlaylist}"
-                                        HeightRequest="34">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="8" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="models:Playlist">
-                                    <Border Style="{StaticResource AmChip}"
-                                            HeightRequest="34"
-                                            Padding="14,0"
-                                            VerticalOptions="Center">
-                                        <Label Text="{Binding Name}"
-                                               Style="{StaticResource AmChipText}"
-                                               VerticalOptions="Center" />
-                                    </Border>
-                                </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
-                    </HorizontalStackLayout>
-                </ScrollView>
-
-                <CollectionView Grid.Row="1"
-                                x:Name="TrackList"
-                                ItemsSource="{Binding VisibleTracks}"
-                                SelectionMode="None">
-
-                    <!-- 列表头：播放全部 / 随机 -->
-                    <CollectionView.Header>
-                        <Grid Padding="16,2,16,12" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="10">
-                            <Button Grid.Column="0"
-                                    Text="▶  播放全部"
-                                    Command="{Binding PlayAllCommand}"
-                                    Style="{StaticResource AmGhostButton}"
-                                    HeightRequest="34"
-                                    FontSize="13"
-                                    Padding="16,0">
-                                <Button.Triggers>
-                                    <DataTrigger TargetType="Button"
-                                                 Binding="{Binding VisibleTracks.Count}"
-                                                 Value="0">
-                                        <Setter Property="IsEnabled" Value="False" />
-                                    </DataTrigger>
-                                </Button.Triggers>
-                            </Button>
-
-                            <Button Grid.Column="1"
-                                    Text="随机播放"
-                                    Command="{Binding ShuffleAllCommand}"
-                                    Style="{StaticResource AmGhostButton}"
-                                    HeightRequest="34"
-                                    FontSize="13"
-                                    Padding="16,0" />
-
-                            <Button Grid.Column="2"
-                                    Text="扫描"
-                                    Command="{Binding ScanCommand}"
-                                    Style="{StaticResource AmGhostButton}"
-                                    HeightRequest="34"
-                                    FontSize="13"
-                                    Padding="16,0"
-                                    IsVisible="{Binding CurrentTab, Converter={StaticResource Equals}, ConverterParameter=All}" />
-
-                            <Label Grid.Column="3"
-                                   Text="{Binding ScanStatus}"
-                                   Style="{StaticResource AmCaptionText}"
-                                   VerticalOptions="Center"
-                                   HorizontalTextAlignment="End"
-                                   LineBreakMode="TailTruncation" />
+                            <BoxView Grid.Row="1"
+                                     Style="{DynamicResource AmDividerLine}"
+                                     Margin="76,0,0,0" />
                         </Grid>
-                    </CollectionView.Header>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
 
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="models:Track">
-                            <Grid RowDefinitions="Auto,Auto" BackgroundColor="{StaticResource AmSurface}">
+                <!-- 空状态 -->
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout Padding="40,56" Spacing="12" IsVisible="{Binding IsEmpty}">
+                        <Label Text="🎵"
+                               FontSize="46"
+                               HorizontalOptions="Center" />
+                        <Label Text="这里还没有音乐"
+                               FontSize="16"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmTextPrimary}"
+                               HorizontalOptions="Center" />
+                        <Label Text="点击上方「扫描」，导入设备中的音频文件"
+                               FontSize="13"
+                               TextColor="{DynamicResource AmTextTertiary}"
+                               HorizontalTextAlignment="Center" />
+                        <Button Text="扫描本地音乐"
+                                Command="{Binding ScanCommand}"
+                                Style="{DynamicResource AmPrimaryButton}"
+                                HorizontalOptions="Center"
+                                Margin="0,8,0,0" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+            </CollectionView>
 
-                                <Grid Grid.Row="0"
-                                      Padding="16,10"
-                                      ColumnDefinitions="Auto,*,Auto"
-                                      ColumnSpacing="12">
-                                    <Grid.GestureRecognizers>
-                                        <TapGestureRecognizer Tapped="OnTrackTapped" />
-                                    </Grid.GestureRecognizers>
-
-                                    <!-- 封面缩略图（无图时显示音符占位） -->
-                                    <Border Grid.Column="0"
-                                            Style="{StaticResource AmCoverSmall}"
-                                            VerticalOptions="Center">
-                                        <Grid>
-                                            <Label Text="♪"
-                                                   FontSize="20"
-                                                   TextColor="#FFFFFF"
-                                                   HorizontalOptions="Center"
-                                                   VerticalOptions="Center"
-                                                   IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
-                                            <Image Source="{Binding CoverKey}"
-                                                   Aspect="AspectFill"
-                                                   IsVisible="{Binding CoverKey, Converter={StaticResource HasValue}}" />
-                                        </Grid>
-                                    </Border>
-
-                                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
-                                        <Label Text="{Binding Title}" Style="{StaticResource AmTitleText}" />
-                                        <Label Text="{Binding Artist}" Style="{StaticResource AmSubText}" />
-                                    </VerticalStackLayout>
-
-                                    <Button Grid.Column="2"
-                                            Text="⋯"
-                                            Style="{StaticResource AmRowMenuButton}"
-                                            Clicked="OnTrackMenuClicked" />
-                                </Grid>
-
-                                <BoxView Grid.Row="1" Style="{StaticResource AmDividerLine}" />
-                            </Grid>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-
-                    <!-- 空状态 -->
-                    <CollectionView.EmptyView>
-                        <VerticalStackLayout Padding="40,60" Spacing="12" IsVisible="{Binding IsEmpty}">
-                            <Label Text="🎵"
-                                   FontSize="46"
-                                   HorizontalOptions="Center" />
-                            <Label Text="这里还没有音乐"
-                                   FontSize="16"
-                                   FontAttributes="Bold"
-                                   TextColor="{StaticResource AmTextPrimary}"
-                                   HorizontalOptions="Center" />
-                            <Label Text="点击上方「扫描」，导入设备中的音频文件"
-                                   FontSize="13"
-                                   TextColor="{StaticResource AmTextTertiary}"
-                                   HorizontalTextAlignment="Center" />
-                            <Button Text="扫描本地音乐"
-                                    Command="{Binding ScanCommand}"
-                                    Style="{StaticResource AmPrimaryButton}"
-                                    HorizontalOptions="Center"
-                                    Margin="0,8,0,0" />
-                        </VerticalStackLayout>
-                    </CollectionView.EmptyView>
-                </CollectionView>
-
-                <!-- 扫描中遮罩 -->
-                <VerticalStackLayout IsVisible="{Binding IsScanning}"
-                                     VerticalOptions="Center"
-                                     HorizontalOptions="Center"
-                                     Spacing="12">
-                    <ActivityIndicator IsRunning="{Binding IsScanning}"
-                                       WidthRequest="38"
-                                       HeightRequest="38" />
-                    <Label Text="正在扫描…"
-                           Style="{StaticResource AmCaptionText}" />
-                </VerticalStackLayout>
-            </Grid>
+            <!-- 扫描中遮罩 -->
+            <VerticalStackLayout IsVisible="{Binding IsScanning}"
+                                 VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Spacing="12">
+                <ActivityIndicator IsRunning="{Binding IsScanning}"
+                                   WidthRequest="38"
+                                   HeightRequest="38" />
+                <Label Text="正在扫描…" Style="{DynamicResource AmCaptionText}" />
+            </VerticalStackLayout>
         </Grid>
 
-        <!-- ══ 底部迷你播放条 ══ -->
+        <!-- ══════════ 底部迷你播放条 ══════════ -->
         <Grid Grid.Row="3" RowDefinitions="Auto,Auto">
 
-            <!-- 细进度线 -->
-            <BoxView Grid.Row="0"
-                     HeightRequest="2"
-                     Color="{StaticResource AmDivider}"
-                     IsVisible="{Binding Player.HasTrack}" />
-            <BoxView Grid.Row="0"
-                     HeightRequest="2"
-                     Color="{StaticResource AmPrimary}"
-                     HorizontalOptions="Start"
-                     WidthRequest="{Binding Player.ProgressWidth}"
-                     IsVisible="{Binding Player.HasTrack}" />
+            <ProgressBar Grid.Row="0"
+                         Progress="{Binding Player.ProgressFraction}"
+                         HeightRequest="2"
+                         ProgressColor="{DynamicResource AmPrimary}"
+                         BackgroundColor="{DynamicResource AmDivider}" />
 
-            <Border Grid.Row="1"
-                    BackgroundColor="{StaticResource AmSurface}"
-                    StrokeThickness="0"
-                    Padding="12,8">
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnMiniPlayerTapped" />
-                </Border.GestureRecognizers>
+            <Border Grid.Row="1" Style="{DynamicResource AmMiniBar}">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
 
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                    <!-- 左半区：封面 + 歌曲信息，整块可点开播放详情 -->
+                    <Grid Grid.Column="0" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnMiniPlayerTapped" />
+                        </Grid.GestureRecognizers>
 
-                    <!-- 旋转封面 -->
-                    <Border Grid.Column="0"
-                            Style="{StaticResource AmCoverSmall}"
-                            VerticalOptions="Center">
-                        <Grid>
-                            <Label Text="♪"
-                                   FontSize="20"
-                                   TextColor="#FFFFFF"
-                                   HorizontalOptions="Center"
-                                   VerticalOptions="Center"
-                                   IsVisible="{Binding Player.CoverPath, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
-                            <Image Source="{Binding Player.CoverPath}"
-                                   Aspect="AspectFill"
-                                   IsVisible="{Binding Player.CoverPath, Converter={StaticResource HasValue}}" />
-                        </Grid>
-                    </Border>
+                        <Border Grid.Column="0"
+                                Style="{DynamicResource AmCoverSmall}"
+                                VerticalOptions="Center">
+                            <Grid>
+                                <Label Text="♪"
+                                       FontSize="20"
+                                       TextColor="{DynamicResource AmTextOnPrimary}"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center"
+                                       IsVisible="{Binding Player.CoverPath, Converter={StaticResource HasValue}, ConverterParameter=invert}" />
+                                <Image Source="{Binding Player.CoverPath}"
+                                       Aspect="AspectFill"
+                                       IsVisible="{Binding Player.CoverPath, Converter={StaticResource HasValue}}" />
+                            </Grid>
+                        </Border>
 
-                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                        <Label Text="{Binding Player.Title}"
-                               Style="{StaticResource AmTitleText}"
-                               FontSize="14" />
-                        <Label Text="{Binding Player.Artist}"
-                               Style="{StaticResource AmSubText}" />
-                    </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="{Binding Player.Title}"
+                                   Style="{DynamicResource AmTitleText}"
+                                   FontSize="14" />
+                            <Label Text="{Binding Player.Artist}"
+                                   Style="{DynamicResource AmSubText}" />
+                        </VerticalStackLayout>
+                    </Grid>
 
-                    <Button Grid.Column="2"
+                    <Button Grid.Column="1"
                             Text="{Binding Player.PlayPauseIcon}"
                             Command="{Binding Player.PlayPauseCommand}"
-                            Style="{StaticResource AmIconButton}"
+                            IsEnabled="{Binding Player.HasTrack}"
+                            Style="{DynamicResource AmIconButton}"
+                            FontSize="24"
+                            VerticalOptions="Center" />
+
+                    <Button Grid.Column="2"
+                            Text="⏭"
+                            Command="{Binding Player.NextCommand}"
+                            IsEnabled="{Binding Player.HasTrack}"
+                            Style="{DynamicResource AmIconButton}"
                             FontSize="22"
                             VerticalOptions="Center" />
 
                     <Button Grid.Column="3"
                             Text="☰"
-                            Command="{Binding Player.PlayPauseCommand}"
-                            Style="{StaticResource AmIconButton}"
+                            IsEnabled="{Binding Player.HasTrack}"
+                            Style="{DynamicResource AmIconButton}"
                             FontSize="19"
                             VerticalOptions="Center"
                             Clicked="OnOpenQueueClicked" />

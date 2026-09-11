@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- AnMusic 应用图标 · 背景层：纯品牌蓝。
+     注意：MauiIcon 的 Include 同时充当自适应图标的「背景层」与旧版图标的底图。
+     这里曾画过整幅音符，与前景层 appiconfg.svg 的音符叠成"双音符"（真机可见），
+     背景层必须是纯色，音符只留在前景层。 -->
 <svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="0" width="456" height="456" fill="#512BD4" />
+    <rect x="0" y="0" width="456" height="456" fill="#2B7DE9" />
 </svg>

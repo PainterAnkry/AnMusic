@@ -17,6 +17,17 @@ public sealed class CoverCacheService
     /// <summary>封面缓存容量上限（256MB）。</summary>
     public const long MaxCacheBytes = 256L * 1024 * 1024;
 
+    /// <summary>
+    /// 宿主注入的封面降采样钩子（输入输出均为图片字节）：
+    /// 安卓端注入 BitmapFactory 实现把大图压到 <see cref="MaxCoverDimension"/> 内，
+    /// 从源头控制 UI 解码内存；桌面端保持 null（WPF 按需解码，无需处理）。
+    /// 写入磁盘之前会先把原字节喂给这个钩子，因此缓存目录里只有压缩后的副本。
+    /// </summary>
+    public static Func<byte[], byte[]>? CoverDownsampler { get; set; }
+
+    /// <summary>写入磁盘前若尺寸仍超此值就触发降采样；同时是通知栏/列表显示的上限参考。</summary>
+    public const int MaxCoverDimension = 800;
+
     private static readonly HttpClient Http = Services.Net.HttpService.Client;
 
     /// <summary>距上次容量检查的写入次数（每 20 次检查一次，避免频繁遍历目录）。</summary>
@@ -27,6 +38,14 @@ public sealed class CoverCacheService
     {
         if (coverBytes is null || coverBytes.Length == 0)
             return null;
+
+        // 写入磁盘前交给宿主端做一次降采样；原图经常来自嵌入音频的封面，
+        // 上千 × 上千的 JPEG 不降样直接解码会瞬间把播放页内存撑到几百 MB。
+        if (CoverDownsampler is { } downsample)
+        {
+            try { coverBytes = downsample(coverBytes); }
+            catch { /* 降采样失败用原图，不能让封面把功能带挂 */ }
+        }
 
         var ext = mime?.Contains("png", StringComparison.OrdinalIgnoreCase) == true ? ".png" : ".jpg";
         var hash = Convert.ToHexStringLower(SHA1.HashData(coverBytes));
@@ -57,6 +76,13 @@ public sealed class CoverCacheService
 
             var bytes = await Http.GetByteArrayAsync(url);
             if (bytes.Length == 0) return null;
+
+            // 在线封面经常是 2000×2000 以上，写盘前同样压一次
+            if (CoverDownsampler is { } downsample)
+            {
+                try { bytes = downsample(bytes); }
+                catch { }
+            }
 
             Directory.CreateDirectory(CacheDir);
             File.WriteAllBytes(path, bytes);

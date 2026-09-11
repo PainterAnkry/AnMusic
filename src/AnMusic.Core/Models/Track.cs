@@ -25,6 +25,37 @@ public sealed class Track : INotifyPropertyChanged
     /// <summary>本地文件路径（在线源为空）。</summary>
     public string FilePath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 在线曲目播放时缓冲到本地的临时文件（只有运行时才有值）。
+    /// </summary>
+    /// <remarks>
+    /// 必须与 <see cref="FilePath"/> 分开：缓冲文件只是"听过一次"的副产物，
+    /// 既不是音乐库里的本地文件，也不该被当成"已下载"。
+    /// 不持久化，也不随分享链接 / 一起听传给别的设备（别人的缓存路径没有意义）。
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string PlaybackCachePath { get; set; } = string.Empty;
+
+    /// <summary>真正可用于播放的本地文件路径：本地曲目取 <see cref="FilePath"/>，在线曲目取播放缓冲。</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string PlayablePath => IsLocalTrack
+        ? FilePath
+        : !string.IsNullOrEmpty(PlaybackCachePath) ? PlaybackCachePath : FilePath;
+
+    /// <summary>是否是本地音乐库曲目（而非在线音源曲目）。</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsLocalTrack =>
+        string.IsNullOrEmpty(ProviderId) || string.Equals(ProviderId, "local-file", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>该曲目是否已经是本机上的音乐文件，无需再走在线下载。</summary>
+    /// <remarks>
+    /// 只看本地曲目的 <see cref="FilePath"/>：在线曲目的 FilePath（历史数据）与
+    /// <see cref="PlaybackCachePath"/> 都只是缓冲，不能算"已下载"。
+    /// </remarks>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsAlreadyLocalFile =>
+        IsLocalTrack && !string.IsNullOrEmpty(FilePath) && File.Exists(FilePath);
+
     /// <summary>远程封面 URL（搜索结果携带，后台下载到本地缓存后写入 CoverKey）。</summary>
     public string CoverUrl { get; set; } = string.Empty;
 

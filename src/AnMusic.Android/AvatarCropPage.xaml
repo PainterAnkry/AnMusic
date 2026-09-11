@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="AnMusic.Android.AvatarCropPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="✕"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="19"
+                    Clicked="OnCancelClicked" />
+            <Label Grid.Column="1"
+                   Text="裁剪头像"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="完成"
+                    Style="{DynamicResource AmTextButton}"
+                    WidthRequest="46"
+                    Clicked="OnConfirmClicked" />
+        </Grid>
+
+        <!-- ══ 裁剪区：CropHost 可视范围就是最终裁剪结果 ══ -->
+        <Grid Grid.Row="1" VerticalOptions="Center" HorizontalOptions="Center">
+            <Border StrokeThickness="1"
+                    Stroke="{DynamicResource AmDivider}"
+                    StrokeShape="RoundRectangle 12"
+                    BackgroundColor="{DynamicResource AmCoverPlaceholder}"
+                    Padding="0">
+                <Grid x:Name="CropHost"
+                      IsClippedToBounds="True">
+                    <Grid.GestureRecognizers>
+                        <PinchGestureRecognizer PinchUpdated="OnPinchUpdated" />
+                        <PanGestureRecognizer PanUpdated="OnPanUpdated" />
+                    </Grid.GestureRecognizers>
+
+                    <Image x:Name="CropImage" Aspect="Fill" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ══ 底部：缩放 ══ -->
+        <VerticalStackLayout Grid.Row="2" Padding="24,8,24,22" Spacing="10">
+            <Label Text="拖动图片调整位置，双指或滑块缩放"
+                   Style="{DynamicResource AmCaptionText}"
+                   HorizontalOptions="Center" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <Label Grid.Column="0"
+                       Text="🔍"
+                       FontSize="14"
+                       TextColor="{DynamicResource AmTextTertiary}"
+                       VerticalOptions="Center" />
+                <Slider Grid.Column="1"
+                        x:Name="ZoomSlider"
+                        Minimum="1"
+                        Maximum="4"
+                        Value="1"
+                        Style="{DynamicResource AmProgress}"
+                        ValueChanged="OnZoomChanged" />
+            </Grid>
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

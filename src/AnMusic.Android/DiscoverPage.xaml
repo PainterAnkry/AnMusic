@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.DiscoverPage"
+             x:DataType="vm:RadioViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="个性电台"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
+
+                <!-- ══════════ 推荐：基于你曲库的 5 种电台 ══════════ -->
+                <Label Text="选一个电台开始" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <CollectionView ItemsSource="{Binding Modes}" SelectionMode="None">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
+                    </CollectionView.ItemsLayout>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RadioModeOption">
+                            <Border Style="{DynamicResource AmCard}" Padding="16,16">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnModeTapped" />
+                                </Border.GestureRecognizers>
+
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                                    <Label Grid.Column="0"
+                                           Text="{Binding Icon}"
+                                           FontSize="32"
+                                           VerticalOptions="Center" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                        <Label Text="{Binding Title}" Style="{DynamicResource AmTitleText}" FontSize="15" />
+                                        <Label Text="{Binding Desc}" Style="{DynamicResource AmCaptionText}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2"
+                                           Text="▶"
+                                           FontSize="20"
+                                           TextColor="{DynamicResource AmPrimary}"
+                                           VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+                <Label Text="{Binding StatusText}"
+                       Style="{DynamicResource AmCaptionText}"
+                       HorizontalTextAlignment="Center" />
+
+                <!-- 说明 -->
+                <Border Style="{DynamicResource AmCard}" Padding="16,14">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="关于电台" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                        <Label Text="所有电台都基于你设备上的本地曲库生成——没有在线内容，也不需要登录。选个模式点一下就开始。"
+                               Style="{DynamicResource AmCaptionText}" />
+                        <Label Text="随机模式连播时会自动切到「随机播放」，可以随时切回别的模式。"
+                               Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

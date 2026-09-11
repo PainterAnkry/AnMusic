@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using AnMusic.Models;
 using AnMusic.Services.Audio;
@@ -166,8 +167,9 @@ public partial class PlaybackBarViewModel : ObservableObject
     {
         try
         {
-            // 在线源：FilePath 为空时先缓冲到本地
-            if (string.IsNullOrEmpty(track.FilePath))
+            // 本地曲目取 FilePath，在线曲目取播放缓冲；缓冲被清理过就重新缓冲
+            var playPath = track.PlayablePath;
+            if (string.IsNullOrEmpty(playPath) || !File.Exists(playPath))
             {
                 if (_registry.Find(track.ProviderId) is IOnlineMusicProvider online)
                 {

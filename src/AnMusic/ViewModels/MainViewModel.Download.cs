@@ -52,7 +52,10 @@ public partial class MainViewModel
     {
         if (track is null) return;
 
-        if (!string.IsNullOrEmpty(track.FilePath) && File.Exists(track.FilePath))
+        // 只有本地曲目才谈得上"已是本地文件"。
+        // 在线曲目（网易云/QQ/B站/插件）在听过一次后 FilePath 上会挂着播放缓冲，
+        // 若直接看 File.Exists(FilePath) 会把"缓存"误判成"已下载"，于是下载被拦住。
+        if (track.IsAlreadyLocalFile)
         {
             Views.UiDialog.Info("该曲目已是本地文件，无需下载", "提示");
             return;

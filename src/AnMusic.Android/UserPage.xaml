@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.UserPage"
+             x:DataType="vm:UserViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="用户中心"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,28,16,28" Spacing="14">
+
+                <!-- ══════════ 资料卡：头像 + 昵称 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="20,32">
+                    <VerticalStackLayout Spacing="18" HorizontalOptions="Fill">
+
+                        <!-- 头像：点击更换，右下角带相机角标 -->
+                        <Grid HorizontalOptions="Center">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnChangeAvatarTapped" />
+                            </Grid.GestureRecognizers>
+
+                            <Border WidthRequest="110"
+                                    HeightRequest="110"
+                                    BackgroundColor="{DynamicResource AmPrimary}"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 55">
+                                <Grid>
+                                    <Label Text="{Binding NicknameInitial}"
+                                           FontSize="42"
+                                           FontAttributes="Bold"
+                                           TextColor="{DynamicResource AmTextOnPrimary}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           IsVisible="{Binding HasAvatar, Converter={StaticResource InvertBool}}" />
+                                    <Image Source="{Binding AvatarSource}"
+                                           Aspect="AspectFill"
+                                           WidthRequest="110"
+                                           HeightRequest="110"
+                                           IsVisible="{Binding HasAvatar}">
+                                        <Image.Clip>
+                                            <EllipseGeometry Center="55,55" RadiusX="55" RadiusY="55" />
+                                        </Image.Clip>
+                                    </Image>
+                                </Grid>
+                            </Border>
+
+                            <Border WidthRequest="32"
+                                    HeightRequest="32"
+                                    BackgroundColor="{DynamicResource AmSurface}"
+                                    StrokeThickness="1"
+                                    Stroke="{DynamicResource AmDivider}"
+                                    StrokeShape="RoundRectangle 16"
+                                    HorizontalOptions="End"
+                                    VerticalOptions="End"
+                                    Padding="0">
+                                <Label Text="📷"
+                                       FontSize="14"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center" />
+                            </Border>
+                        </Grid>
+
+                        <!-- 昵称 -->
+                        <VerticalStackLayout Spacing="2" HorizontalOptions="Fill">
+                            <Entry x:Name="NicknameEntry"
+                                   Text="{Binding Nickname}"
+                                   Style="{DynamicResource AmFieldEntry}"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   HorizontalTextAlignment="Center"
+                                   ReturnType="Done"
+                                   Completed="OnNicknameCommitted"
+                                   Unfocused="OnNicknameCommitted" />
+                            <Label Text="点击昵称即可修改"
+                                   Style="{DynamicResource AmCaptionText}"
+                                   HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+
+                        <!-- 头像操作 -->
+                        <HorizontalStackLayout Spacing="20" HorizontalOptions="Center">
+                            <Label Text="更换头像"
+                                   Style="{DynamicResource AmLinkText}"
+                                   FontSize="13">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnChangeAvatarTapped" />
+                                </Label.GestureRecognizers>
+                            </Label>
+                            <Label Text="移除头像"
+                                   Style="{DynamicResource AmLinkText}"
+                                   FontSize="13"
+                                   IsVisible="{Binding HasAvatar}">
+                                <Label.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnRemoveAvatarTapped" />
+                                </Label.GestureRecognizers>
+                            </Label>
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="头像与昵称保存在本机应用数据目录，不会上传。"
+                       Style="{DynamicResource AmCaptionText}"
+                       HorizontalTextAlignment="Center"
+                       Margin="0,8,0,0" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

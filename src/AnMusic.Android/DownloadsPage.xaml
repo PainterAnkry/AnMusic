@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.DownloadsPage"
+             x:DataType="vm:DownloadViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:HasValueConverter x:Key="HasValue" />
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="下载管理"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
+            <Button Grid.Column="3"
+                    Text="刷新"
+                    Style="{DynamicResource AmTextButton}"
+                    WidthRequest="46"
+                    Clicked="OnRefreshClicked" />
+        </Grid>
+
+        <!-- ══ 分段：下载任务 / 缓冲缓存 ══ -->
+        <Border Grid.Row="1"
+                Style="{DynamicResource AmSegmentedBar}"
+                Margin="16,2,16,10">
+            <Grid ColumnDefinitions="*,*">
+                <Button x:Name="TabTasksBtn"
+                        Grid.Column="0"
+                        Text="下载任务"
+                        Style="{DynamicResource AmSegmentedButton}"
+                        Clicked="OnTabTasksClicked" />
+                <Button x:Name="TabCacheBtn"
+                        Grid.Column="1"
+                        Text="缓冲缓存"
+                        Style="{DynamicResource AmSegmentedButton}"
+                        Clicked="OnTabCacheClicked" />
+            </Grid>
+        </Border>
+
+        <!-- ══ 下载任务 ══ -->
+        <Grid Grid.Row="2" x:Name="TaskPanel" RowDefinitions="Auto,*">
+
+            <Border Grid.Row="0"
+                    Style="{DynamicResource AmCard}"
+                    Margin="16,0,16,10">
+                <VerticalStackLayout Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Grid.Column="0" Spacing="3">
+                            <Label Text="{Binding TaskSummary}" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                            <Label Text="{Binding SaveLocationText}" Style="{DynamicResource AmCaptionText}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1"
+                                Text="清空已结束"
+                                Clicked="OnClearFinishedClicked"
+                                Style="{DynamicResource AmCardActionButton}"
+                                VerticalOptions="Center" />
+                    </Grid>
+
+                    <Label Text="{Binding StatusMessage}"
+                           Style="{DynamicResource AmCaptionText}"
+                           TextColor="{DynamicResource AmPrimary}"
+                           IsVisible="{Binding StatusMessage, Converter={StaticResource HasValue}}" />
+
+                    <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                       IsVisible="{Binding IsBusy}"
+                                       HorizontalOptions="Start"
+                                       HeightRequest="18" />
+                </VerticalStackLayout>
+            </Border>
+
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding Tasks}"
+                            SelectionMode="None">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DownloadTaskItem">
+                        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{DynamicResource AmSurface}">
+                            <Grid Grid.Row="0"
+                                  Padding="16,12"
+                                  ColumnDefinitions="Auto,*,Auto,Auto"
+                                  ColumnSpacing="12">
+                                <Label Grid.Column="0"
+                                       Text="🎵"
+                                       FontSize="18"
+                                       VerticalOptions="Center" />
+
+                                <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                    <Label Text="{Binding Title}" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                                    <Label Text="{Binding Artist}" Style="{DynamicResource AmSubText}" />
+                                    <Label Text="{Binding StateText}"
+                                           Style="{DynamicResource AmCaptionText}"
+                                           LineBreakMode="TailTruncation" />
+                                </VerticalStackLayout>
+
+                                <Button Grid.Column="2"
+                                        Text="重试"
+                                        IsVisible="{Binding CanRetry}"
+                                        Clicked="OnRetryTaskClicked"
+                                        Style="{DynamicResource AmTextButton}"
+                                        WidthRequest="46" />
+
+                                <Button Grid.Column="3"
+                                        Text="✕"
+                                        IsEnabled="{Binding IsRunning, Converter={StaticResource InvertBool}}"
+                                        Clicked="OnRemoveTaskClicked"
+                                        Style="{DynamicResource AmRowMenuButton}" />
+                            </Grid>
+
+                            <BoxView Grid.Row="1" Style="{DynamicResource AmDividerLine}" Margin="46,0,0,0" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout Padding="40,56" Spacing="10">
+                        <Label Text="⬇" FontSize="42" HorizontalOptions="Center" />
+                        <Label Text="还没有下载任务"
+                               FontSize="15"
+                               FontAttributes="Bold"
+                               TextColor="{DynamicResource AmTextPrimary}"
+                               HorizontalOptions="Center" />
+                        <Label Text="在搜索页或曲库里点歌曲右侧「⋯」→「下载到本地」，即可把在线歌曲保存进设备音乐库"
+                               Style="{DynamicResource AmCaptionText}"
+                               HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+            </CollectionView>
+        </Grid>
+
+        <!-- ══ 缓冲缓存 ══ -->
+        <Grid Grid.Row="2" x:Name="CachePanel" RowDefinitions="Auto,*" IsVisible="False">
+
+            <Border Grid.Row="0"
+                    Style="{DynamicResource AmCard}"
+                    Margin="16,0,16,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <VerticalStackLayout Grid.Column="0" Style="{DynamicResource AmRowStack}">
+                        <Label Text="已缓冲音频" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                        <Label Text="{Binding CacheSummary}" Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1"
+                            Text="全部清理"
+                            Clicked="OnClearAllCacheClicked"
+                            Style="{DynamicResource AmCardActionButton}"
+                            VerticalOptions="Center" />
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1">
+                <CollectionView ItemsSource="{Binding CacheFiles}" SelectionMode="None">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CacheFileItem">
+                            <Grid RowDefinitions="Auto,Auto" BackgroundColor="{DynamicResource AmSurface}">
+                                <Grid Grid.Row="0"
+                                      Padding="16,12"
+                                      ColumnDefinitions="Auto,*,Auto,Auto"
+                                      ColumnSpacing="12">
+                                    <Label Grid.Column="0" Text="🎵" FontSize="18" VerticalOptions="Center" />
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                        <Label Text="{Binding Name}" Style="{DynamicResource AmTitleText}" FontSize="14" LineBreakMode="MiddleTruncation" />
+                                        <Label Text="{Binding SourceText}" Style="{DynamicResource AmSubText}" />
+                                    </VerticalStackLayout>
+
+                                    <Label Grid.Column="2"
+                                           Text="{Binding SizeText}"
+                                           Style="{DynamicResource AmCaptionText}"
+                                           VerticalOptions="Center" />
+
+                                    <Button Grid.Column="3"
+                                            Text="🗑"
+                                            Clicked="OnDeleteCacheFileClicked"
+                                            Style="{DynamicResource AmRowMenuButton}" />
+                                </Grid>
+
+                                <BoxView Grid.Row="1" Style="{DynamicResource AmDividerLine}" Margin="46,0,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                    <CollectionView.EmptyView>
+                        <VerticalStackLayout Padding="40,56" Spacing="10">
+                            <Label Text="📁" FontSize="42" HorizontalOptions="Center" />
+                            <Label Text="还没有缓冲文件"
+                                   FontSize="15"
+                                   FontAttributes="Bold"
+                                   TextColor="{DynamicResource AmTextPrimary}"
+                                   HorizontalOptions="Center" />
+                            <Label Text="在线音源播放过的歌曲会缓冲到这里，方便离线续听"
+                                   Style="{DynamicResource AmCaptionText}"
+                                   HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </CollectionView.EmptyView>
+                </CollectionView>
+            </Grid>
+        </Grid>
+    </Grid>
+
+</ContentPage>

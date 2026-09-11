@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.ImportPage"
+             x:DataType="vm:ImportViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="导入音乐"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="🔍"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnScanClicked" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
+
+                <!-- ══════════ 系统扫描 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="18,18">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="系统扫描" Style="{DynamicResource AmSectionTitle}" />
+                        <Label Text="扫描 /Music、/Download 等系统目录里的音频。首次扫描会申请音频读取权限。"
+                               Style="{DynamicResource AmCaptionText}" />
+                        <Button Text="🔍  开始扫描"
+                                Style="{DynamicResource AmPrimaryButton}"
+                                Command="{Binding ScanSystemCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBool}}" />
+                        <Label Text="{Binding HelpText}" Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 自定义目录 ══════════ -->
+                <Label Text="自定义扫描目录" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{DynamicResource AmCard}" Padding="0,4">
+                    <VerticalStackLayout>
+                        <CollectionView ItemsSource="{Binding ExtraDirs}" SelectionMode="None">
+                            <CollectionView.EmptyView>
+                                <Label Text="（还没添加任何自定义目录）"
+                                       Style="{DynamicResource AmCaptionText}"
+                                       HorizontalOptions="Center"
+                                       Margin="0,12" />
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Grid Padding="14,10" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <Label Grid.Column="0"
+                                               Text="{Binding .}"
+                                               Style="{DynamicResource AmTitleText}"
+                                               FontSize="13"
+                                               LineBreakMode="MiddleTruncation"
+                                               VerticalOptions="Center" />
+                                        <Button Grid.Column="1"
+                                                Text="✕"
+                                                Style="{DynamicResource AmRowMenuButton}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ImportViewModel}}, Path=RemoveExtraDirCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Button Text="＋  添加目录"
+                        Style="{DynamicResource AmOutlineButton}"
+                        Command="{Binding AddExtraDirPromptCommand}"
+                        HorizontalOptions="Start" />
+
+                <!-- ══════════ m3u 解析 ══════════ -->
+                <Label Text="m3u 解析" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+
+                <Border Style="{DynamicResource AmCard}" Padding="16,14">
+                    <VerticalStackLayout Spacing="10">
+                        <Editor Text="{Binding M3uText}"
+                                Placeholder="把 .m3u 文件内容贴到这里（每行一个文件绝对路径）…"
+                                AutoSize="TextChanges"
+                                FontSize="12"
+                                HeightRequest="120"
+                                BackgroundColor="{DynamicResource AmBg}" />
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Grid.Column="0"
+                                    Text="解析"
+                                    Style="{DynamicResource AmOutlineButton}"
+                                    Command="{Binding ParseM3uCommand}" />
+                            <Button Grid.Column="1"
+                                    Text="全部入库"
+                                    Style="{DynamicResource AmPrimaryButton}"
+                                    Command="{Binding ApplyImportedCommand}"
+                                    IsEnabled="{Binding Tasks.Count, Converter={StaticResource InvertBool}}" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- 解析出的文件列表 -->
+                <Border Style="{DynamicResource AmCard}" Padding="0,4"
+                        IsVisible="{Binding Tasks.Count, Converter={StaticResource InvertBool}}">
+                    <CollectionView ItemsSource="{Binding Tasks}" SelectionMode="None">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ImportTaskItem">
+                                <Grid Padding="14,8" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                        <Label Text="{Binding DisplayName}" Style="{DynamicResource AmTitleText}" FontSize="13" />
+                                        <Label Text="{Binding SizeText}" Style="{DynamicResource AmCaptionText}" FontSize="11" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1"
+                                           Text="{Binding StatusText}"
+                                           Style="{DynamicResource AmCaptionText}"
+                                           VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </Border>
+
+                <Label Text="{Binding StatusText}"
+                       Style="{DynamicResource AmCaptionText}"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
+             xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             x:Class="AnMusic.Android.ListenTogetherPage"
+             x:DataType="vm:ListenTogetherViewModel"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:HasValueConverter x:Key="HasValue" />
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="一起听"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
+
+                <!-- ══════════ 状态卡 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="18,18">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Border Grid.Column="0"
+                                    WidthRequest="46"
+                                    HeightRequest="46"
+                                    BackgroundColor="{DynamicResource AmPrimarySoft}"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 23"
+                                    VerticalOptions="Center">
+                                <Label Text="🎧"
+                                       FontSize="21"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                <Label Text="一起听" Style="{DynamicResource AmTitleText}" FontSize="16" FontAttributes="Bold" />
+                                <Label Text="{Binding StatusText}" Style="{DynamicResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                           IsVisible="{Binding IsBusy}"
+                                           HorizontalOptions="Start"
+                                           HeightRequest="18" />
+
+                        <BoxView Style="{DynamicResource AmDividerLine}" />
+
+                        <Label Text="与好友同步播放：音源不互通，双方需要各自能播放同一首歌（本地音乐或同一音源插件）。房间最多 4 人，手机与电脑可互相加入。"
+                               Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 未连接：创建 / 加入 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="18,18"
+                        IsVisible="{Binding IsDisconnected}">
+                    <VerticalStackLayout Spacing="14">
+
+                        <Label Text="创建房间" Style="{DynamicResource AmSectionTitle}" />
+                        <Label Text="在自己这台设备上开一个房间，把邀请链接发给好友。"
+                               Style="{DynamicResource AmCaptionText}" />
+                        <Button Text="🎧  创建房间"
+                                Command="{Binding CreateRoomCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBool}}"
+                                Style="{DynamicResource AmPrimaryButton}"
+                                HorizontalOptions="Fill" />
+
+                        <BoxView Style="{DynamicResource AmDividerLine}" Margin="0,4" />
+
+                        <Label Text="加入房间" Style="{DynamicResource AmSectionTitle}" />
+                        <Label Text="粘贴房主发来的邀请链接。"
+                               Style="{DynamicResource AmCaptionText}" />
+                        <Entry Text="{Binding JoinLinkInput}"
+                               Placeholder="anmusic://jointogether/192.168.1.5:58000/abc123"
+                               Style="{DynamicResource AmFieldEntry}"
+                               Keyboard="Url" />
+                        <Button Text="加入"
+                                Command="{Binding JoinRoomCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBool}}"
+                                Style="{DynamicResource AmOutlineButton}"
+                                HorizontalOptions="Fill" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 已连接：邀请链接 + 成员 ══════════ -->
+                <Border Style="{DynamicResource AmCard}" Padding="18,18"
+                        IsVisible="{Binding IsConnected}">
+                    <VerticalStackLayout Spacing="14">
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0"
+                                   Text="{Binding MemberCountText}"
+                                   Style="{DynamicResource AmSectionTitle}"
+                                   VerticalOptions="Center" />
+                            <Button Grid.Column="1"
+                                    Text="断开"
+                                    Command="{Binding DisconnectCommand}"
+                                    Style="{DynamicResource AmCardActionButton}" />
+                        </Grid>
+
+                        <!-- 邀请链接（仅房主展示，成员侧显示的是自己粘贴的链接） -->
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding IsHost}">
+                            <Label Text="邀请链接" Style="{DynamicResource AmCaptionText}" />
+                            <Border Style="{DynamicResource AmChip}" Padding="12,10">
+                                <Label Text="{Binding InviteLink}"
+                                       FontSize="12"
+                                       LineBreakMode="CharacterWrap"
+                                       TextColor="{DynamicResource AmTextSecondary}" />
+                            </Border>
+                            <Button Text="复制邀请链接"
+                                    Command="{Binding CopyLinkCommand}"
+                                    Style="{DynamicResource AmOutlineButton}"
+                                    HorizontalOptions="Fill" />
+                            <Label Text="⚠ 当前只绑定到了本机地址，其它设备可能无法加入（常见于 Windows 缺少网络授权或手机热点隔离）"
+                                   Style="{DynamicResource AmCaptionText}"
+                                   TextColor="{DynamicResource AmDanger}"
+                                   IsVisible="{Binding IsInviteLanReachable, Converter={StaticResource InvertBool}}" />
+                        </VerticalStackLayout>
+
+                        <!-- 成员侧提示 -->
+                        <Label Text="{Binding ClientHint}"
+                               Style="{DynamicResource AmCaptionText}"
+                               IsVisible="{Binding IsClient}" />
+
+                        <BoxView Style="{DynamicResource AmDividerLine}" />
+
+                        <Label Text="房间成员" Style="{DynamicResource AmSectionTitle}" />
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Members}" Spacing="8">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                        <Label Grid.Column="0" Text="👤" FontSize="15" VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               Text="{Binding .}"
+                                               Style="{DynamicResource AmTitleText}"
+                                               FontSize="14" />
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ══════════ 说明 ══════════ -->
+                <Border Style="{DynamicResource AmCard}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="使用须知" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                        <Label Text="• 房主设备负责同步播放状态，成员端会跟随切歌、暂停与进度跳转。"
+                               Style="{DynamicResource AmCaptionText}" />
+                        <Label Text="• 双方需要在同一个局域网内；手机与电脑之间请确认没有被防火墙拦截。"
+                               Style="{DynamicResource AmCaptionText}" />
+                        <Label Text="• 房间无任何人操作时会在 30 秒内保持连接，长时间无心跳的成员会被自动清理。"
+                               Style="{DynamicResource AmCaptionText}" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

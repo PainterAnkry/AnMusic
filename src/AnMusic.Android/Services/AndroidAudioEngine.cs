@@ -92,9 +92,32 @@ public sealed class AndroidAudioEngine : IAudioEngine
     /// <summary>MediaPlayer 不暴露采样率等细节，给出可读的占位描述。</summary>
     public string? FormatDescription => _prepared ? "系统解码器（MediaPlayer）" : null;
 
+    /// <summary>
+    /// 当前音频会话 Id：均衡器等音效组件需要挂到它上面。
+    /// 每次 Reset 后会话会变，所以只能在 Prepare 完成后取，未就绪时返回 -1。
+    /// </summary>
+    public int AudioSessionId
+    {
+        get
+        {
+            try
+            {
+                return _prepared ? _player.AudioSessionId : -1;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+    }
+
+    /// <summary>音频会话就绪（或更换）时触发，均衡器借此重新挂载。</summary>
+    public event EventHandler? AudioSessionReady;
+
     public Task LoadAsync(Track track, CancellationToken ct = default)
     {
-        var path = track.FilePath;
+        // 本地曲目取 FilePath，在线曲目取播放缓冲（由调用方先缓冲好）
+        var path = track.PlayablePath;
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
             throw new FileNotFoundException("音频文件不存在（在线曲目需先缓冲到本地）", path);
 
@@ -226,6 +249,8 @@ public sealed class AndroidAudioEngine : IAudioEngine
             _playWhenPrepared = false;
             Play();
         }
+
+        AudioSessionReady?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSeekComplete(object? sender, EventArgs e) => RaisePosition();

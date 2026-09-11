@@ -5,7 +5,18 @@
 	             android:icon="@mipmap/appicon"
 	             android:roundIcon="@mipmap/appicon_round"
 	             android:supportsRtl="true"
-	             android:label="AnMusic" />
+	             android:label="AnMusic">
+
+		<!-- 应用内更新：把下载到 cache 的 APK 经 content:// 交给系统安装器。
+		     安卓 7.0 起禁止 file:// URI 跨进程传递，必须走 FileProvider。 -->
+		<provider android:name="androidx.core.content.FileProvider"
+		          android:authorities="${applicationId}.fileprovider"
+		          android:exported="false"
+		          android:grantUriPermissions="true">
+			<meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+			           android:resource="@xml/file_paths" />
+		</provider>
+	</application>
 
 	<!-- 在线音源 / 封面 / 歌词需要联网 -->
 	<uses-permission android:name="android.permission.INTERNET" />
@@ -16,10 +27,16 @@
 	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
 	                 android:maxSdkVersion="32" />
 
-	<!-- 后台播放与通知栏媒体控制（MVP 阶段先声明，前台服务在后续迭代启用） -->
+	<!-- 选择头像：安卓 13+ 走系统照片选择器，低版本走存储读取 -->
+	<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+	<!-- 后台播放与通知栏媒体控制 -->
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+	<!-- 应用内更新：允许唤起安装器安装下载好的 APK（安卓 8.0+ 需要） -->
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
 </manifest>

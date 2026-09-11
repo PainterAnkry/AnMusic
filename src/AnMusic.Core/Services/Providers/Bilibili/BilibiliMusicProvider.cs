@@ -88,8 +88,9 @@ public sealed class BilibiliMusicProvider : IOnlineMusicProvider
     /// <summary>将 B 站曲目缓冲为本地可播放文件（已缓存直接复用）。</summary>
     public async Task<string> ResolveToLocalAsync(Track track, CancellationToken ct = default)
     {
-        if (!string.IsNullOrEmpty(track.FilePath) && File.Exists(track.FilePath))
-            return track.FilePath;
+        // 只认播放缓冲：FilePath 是"本地音乐文件"的语义，不能被缓冲路径占用
+        if (!string.IsNullOrEmpty(track.PlaybackCachePath) && File.Exists(track.PlaybackCachePath))
+            return track.PlaybackCachePath;
 
         var bvid = track.Id;
         var info = await _api.GetVideoInfoAsync(bvid, ct);
@@ -99,7 +100,7 @@ public sealed class BilibiliMusicProvider : IOnlineMusicProvider
         var audioUrl = await _api.GetAudioUrlAsync(bvid, info.Cid, ct);
         var localPath = await _api.DownloadAudioAsync(audioUrl, bvid, ct);
 
-        track.FilePath = localPath;
+        track.PlaybackCachePath = localPath;
         return localPath;
     }
 

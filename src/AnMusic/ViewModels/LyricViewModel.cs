@@ -1,7 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using AnMusic.Models;
@@ -119,16 +116,13 @@ public partial class LyricViewModel : ObservableObject
         LyricColorIndex = Math.Clamp(s.LyricColorIndex, 0, 5);
     }
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
-
-    static LyricViewModel()
-    {
-        // 部分翻译接口要求浏览器 UA
-        Http.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
-    }
-
     private string[]? _translations;
+
+    /// <summary>
+    /// 歌词翻译统一走 Core（两端共享同一份实现，并且会套用用户配置的代理）。
+    /// 以前这里是内联实现 + 自建 HttpClient，导致翻译请求绕过代理设置。
+    /// </summary>
+    private readonly LyricTranslationService _translator = new();
 
     public LyricViewModel(IAudioEngine engine, LocalLyricProvider lyricProvider, ILrcParser parser,
         UserSettingsService settingsService, IEnumerable<IOnlineLyricProvider> onlineLyricProviders)
@@ -331,7 +325,7 @@ public partial class LyricViewModel : ObservableObject
             StatusText = "正在翻译歌词…";
             try
             {
-                _translations = await TranslateAsync(Lines.Select(l => l.Text));
+                _translations = await _translator.TranslateAsync(Lines.Select(l => l.Text).ToList());
             }
             catch
             {
@@ -351,81 +345,6 @@ public partial class LyricViewModel : ObservableObject
             Lines[i].Translation = string.IsNullOrWhiteSpace(t) ? null : t;
         }
         IsTranslated = true;
-    }
-
-    /// <summary>调用在线翻译接口批量翻译，返回与行数对齐的译文数组。优先 MyMemory（国内可用、免密钥），失败回退 Google（海外）。</summary>
-    private static async Task<string[]> TranslateAsync(IEnumerable<string> lines)
-    {
-        var text = string.Join("\n", lines);
-        try
-        {
-            return await TranslateViaMyMemoryAsync(text);
-        }
-        catch
-        {
-            // MyMemory 失败（额度用完/网络异常），回退 Google gtx
-            return await TranslateViaGoogleAsync(text);
-        }
-    }
-
-    /// <summary>MyMemory 翻译：免费免密钥，单次限长约 500 字符，按行分块请求；自动检测源语言并保留换行。</summary>
-    private static async Task<string[]> TranslateViaMyMemoryAsync(string text)
-    {
-        var chunks = new List<string>();
-        var sb = new StringBuilder();
-        foreach (var line in text.Split('\n'))
-        {
-            if (sb.Length > 0 && sb.Length + line.Length + 1 > 450)
-            {
-                chunks.Add(sb.ToString());
-                sb.Clear();
-            }
-            if (sb.Length > 0) sb.Append('\n');
-            sb.Append(line);
-        }
-        if (sb.Length > 0) chunks.Add(sb.ToString());
-
-        var parts = new List<string>(chunks.Count);
-        foreach (var chunk in chunks)
-        {
-            var url = "https://api.mymemory.translated.net/get?langpair=Autodetect%7Czh-CN&q="
-                      + Uri.EscapeDataString(chunk);
-            using var resp = await Http.GetAsync(url);
-            resp.EnsureSuccessStatusCode();
-            using var json = JsonDocument.Parse(await resp.Content.ReadAsStreamAsync());
-            var root = json.RootElement;
-
-            if (root.TryGetProperty("quotaFinished", out var quota) && quota.ValueKind == JsonValueKind.True)
-                throw new HttpRequestException("MyMemory 今日免费额度已用完");
-            var status = root.GetProperty("responseStatus");
-            if (status.ValueKind != JsonValueKind.Number || status.GetInt32() != 200)
-                throw new HttpRequestException("MyMemory 翻译失败");
-
-            parts.Add(root.GetProperty("responseData").GetProperty("translatedText").GetString() ?? "");
-        }
-
-        return string.Join("\n", parts)
-            .Replace("\r\n", "\n")
-            .Split('\n');
-    }
-
-    /// <summary>Google 翻译免费接口（海外可用）。</summary>
-    private static async Task<string[]> TranslateViaGoogleAsync(string text)
-    {
-        var url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q="
-                  + Uri.EscapeDataString(text);
-        using var resp = await Http.GetAsync(url);
-        resp.EnsureSuccessStatusCode();
-        await using var stream = await resp.Content.ReadAsStreamAsync();
-        using var json = await JsonDocument.ParseAsync(stream);
-
-        var sb = new StringBuilder();
-        foreach (var seg in json.RootElement[0].EnumerateArray())
-            sb.Append(seg[0].GetString());
-
-        return sb.ToString()
-            .Replace("\r\n", "\n")
-            .Split('\n');
     }
 
     private void OnPositionChanged(object? sender, TimeSpan position)

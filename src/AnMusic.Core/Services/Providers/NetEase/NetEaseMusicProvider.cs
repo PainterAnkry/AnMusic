@@ -83,8 +83,9 @@ public sealed class NetEaseMusicProvider : IOnlineMusicProvider
     /// <summary>将网易云曲目缓冲为本地可播放文件（默认极高音质，失败降级）。</summary>
     public async Task<string> ResolveToLocalAsync(Track track, CancellationToken ct = default)
     {
-        if (!string.IsNullOrEmpty(track.FilePath) && File.Exists(track.FilePath))
-            return track.FilePath;
+        // 只认播放缓冲：FilePath 是"本地音乐文件"的语义，不能被缓冲路径占用
+        if (!string.IsNullOrEmpty(track.PlaybackCachePath) && File.Exists(track.PlaybackCachePath))
+            return track.PlaybackCachePath;
 
         // 尝试 320kbps，失败降级到 128kbps
         var url = await _api.GetPlayUrlAsync(track.Id, (int)AudioQuality.ExHigh, ct)
@@ -93,7 +94,7 @@ public sealed class NetEaseMusicProvider : IOnlineMusicProvider
             throw new NetEaseApiException("该曲目暂无可用音源（可能为 VIP 专属）");
 
         var localPath = await _api.DownloadAudioAsync(url, track.Id, ct);
-        track.FilePath = localPath;
+        track.PlaybackCachePath = localPath;
         return localPath;
     }
 
@@ -103,17 +104,16 @@ public sealed class NetEaseMusicProvider : IOnlineMusicProvider
             [AudioQuality.Standard, AudioQuality.Higher, AudioQuality.ExHigh, AudioQuality.Lossless]);
 
     /// <summary>按指定音质下载。</summary>
+    /// <remarks>
+    /// 这里刻意不复用播放缓冲：用户选了「无损」却拿到刚才在线听时缓存的 320k 就是错的。
+    /// 下载缓存由 <see cref="NetEaseApiClient.DownloadAudioAsync"/> 按「歌曲 + 音质」命名，重复下载仍然只走一次网络。
+    /// </remarks>
     public async Task<string> DownloadAsync(Track track, AudioQuality quality, CancellationToken ct = default)
     {
-        if (!string.IsNullOrEmpty(track.FilePath) && File.Exists(track.FilePath))
-            return track.FilePath;
-
         var url = await _api.GetPlayUrlAsync(track.Id, (int)quality, ct);
         if (string.IsNullOrEmpty(url))
             throw new NetEaseApiException($"该曲目不支持所选音质，尝试其他音质");
 
-        var localPath = await _api.DownloadAudioAsync(url, $"{track.Id}_{(int)quality}", ct);
-        track.FilePath = localPath;
-        return localPath;
+        return await _api.DownloadAudioAsync(url, $"{track.Id}_{(int)quality}", ct);
     }
 }

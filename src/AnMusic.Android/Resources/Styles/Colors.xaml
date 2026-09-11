@@ -3,46 +3,43 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <!-- ══════════════════════════════════════════════════════════════
-         AnMusic 安卓端设计令牌（网易云音乐风格 · 浅色）
+         AnMusic 安卓端颜色令牌 · 默认值（浅色 + 科技蓝）
          ──────────────────────────────────────────────────────────────
-         命名约定：Am* 前缀，避免与 MAUI 默认样式键冲突。
+         这里的值是「启动瞬间的兜底」：App 构造时会立刻调用
+         ThemeService.Apply(...) 把整套颜色按用户所选皮肤覆写一遍。
+
+         界面必须用 {DynamicResource AmXxx} 引用颜色 —— 用 StaticResource
+         会在解析时固化取值，运行时换肤不会生效。
          ══════════════════════════════════════════════════════════════ -->
 
-    <!-- ── 品牌色 ── -->
-    <Color x:Key="AmPrimary">#EC4141</Color>
-    <Color x:Key="AmPrimaryDark">#C73333</Color>
-    <Color x:Key="AmPrimarySoft">#FDECEC</Color>
+    <!-- ── 品牌 / 强调 ── -->
+    <Color x:Key="AmPrimary">#2B7DE9</Color>
+    <Color x:Key="AmPrimaryDark">#2367C4</Color>
+    <Color x:Key="AmPrimaryHover">#4C93F0</Color>
+    <Color x:Key="AmPrimarySoft">#E3EEFC</Color>
+    <Color x:Key="AmAccent">#2B7DE9</Color>
+    <Color x:Key="AmTextOnPrimary">#FFFFFF</Color>
 
     <!-- ── 背景层级（浅 -> 深）── -->
-    <Color x:Key="AmBg">#F5F6F8</Color>
+    <Color x:Key="AmBg">#F6F7F9</Color>
     <Color x:Key="AmSurface">#FFFFFF</Color>
-    <Color x:Key="AmSurfaceAlt">#FAFAFC</Color>
-    <Color x:Key="AmDivider">#EDEDF0</Color>
-    <Color x:Key="AmOverlay">#66000000</Color>
+    <Color x:Key="AmSurfaceAlt">#FAFBFC</Color>
+    <Color x:Key="AmDivider">#EDEEF1</Color>
+    <Color x:Key="AmOverlay">#6B000000</Color>
+    <Color x:Key="AmPlayerBg">#FFFFFF</Color>
+    <Color x:Key="AmChipBg">#F1F2F5</Color>
+    <Color x:Key="AmSkeleton">#ECEDF1</Color>
+    <Color x:Key="AmCoverPlaceholder">#E0E1E6</Color>
 
     <!-- ── 文字层级 ── -->
     <Color x:Key="AmTextPrimary">#1A1A1A</Color>
-    <Color x:Key="AmTextSecondary">#66666E</Color>
-    <Color x:Key="AmTextTertiary">#9E9EA6</Color>
-    <Color x:Key="AmTextOnPrimary">#FFFFFF</Color>
+    <Color x:Key="AmTextSecondary">#5F5F68</Color>
+    <Color x:Key="AmTextTertiary">#9A9AA3</Color>
 
     <!-- ── 功能色 ── -->
-    <Color x:Key="AmAccent">#EC4141</Color>
     <Color x:Key="AmSuccess">#2FB86B</Color>
-    <Color x:Key="AmWarning">#F0A020</Color>
-    <Color x:Key="AmChipBg">#F2F2F5</Color>
-    <Color x:Key="AmSkeleton">#ECECF0</Color>
-
-    <!-- ── 封面占位（无封面时的渐层底）── -->
-    <Color x:Key="AmCoverPlaceholder">#DCDCE2</Color>
-
-    <!-- ── 播放器深色面板（播放详情页用，网易云播放页惯用深色沉浸）── -->
-    <Color x:Key="AmPlayerBg">#F2F3F5</Color>
-
-    <!-- ── 常用 SolidColorBrush ── -->
-    <SolidColorBrush x:Key="AmPrimaryBrush" Color="{StaticResource AmPrimary}" />
-    <SolidColorBrush x:Key="AmBgBrush" Color="{StaticResource AmBg}" />
-    <SolidColorBrush x:Key="AmSurfaceBrush" Color="{StaticResource AmSurface}" />
-    <SolidColorBrush x:Key="AmDividerBrush" Color="{StaticResource AmDivider}" />
+    <Color x:Key="AmWarning">#F59E0B</Color>
+    <Color x:Key="AmDanger">#E5484D</Color>
+    <Color x:Key="AmLike">#E5484D</Color>
 
 </ResourceDictionary>

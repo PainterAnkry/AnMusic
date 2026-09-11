@@ -129,13 +129,15 @@ public sealed class NAudioEngine : IAudioEngine
             CleanupPlayback();
             CurrentTrack = track;
 
-            if (string.IsNullOrEmpty(track.FilePath) || !File.Exists(track.FilePath))
-                throw new FileNotFoundException("音频文件不存在", track.FilePath);
+            // 本地曲目取 FilePath，在线曲目取播放缓冲（由调用方先缓冲好）
+            var path = track.PlayablePath;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                throw new FileNotFoundException("音频文件不存在", path);
 
             ISampleProvider sampleSource;
-            if (IsSupportedByAudioFileReader(track.FilePath))
+            if (IsSupportedByAudioFileReader(path))
             {
-                _audioFileReader = new AudioFileReader(track.FilePath)
+                _audioFileReader = new AudioFileReader(path)
                 {
                     Volume = _isMuted ? 0f : _volume
                 };
@@ -144,7 +146,7 @@ public sealed class NAudioEngine : IAudioEngine
             else
             {
                 // m4s/m4a/aac 等 → Windows Media Foundation（net10.0-windows 可用）
-                _mfReader = new MediaFoundationReader(track.FilePath);
+                _mfReader = new MediaFoundationReader(path);
                 sampleSource = _mfReader.ToSampleProvider();
             }
 

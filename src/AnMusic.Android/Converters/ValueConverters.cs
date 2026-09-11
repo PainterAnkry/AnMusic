@@ -2,8 +2,7 @@ using System.Globalization;
 
 namespace AnMusic.Android.Converters;
 
-/// <summary>
-/// 字符串非空 -> true。用于「有封面才显示 Image、无封面显示占位」这类显隐判断。
+/// <summary>字符串非空 -> true。用于「有封面才显示 Image、无封面显示占位」这类显隐判断。
 /// 支持 <c>ConverterParameter="invert"</c> 取反。
 /// </summary>
 public sealed class HasValueConverter : IValueConverter
@@ -22,6 +21,17 @@ public sealed class HasValueConverter : IValueConverter
 
         return invert ? !hasValue : hasValue;
     }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>字符串非空 -> true（HasValueConverter 别名，更直白）。
+/// 不支持 invert：反转请用 InvertBoolConverter 套一层。</summary>
+public sealed class IsNotEmptyConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is string s ? !string.IsNullOrWhiteSpace(s) : value is not null;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -89,6 +99,19 @@ public sealed class EqualsConverter : IValueConverter
 
         return string.Equals(value.ToString(), parameter.ToString(), StringComparison.OrdinalIgnoreCase);
     }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// bool -> FontAttributes：true 得 Bold，false 得 None。
+/// 用于歌词当前行加粗，以及任何"选中即加粗"的行。
+/// </summary>
+public sealed class BoldWhenTrueConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is true ? FontAttributes.Bold : FontAttributes.None;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

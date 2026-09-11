@@ -55,6 +55,36 @@ public static class UpdateFeed
         return setupUrl is not null ? (setupUrl, setupName) : (portableUrl, portableName);
     }
 
+    /// <summary>
+    /// 按文件扩展名从 assets 里挑选下载地址（安卓端用它找 .apk）。
+    /// 桌面端找 .exe 有 Setup/Portable 之分，安卓端只有单一 APK，不必分优先级，
+    /// 取第一个匹配的即可。
+    /// </summary>
+    public static (string? Url, string? Name) PickAssetByExtension(JsonElement release, string extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension)) return (null, null);
+
+        var suffix = extension.StartsWith('.') ? extension : "." + extension;
+
+        if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            return (null, null);
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (asset.ValueKind != JsonValueKind.Object) continue;
+
+            var name = asset.TryGetProperty("name", out var nameElement) ? nameElement.GetString() ?? "" : "";
+            if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var url = asset.TryGetProperty("browser_download_url", out var urlElement) ? urlElement.GetString() : null;
+            if (string.IsNullOrEmpty(url)) continue;
+
+            return (url, name);
+        }
+
+        return (null, null);
+    }
+
     /// <summary>candidate 是否比 current 新（按 x.y.z 逐段数字比较，缺失段按 0）。</summary>
     public static bool IsNewer(string? candidate, string? current)
     {
