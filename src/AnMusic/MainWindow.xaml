@@ -44,6 +44,9 @@
             <Setter Property="Foreground" Value="{DynamicResource FgNormal}"/>
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <!-- 高 DPI 下按设备像素对齐：行高/封面圆角不会因小数坐标被"顶平" -->
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>
@@ -1429,26 +1432,30 @@
                           ContextMenuOpening="TrackList_ContextMenuOpening">
                 <ListView.View>
                     <GridView>
-                        <GridViewColumn Width="50" Header="">
+                        <GridViewColumn Width="54" Header="">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <!-- 固定 40x40 封面框：无封面时显示占位符，保证始终可点击进歌词 -->
-                                    <Border CornerRadius="4" Width="40" Height="40" Cursor="Hand"
+                                    <!-- 固定 40x40 封面框：无封面时显示占位符，保证始终可点击进歌词。
+                                         右边留 2px 余量 + 用 Rectangle 的 RadiusX/RadiusY 画封面：
+                                         高 DPI（125%/150%）下像素舍入会让贴着单元格边缘的圆角"顶平"，
+                                         留出余量后四角都能保住。 -->
+                                    <Border Width="40" Height="40" Cursor="Hand" CornerRadius="4"
                                             Background="{DynamicResource BgControl}"
+                                            UseLayoutRounding="True" SnapsToDevicePixels="True"
+                                            Margin="0,0,2,0"
                                             MouseLeftButtonDown="CoverImage_Click"
                                             ToolTip="点击封面打开/关闭歌词">
                                         <Grid>
                                             <TextBlock Text="🎵" FontSize="18"
                                                        Foreground="{DynamicResource FgMuted}"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            <!-- 封面走圆角 Border 的背景（ImageBrush 一定被圆角裁掉四角） -->
-                                            <Border CornerRadius="4"
-                                                    Visibility="{Binding CoverKey, Converter={StaticResource StrNotEmptyToVis}}">
-                                                <Border.Background>
+                                            <Rectangle RadiusX="4" RadiusY="4"
+                                                       Visibility="{Binding CoverKey, Converter={StaticResource StrNotEmptyToVis}}">
+                                                <Rectangle.Fill>
                                                     <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
                                                                 ImageSource="{Binding CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=96}"/>
-                                                </Border.Background>
-                                            </Border>
+                                                </Rectangle.Fill>
+                                            </Rectangle>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
