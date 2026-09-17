@@ -953,9 +953,10 @@
             </Grid>
         </Border>
 
-        <!-- 顶部工具栏：品牌 + 搜索框 + 来源切换 + 设置 -->
+        <!-- 顶部工具栏：品牌 + 搜索框 + 来源切换 + 设置（歌词页/播放器模式下收起） -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource BgPanel}" Padding="16,10"
-                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,0,0,1">
+                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,0,0,1"
+                Visibility="{Binding IsMainChromeVisible, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -1059,9 +1060,10 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 左侧边栏（MusicFree 风格） -->
+            <!-- 左侧边栏（MusicFree 风格）；歌词页/播放器模式下收起 -->
             <Border Grid.Column="0" Background="{DynamicResource BgPanel}"
-                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,0,1,0">
+                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,0,1,0"
+                    Visibility="{Binding IsMainChromeVisible, Converter={StaticResource BoolToVis}}">
                 <DockPanel Margin="8,10,8,10">
                     <!-- 我的歌单标题 + 新建/导入 -->
                     <DockPanel DockPanel.Dock="Bottom" Margin="4,14,4,4">
@@ -1134,17 +1136,24 @@
                                         <DockPanel>
                                             <!-- 封面：自定义封面优先，否则用最近添加的歌曲封面（随封面缓存异步刷新） -->
                                             <Border DockPanel.Dock="Left" Width="26" Height="26" CornerRadius="4"
-                                                    Background="{DynamicResource BgControl}" Margin="0,0,8,0"
-                                                    ClipToBounds="True">
+                                                    Background="{DynamicResource BgControl}" Margin="0,0,8,0">
                                                 <Grid>
                                                     <TextBlock Text="🎵" FontSize="11" Foreground="{DynamicResource FgMuted}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    <Image Source="{Binding DefaultCoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=64}"
-                                                           Stretch="UniformToFill"
-                                                           Visibility="{Binding CoverPath, Converter={StaticResource StrNotEmptyToCollapsed}}"/>
-                                                    <Image Source="{Binding CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=64}"
-                                                           Stretch="UniformToFill"
-                                                           Visibility="{Binding CoverPath, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                                    <Border CornerRadius="4"
+                                                            Visibility="{Binding CoverPath, Converter={StaticResource StrNotEmptyToCollapsed}}">
+                                                        <Border.Background>
+                                                            <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                        ImageSource="{Binding DefaultCoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=64}"/>
+                                                        </Border.Background>
+                                                    </Border>
+                                                    <Border CornerRadius="4"
+                                                            Visibility="{Binding CoverPath, Converter={StaticResource StrNotEmptyToVis}}">
+                                                        <Border.Background>
+                                                            <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                        ImageSource="{Binding CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=64}"/>
+                                                        </Border.Background>
+                                                    </Border>
                                                 </Grid>
                                             </Border>
                                             <TextBlock Text="{Binding Name}" Foreground="{DynamicResource FgNormal}"
@@ -1352,10 +1361,10 @@
                             <TextBlock Text="{Binding CurrentTracks.Count, StringFormat={}{0} 首}" FontSize="12"
                                        Foreground="{DynamicResource FgMuted}" VerticalAlignment="Center" Margin="10,2,0,0"
                                        Visibility="{Binding IsHomeView, Converter={StaticResource InvBoolToVis}}"/>
-                            <!-- 按时段问候（早/中/晚，随时间自动刷新） -->
+                            <!-- 按时段问候（清晨/午后/黄昏/深夜，随时间自动刷新） -->
                             <TextBlock Text="{Binding Greeting}" FontSize="12" TextTrimming="CharacterEllipsis"
                                        Foreground="{DynamicResource FgMuted}" VerticalAlignment="Center"
-                                       Margin="16,2,12,0" MaxWidth="260" ToolTip="{Binding Greeting}"/>
+                                       Margin="16,2,12,0" MaxWidth="360" ToolTip="{Binding Greeting}"/>
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -1432,9 +1441,14 @@
                                             <TextBlock Text="🎵" FontSize="18"
                                                        Foreground="{DynamicResource FgMuted}"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            <Image Source="{Binding CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=96}"
-                                                   Width="40" Height="40" Stretch="Uniform"
-                                                   Visibility="{Binding CoverKey, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                            <!-- 封面走圆角 Border 的背景（ImageBrush 一定被圆角裁掉四角） -->
+                                            <Border CornerRadius="4"
+                                                    Visibility="{Binding CoverKey, Converter={StaticResource StrNotEmptyToVis}}">
+                                                <Border.Background>
+                                                    <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                ImageSource="{Binding CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=96}"/>
+                                                </Border.Background>
+                                            </Border>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -1551,17 +1565,26 @@
                                 <DataTemplate>
                                     <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
                                             Click="HomeCard_Click" ToolTip="{Binding Description}">
-                                        <Border Height="116" CornerRadius="8" Background="{DynamicResource BgControl}"
-                                                ClipToBounds="True">
+                                        <Border Height="116" CornerRadius="8" Background="{DynamicResource BgControl}">
                                             <Grid>
-                                                <!-- 封面：有曲目封面用曲目封面，否则用内置设计图（不出现空卡片） -->
-                                                <Image Source="{Binding DefaultCover, Converter={StaticResource PathToImageConv}, ConverterParameter=240}"
-                                                       Stretch="UniformToFill"/>
-                                                <Image Source="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=240}"
-                                                       Stretch="UniformToFill"
-                                                       Visibility="{Binding CoverTrack.CoverKey, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                                <!-- 封面一律画在"圆角 Border 的背景"上：
+                                                     WPF 的 ClipToBounds 不会按圆角裁剪子元素，
+                                                     直接放 Image 会四角发方、UniformToFill 时还会溢出边框 -->
+                                                <Border CornerRadius="8">
+                                                    <Border.Background>
+                                                        <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                    ImageSource="{Binding DefaultCover, Converter={StaticResource PathToImageConv}, ConverterParameter=240}"/>
+                                                    </Border.Background>
+                                                </Border>
+                                                <Border CornerRadius="8"
+                                                        Visibility="{Binding CoverTrack.CoverKey, Converter={StaticResource StrNotEmptyToVis}}">
+                                                    <Border.Background>
+                                                        <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                    ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=240}"/>
+                                                    </Border.Background>
+                                                </Border>
                                                 <!-- 底部渐暗，保证文字可读又不压掉封面 -->
-                                                <Border>
+                                                <Border CornerRadius="8">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                                             <GradientStop Color="#33000000" Offset="0"/>
@@ -1615,9 +1638,13 @@
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel HorizontalAlignment="Left">
-                                            <Border Width="148" Height="148" CornerRadius="8"
-                                                    Background="{DynamicResource BgControl}" ClipToBounds="True">
-                                                <Grid>
+                                            <!-- Viewbox：封面始终是正方形、随列宽自适应，六张大小一致也不会溢出 -->
+                                            <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
+                                                <Grid Width="150" Height="150">
+                                                    <!-- 占位底色 -->
+                                                    <Border CornerRadius="8" Background="{DynamicResource BgControl}"/>
+                                                    <TextBlock Text="🎵" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     <!-- 占位卡（新建歌单）：虚线框 + 大加号 -->
                                                     <Border BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="1"
                                                             CornerRadius="8">
@@ -1632,27 +1659,33 @@
                                                             </Style>
                                                         </Border.Style>
                                                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                            <TextBlock Text="＋" FontSize="26" HorizontalAlignment="Center"
+                                                            <TextBlock Text="＋" FontSize="30" HorizontalAlignment="Center"
                                                                        Foreground="{DynamicResource FgMuted}"/>
-                                                            <TextBlock Text="新建歌单" FontSize="11" Margin="0,2,0,0"
+                                                            <TextBlock Text="新建歌单" FontSize="12" Margin="0,3,0,0"
                                                                        Foreground="{DynamicResource FgMuted}"/>
                                                         </StackPanel>
                                                     </Border>
                                                     <!-- 默认封面 = 最近添加的那首歌；自定义封面优先 -->
-                                                    <Image Source="{Binding Playlist.DefaultCoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
-                                                           Stretch="UniformToFill"
-                                                           Visibility="{Binding Playlist.CoverPath, Converter={StaticResource StrNotEmptyToCollapsed}}"/>
-                                                    <Image Source="{Binding Playlist.CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
-                                                           Stretch="UniformToFill"
-                                                           Visibility="{Binding Playlist.CoverPath, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                                    <Border CornerRadius="8"
+                                                            Visibility="{Binding Playlist.CoverPath, Converter={StaticResource StrNotEmptyToCollapsed}}">
+                                                        <Border.Background>
+                                                            <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                        ImageSource="{Binding Playlist.DefaultCoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                        </Border.Background>
+                                                    </Border>
+                                                    <Border CornerRadius="8"
+                                                            Visibility="{Binding Playlist.CoverPath, Converter={StaticResource StrNotEmptyToVis}}">
+                                                        <Border.Background>
+                                                            <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                        ImageSource="{Binding Playlist.CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                        </Border.Background>
+                                                    </Border>
                                                 </Grid>
-                                            </Border>
+                                            </Viewbox>
                                             <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
-                                                       FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"
-                                                       MaxWidth="148"/>
+                                                       FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                       FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"
-                                                       MaxWidth="148"/>
+                                                       FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>
@@ -1677,21 +1710,23 @@
                                     <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
                                             Click="HomeCard_Click" ToolTip="{Binding Title}">
                                         <StackPanel HorizontalAlignment="Left">
-                                            <Border Width="148" Height="148" CornerRadius="8"
-                                                    Background="{DynamicResource BgControl}" ClipToBounds="True">
-                                                <Grid>
-                                                    <TextBlock Text="🎵" FontSize="24" Foreground="{DynamicResource FgMuted}"
+                                            <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
+                                                <Grid Width="150" Height="150">
+                                                    <Border CornerRadius="8" Background="{DynamicResource BgControl}"/>
+                                                    <TextBlock Text="🎵" FontSize="26" Foreground="{DynamicResource FgMuted}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    <Image Source="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
-                                                           Stretch="UniformToFill"/>
+                                                    <Border CornerRadius="8">
+                                                        <Border.Background>
+                                                            <ImageBrush Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"
+                                                                        ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                        </Border.Background>
+                                                    </Border>
                                                 </Grid>
-                                            </Border>
+                                            </Viewbox>
                                             <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
-                                                       FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"
-                                                       MaxWidth="148"/>
+                                                       FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                       FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"
-                                                       MaxWidth="148"/>
+                                                       FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>
@@ -1849,9 +1884,11 @@
             <pages:SettingsPage Grid.Column="1" x:Name="SettingsPageHost" DataContext="{Binding Settings}"
                                 Visibility="{Binding DataContext.IsShowingSettings, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
 
-            <!-- 歌词页覆盖层（默认隐藏，点击左下封面/列表封面切换，覆盖内容区）
-                 布局：左侧黑胶唱片（播放时缓缓旋转）+ 右侧曲目信息与歌词 -->
-            <Border Grid.Column="1" x:Name="LyricsOverlay" Background="{DynamicResource BgMainAlpha}"
+            <!-- 歌词页覆盖层（默认隐藏，点击左下封面/列表封面切换）
+                 整块盖住内容区（含侧边栏，ColumnSpan=2），只留顶部标题栏与下方播放条，
+                 和"播放器模式"一致；布局：左侧黑胶唱片（播放时缓缓旋转）+ 右侧曲目信息与歌词 -->
+            <Border Grid.Column="0" Grid.ColumnSpan="2" x:Name="LyricsOverlay"
+                    Background="{DynamicResource BgMainAlpha}"
                     Visibility="{Binding IsLyricsOpen, Converter={StaticResource BoolToVis}}">
                 <DockPanel>
                     <!-- 顶部：收起 + 来源 + 既有工具（搜索歌词/字号/颜色/翻译/关闭） -->

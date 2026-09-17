@@ -20,8 +20,8 @@
 		     与 GitHub Release 的 tag 比对，落后会导致装完最新包仍提示有更新。
 		     ApplicationVersion 是给安卓用的单调递增整数，每次发版必须 +1，
 		     否则同版本号的 APK 装不上（INSTALL_FAILED_VERSION_DOWNGRADE）。 -->
-		<ApplicationDisplayVersion>3.3.4</ApplicationDisplayVersion>
-		<ApplicationVersion>8</ApplicationVersion>
+		<ApplicationDisplayVersion>3.3.5</ApplicationDisplayVersion>
+		<ApplicationVersion>9</ApplicationVersion>
 
 		<SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
 

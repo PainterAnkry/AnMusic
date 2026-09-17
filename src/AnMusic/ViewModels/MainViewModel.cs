@@ -136,6 +136,15 @@ public partial class MainViewModel : ObservableObject
     /// <summary>内容区（标题行/状态条/列表）是否可见：设置页或歌词页打开时整体隐藏，避免下层内容透过半透明页面显示。</summary>
     public bool IsContentAreaVisible => !IsShowingSettings && !IsLyricsOpen;
 
+    /// <summary>
+    /// 顶部工具栏与侧边栏是否可见。
+    /// </summary>
+    /// <remarks>
+    /// 歌词页要像"播放器模式"那样铺满（只留下方播放条），所以打开歌词时把这两块外壳收起来；
+    /// 只靠半透明遮罩盖住的话，深色侧边栏会透过遮罩显出一层"鬼影"。
+    /// </remarks>
+    public bool IsMainChromeVisible => !IsLyricsOpen;
+
     /// <summary>当前播放曲目是否已收藏（我喜欢）。</summary>
     public bool IsCurrentFavorited =>
         _playbackBar.CurrentTrack is { } t &&
@@ -252,6 +261,7 @@ public partial class MainViewModel : ObservableObject
         // 歌词遮罩是半透明的，若设置页仍显示会透过遮罩露出：打开歌词时同步收起设置页
         if (value && IsShowingSettings) IsShowingSettings = false;
         OnPropertyChanged(nameof(IsContentAreaVisible));
+        OnPropertyChanged(nameof(IsMainChromeVisible));
     }
 
     /// <summary>搜索结果（在线源分页时仅展示已“放行”的部分，池见 _searchPool）。</summary>
@@ -356,19 +366,65 @@ public partial class MainViewModel : ObservableObject
     public bool IsTrackListVisible =>
         !IsShowingSettings && ViewMode is not (ViewMode.Downloads or ViewMode.Home);
 
-    /// <summary>按时段的小问候（早安 / 中午好 / 晚安），显示在内容区标题右侧。</summary>
+    /// <summary>按时段的小问候（清晨 / 午后 / 黄昏 / 深夜），显示在内容区标题右侧。</summary>
     [ObservableProperty]
     private string _greeting = "";
 
-    /// <summary>按当前时间刷新问候语。</summary>
+    /// <summary>各时段的问候文案池（抒情向，和音乐有关，不堆砌功能说明）。</summary>
+    private static readonly string[] MorningGreetings =
+    [
+        "早安 ☀️ 清晨的风里，先放一首慢歌",
+        "早安 🌤 让第一段旋律，替今天开个好头",
+        "早安 ☀️ 窗外的光刚刚好，配一首温柔的歌",
+        "早安 🌱 新的一天，从一段前奏开始",
+        "早安 🎧 把耳机戴上，世界就安静了",
+    ];
+
+    private static readonly string[] NoonGreetings =
+    [
+        "午后好 🌤 阳光正暖，来点轻快的旋律",
+        "午后好 ☕ 一杯茶，一首歌，刚好",
+        "午后好 🌿 让音乐铺满这段无所事事的时光",
+        "午后好 🎧 把喧嚣调到静音，只剩耳边这一首",
+        "午后好 🍃 慢一点，歌还没唱完",
+    ];
+
+    private static readonly string[] DuskGreetings =
+    [
+        "傍晚好 🌇 天色渐暗，正好听一首有故事的歌",
+        "傍晚好 🌆 落日与晚风，都该配一段旋律",
+        "傍晚好 🌉 让今天的疲惫，在副歌里散掉",
+        "傍晚好 🍂 黄昏很短，单曲循环很长",
+    ];
+
+    private static readonly string[] NightGreetings =
+    [
+        "夜深了 🌙 把音量调小一点，把心事交给歌",
+        "夜深了 ✨ 适合一首慢歌，和一段不被打扰的安静",
+        "夜深了 🌌 灯关掉，音响留着",
+        "夜深了 🌙 歌词好像比白天更懂你一些",
+        "夜深了 🎶 再听一首，就去睡",
+    ];
+
+    /// <summary>
+    /// 按当前时段刷新问候语。
+    /// </summary>
+    /// <remarks>
+    /// 同一天、同一时段内保持同一句：问候每 5 分钟会重算一次（为了跨时段自动切换），
+    /// 若每次随机，文案会在界面上乱跳。
+    /// </remarks>
     public void RefreshGreeting()
     {
-        Greeting = DateTime.Now.Hour switch
+        var (slot, pool) = DateTime.Now.Hour switch
         {
-            >= 5 and < 11 => "早安 ☀️ 新的一天，从一首歌开始",
-            >= 11 and < 18 => "中午好 🌤 来点轻快的音乐吧",
-            _ => "晚安 🌙 让音乐陪你放松一下"
+            >= 5 and < 11 => (0, MorningGreetings),
+            >= 11 and < 17 => (1, NoonGreetings),
+            >= 17 and < 21 => (2, DuskGreetings),
+            _ => (3, NightGreetings),
         };
+
+        var index = Math.Abs(DateTime.Now.DayOfYear * 31 + slot) % pool.Length;
+        Greeting = pool[index];
     }
 
     /// <summary>空列表状态引导文案（根据视图模式动态切换）。</summary>

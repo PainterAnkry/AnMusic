@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- 版本号唯一来源：运行时通过程序集读取（见 SettingsViewModel.CurrentVersion） -->
-    <Version>3.3.4</Version>
+    <Version>3.3.5</Version>
     <Product>AnMusic</Product>
     <AssemblyTitle>AnMusic</AssemblyTitle>
     <Company>PainterAnkry</Company>

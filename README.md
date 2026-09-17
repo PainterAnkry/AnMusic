@@ -1,9 +1,9 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.4**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.5**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.4-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.5-orange)
 
 ## 功能特性
 
@@ -136,16 +136,6 @@ dotnet publish src/AnMusic/AnMusic.csproj -c Release -r win-x64 \
 | `maxVersion` | 只发给**不高于**该版本的用户（留空 = 不限，催老版本升级就用它） |
 | `url` / `urlText` | 详情按钮的链接与文案（`url` 留空则不显示按钮） |
 | `pinned` | 置顶（重要公告建议置顶） |
-
-实现细节与注意事项：
-
-- 客户端通过 GitHub contents 接口取这个文件（`Accept: application/vnd.github.raw`），
-  与「检查更新」走同一条网络路径；文件不存在（HTTP 404）按"没有公告"处理，不会报错打扰用户。
-- 未认证请求对本机 IP 有 **60 次/小时**限制，而应用每次启动只取一次，正常使用碰不到。
-- 公告与版本升级提示是**两条独立来源**：一条取不到不影响另一条显示。
-- 「已读」记录只保留最近 100 条公告 Id，长期使用不会无限增长。
-- 想换成**自建服务器 / Gitee 镜像**（国内可达性更好）：设置 → 关于 → 「公告源地址」填你的
-  JSON 完整 URL 即可，不用发新版；留空则回到 GitHub 官方仓库。
 
 ## 项目结构
 
