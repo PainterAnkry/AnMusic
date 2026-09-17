@@ -3,14 +3,44 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
              xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             xmlns:svc="clr-namespace:AnMusic.Android.Services"
              x:Class="AnMusic.Android.PluginsPage"
+             x:Name="ThisPage"
              x:DataType="vm:PluginsViewModel"
              Shell.NavBarIsVisible="False"
              BackgroundColor="{DynamicResource AmBg}">
 
     <ContentPage.Resources>
         <ResourceDictionary>
-            <conv:IsNotEmptyConverter x:Key="IsNotEmpty" />
+            <conv:InvertBoolConverter x:Key="InvertBool" />
+
+            <!-- 音源卡片：白底圆角 16 -->
+            <Style x:Key="PresetCard" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="{DynamicResource AmSurface}" />
+                <Setter Property="StrokeThickness" Value="0" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+                <Setter Property="WidthRequest" Value="160" />
+                <Setter Property="Margin" Value="0,0,12,12" />
+                <Setter Property="Padding" Value="14,14" />
+            </Style>
+
+            <!-- 卡片上的小圆钮 -->
+            <Style x:Key="CardMiniButton" TargetType="Button" BasedOn="{StaticResource AmPrimaryButton}">
+                <Setter Property="HeightRequest" Value="30" />
+                <Setter Property="CornerRadius" Value="15" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontAttributes" Value="None" />
+                <Setter Property="Padding" Value="16,0" />
+                <Setter Property="MinimumWidthRequest" Value="64" />
+            </Style>
+
+            <Style x:Key="CardMiniGhost" TargetType="Button" BasedOn="{StaticResource AmOutlineButton}">
+                <Setter Property="HeightRequest" Value="30" />
+                <Setter Property="CornerRadius" Value="15" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Padding" Value="16,0" />
+                <Setter Property="MinimumWidthRequest" Value="64" />
+            </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -39,79 +69,196 @@
         <ScrollView Grid.Row="1">
             <VerticalStackLayout Padding="16,4,16,28" Spacing="14">
 
-                <!-- ══════════ 粘贴链接安装 ══════════ -->
+                <!-- ══════════ 红色头图 ══════════ -->
+                <Border StrokeThickness="0"
+                        StrokeShape="RoundRectangle 18"
+                        Padding="18,18"
+                        Margin="0,2,0,2">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="{DynamicResource AmPrimary}" Offset="0" />
+                            <GradientStop Color="{DynamicResource AmPrimaryDark}" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout Grid.Column="0" Spacing="6" VerticalOptions="Center">
+                            <Label Text="在线音源"
+                                   FontSize="19"
+                                   FontAttributes="Bold"
+                                   TextColor="#FFFFFF" />
+                            <Label Text="内置 4 大音源，开箱即用&#10;安装社区源还能搜到更多歌曲"
+                                   FontSize="12"
+                                   TextColor="#CCFFFFFF"
+                                   LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="1"
+                               Text="🎵"
+                               FontSize="40"
+                               VerticalOptions="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- ══════════ 音源市场 ══════════ -->
+                <Label Text="音源市场"
+                       Style="{DynamicResource AmSectionTitle}"
+                       Margin="2,2,0,0" />
+
+                <FlexLayout Wrap="Wrap"
+                            Direction="Row"
+                            AlignItems="Start"
+                            BindableLayout.ItemsSource="{x:Static vm:PluginsViewModel.Presets}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PluginPreset">
+                            <Border Style="{StaticResource PresetCard}"
+                                    svc:PressFeedback.IsEnabled="True">
+                                <VerticalStackLayout Spacing="10">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <Border Grid.Column="0"
+                                                WidthRequest="42"
+                                                HeightRequest="42"
+                                                StrokeThickness="0"
+                                                StrokeShape="RoundRectangle 21"
+                                                BackgroundColor="{DynamicResource AmPrimarySoft}">
+                                            <Label Text="{Binding Icon}"
+                                                   FontSize="20"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center" />
+                                        </Border>
+                                        <ActivityIndicator Grid.Column="1"
+                                                           IsRunning="{Binding IsBusy}"
+                                                           IsVisible="{Binding IsBusy}"
+                                                           HorizontalOptions="End"
+                                                           VerticalOptions="Start"
+                                                           WidthRequest="22"
+                                                           HeightRequest="22" />
+                                    </Grid>
+
+                                    <Label Text="{Binding Name}"
+                                           FontSize="15"
+                                           FontAttributes="Bold"
+                                           TextColor="{DynamicResource AmTextPrimary}" />
+                                    <Label Text="{Binding Description}"
+                                           FontSize="11"
+                                           TextColor="{DynamicResource AmTextTertiary}"
+                                           LineBreakMode="WordWrap"
+                                           MinHeight="30" />
+
+                                    <!-- 安装（默认：未安装） -->
+                                    <Button Text="安装"
+                                            Style="{StaticResource CardMiniButton}"
+                                            HorizontalOptions="Start"
+                                            IsVisible="{Binding IsInstalled, Converter={StaticResource InvertBool}}"
+                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.InstallPresetCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <!-- 内置已安装：恢复 -->
+                                    <Button Text="恢复"
+                                            Style="{StaticResource CardMiniGhost}"
+                                            HorizontalOptions="Start"
+                                            IsVisible="{Binding IsInstalled}"
+                                            Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.InstallPresetCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+
+                <!-- ══════════ 自定义链接安装 ══════════ -->
                 <Border Style="{DynamicResource AmCard}" Padding="16,16">
                     <VerticalStackLayout Spacing="10">
-                        <Label Text="安装插件" Style="{DynamicResource AmSectionTitle}" />
-                        <Label Text="AnMusic 不内置在线曲库。从下面粘一个 .js 链接，或选个预设源，应用会立刻下载并加入音源列表。"
+                        <Label Text="从链接安装" Style="{DynamicResource AmSectionTitle}" />
+                        <Label Text="粘贴单个 .js 插件链接，或 plugins.json 订阅链接（批量安装）。"
                                Style="{DynamicResource AmCaptionText}" />
 
                         <Entry x:Name="UrlEntry"
                                Text="{Binding InstallUrl}"
-                               Placeholder="https://.../netease.js"
+                               Placeholder="https://.../plugin.js"
                                Style="{DynamicResource AmFieldEntry}"
                                ReturnType="Send"
                                Completed="OnUrlCompleted" />
 
-                        <Button Text="下载并安装"
-                                Style="{DynamicResource AmPrimaryButton}"
-                                Command="{Binding InstallUrlCommand}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource IsNotEmpty}, ConverterParameter=invert}" />
-
-                        <!-- 预设源：点一下就自动粘到输入框，省得手抄 -->
-                        <Label Text="常用公开源（点击即可填入）" Style="{DynamicResource AmCaptionText}" Margin="0,6,0,0" />
-                        <FlexLayout x:Name="PresetChips" Wrap="Wrap" Direction="Row" BindableLayout.ItemsSource="{x:Static vm:PluginsViewModel.Presets}">
-                            <BindableLayout.ItemTemplate>
-                                <DataTemplate x:DataType="vm:PluginPreset">
-                                    <Border Style="{DynamicResource AmChip}" Margin="0,4,8,0" Padding="12,5">
-                                        <Border.GestureRecognizers>
-                                            <TapGestureRecognizer Tapped="OnPresetTapped" />
-                                        </Border.GestureRecognizers>
-                                        <Label Text="{Binding Name}" Style="{DynamicResource AmChipText}" FontSize="12" />
-                                    </Border>
-                                </DataTemplate>
-                            </BindableLayout.ItemTemplate>
-                        </FlexLayout>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Button Grid.Column="0"
+                                    Text="下载并安装"
+                                    Style="{DynamicResource AmPrimaryButton}"
+                                    Command="{Binding InstallUrlCommand}"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBool}}" />
+                            <Button Grid.Column="1"
+                                    Text="官方订阅"
+                                    Style="{DynamicResource AmGhostButton}"
+                                    WidthRequest="108"
+                                    Command="{Binding UseOfficialSubscriptionCommand}" />
+                        </Grid>
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- ══════════ 已安装列表 ══════════ -->
-                <Label Text="已加载" Style="{DynamicResource AmSectionTitle}" Margin="4,6,0,0" />
+                <!-- ══════════ 已加载列表 ══════════ -->
+                <Grid ColumnDefinitions="*,Auto" Margin="2,4,2,0">
+                    <Label Grid.Column="0" Text="已加载音源" Style="{DynamicResource AmSectionTitle}" />
+                    <Label Grid.Column="1"
+                           Text="{Binding Plugins.Count, StringFormat='{0} 个'}"
+                           Style="{DynamicResource AmCaptionText}"
+                           VerticalOptions="Center" />
+                </Grid>
 
                 <Border Style="{DynamicResource AmCard}" Padding="0,4">
-                    <CollectionView ItemsSource="{Binding Plugins}" SelectionMode="None">
-                        <CollectionView.EmptyView>
-                            <Label Text="（空空如也）"
-                                   Style="{DynamicResource AmCaptionText}"
-                                   HorizontalOptions="Center"
-                                   Margin="0,16,0,16" />
-                        </CollectionView.EmptyView>
-
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PluginItem">
-                                <Grid Padding="14,10" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                    <VerticalStackLayout Grid.Column="0" Spacing="2">
-                                        <Label Text="{Binding DisplayName}" Style="{DynamicResource AmTitleText}" FontSize="14" />
-                                        <Label Text="{Binding FileName}" Style="{DynamicResource AmCaptionText}" FontSize="11" />
-                                    </VerticalStackLayout>
-                                    <Label Grid.Column="1"
-                                           Text="{Binding Version}"
+                    <VerticalStackLayout>
+                        <CollectionView ItemsSource="{Binding Plugins}" SelectionMode="None">
+                            <CollectionView.EmptyView>
+                                <VerticalStackLayout Padding="0,22" Spacing="6">
+                                    <Label Text="🗂" FontSize="34" HorizontalOptions="Center" />
+                                    <Label Text="还没有加载到音源"
                                            Style="{DynamicResource AmCaptionText}"
-                                           VerticalOptions="Center"
-                                           Margin="0,0,6,0" />
-                                    <Button Grid.Column="2"
-                                            Text="🗑"
-                                            Style="{DynamicResource AmRowMenuButton}"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:PluginsViewModel}}, Path=DeletePluginCommand}"
-                                            CommandParameter="{Binding .}" />
-                                </Grid>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
+                                           HorizontalOptions="Center" />
+                                </VerticalStackLayout>
+                            </CollectionView.EmptyView>
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PluginItem">
+                                    <Grid Padding="14,10" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                                        <Border Grid.Column="0"
+                                                WidthRequest="38"
+                                                HeightRequest="38"
+                                                StrokeThickness="0"
+                                                StrokeShape="RoundRectangle 19"
+                                                BackgroundColor="{DynamicResource AmPrimarySoft}">
+                                            <Label Text="🎵"
+                                                   FontSize="16"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center" />
+                                        </Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding DisplayName}"
+                                                   Style="{DynamicResource AmTitleText}"
+                                                   FontSize="14" />
+                                            <Label Text="{Binding FileName}"
+                                                   Style="{DynamicResource AmCaptionText}"
+                                                   FontSize="11" />
+                                        </VerticalStackLayout>
+                                        <Border Grid.Column="2"
+                                                Style="{DynamicResource AmBadge}"
+                                                IsVisible="{Binding IsBuiltIn}"
+                                                VerticalOptions="Center"
+                                                Margin="0,0,2,0">
+                                            <Label Text="内置" Style="{DynamicResource AmBadgeText}" />
+                                        </Border>
+                                        <Button Grid.Column="3"
+                                                Text="🗑"
+                                                Style="{DynamicResource AmRowMenuButton}"
+                                                IsVisible="{Binding IsBuiltIn, Converter={StaticResource InvertBool}}"
+                                                Command="{Binding Source={x:Reference ThisPage}, Path=BindingContext.DeletePluginCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
                 </Border>
 
                 <!-- ══════════ 错误日志 ══════════ -->
-                <Border Style="{DynamicResource AmCard}" Padding="16,14" IsVisible="{Binding HasErrors}">
+                <Border Style="{DynamicResource AmCard}"
+                        Padding="16,14"
+                        IsVisible="{Binding HasErrors}">
                     <VerticalStackLayout Spacing="10">
                         <Grid ColumnDefinitions="*,Auto">
                             <Label Grid.Column="0" Text="加载错误日志" Style="{DynamicResource AmSectionTitle}" />
@@ -131,7 +278,8 @@
 
                 <Label Text="{Binding StatusText}"
                        Style="{DynamicResource AmCaptionText}"
-                       HorizontalTextAlignment="Center" />
+                       HorizontalTextAlignment="Center"
+                       Margin="0,2" />
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

@@ -7,15 +7,16 @@
              d:DesignHeight="400" d:DesignWidth="300"
              Background="Transparent">
     <DockPanel>
+        <!-- 状态说明（暂无歌词 / 已匹配歌词…）：与歌词左对齐 -->
         <TextBlock DockPanel.Dock="Top" Text="{Binding StatusText}"
                    Foreground="{DynamicResource FgMuted}" FontSize="12"
-                   HorizontalAlignment="Center" Margin="0,12,0,8"/>
+                   HorizontalAlignment="Left" Margin="4,0,0,8"/>
 
         <ListBox x:Name="LyricListBox"
                  ItemsSource="{Binding Lines}"
                  SelectedIndex="{Binding CurrentIndex, Mode=OneWay}"
                  Background="Transparent" BorderThickness="0"
-                 Padding="20,8"
+                 Padding="0,8,0,8"
                  FontSize="{Binding LyricFontSize}"
                  Foreground="{Binding LyricForeground}"
                  HorizontalContentAlignment="Stretch"
@@ -27,15 +28,15 @@
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Padding" Value="4,6"/>
-                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                    <Setter Property="Padding" Value="4,7"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
                     <Setter Property="Cursor" Value="Hand"/>
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ListBoxItem">
-                                <ContentPresenter HorizontalAlignment="Center"
+                                <ContentPresenter HorizontalAlignment="Left"
                                                   Margin="{TemplateBinding Padding}"
-                                                  TextBlock.TextAlignment="Center"/>
+                                                  TextBlock.TextAlignment="Left"/>
                             </ControlTemplate>
                         </Setter.Value>
                     </Setter>
@@ -56,15 +57,15 @@
                         <!-- 字号/颜色由 ListBox 继承（可设置），当前行经容器样式覆盖为强调色 -->
                         <TextBlock Text="{Binding Text}"
                                    TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   MaxWidth="320"/>
+                                   TextAlignment="Left"
+                                   MaxWidth="560"/>
                         <!-- 翻译行：有译文时显示在原文下方 -->
                         <TextBlock Text="{Binding Translation}"
                                    FontSize="{Binding DataContext.LyricTranslationFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    Opacity="0.8"
                                    TextWrapping="Wrap"
-                                   TextAlignment="Center"
-                                   MaxWidth="320"
+                                   TextAlignment="Left"
+                                   MaxWidth="560"
                                    Margin="0,2,0,0">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">

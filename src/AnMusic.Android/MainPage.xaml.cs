@@ -7,15 +7,16 @@ using Microsoft.Maui.ApplicationModel.DataTransfer;
 namespace AnMusic.Android;
 
 /// <summary>
-/// 主页面：曲库列表 + 底部迷你播放条。
-/// 需要「取当前项」的交互（列表点击、行内菜单）用事件回调而非纯命令绑定，
-/// 因为 MAUI 的 CollectionView 在 TapGestureRecognizer 下不直接给出 DataContext 之外的上下文。
+/// 主页面：问候头 + 搜索胶囊 + 快捷宫格 + 推荐横幅 + 分段曲库 + 底部迷你播放条。
 /// </summary>
 public partial class MainPage : ContentPage
 {
     private readonly LibraryViewModel _library;
     private readonly PlayerViewModel _player;
     private readonly DownloadViewModel _downloads;
+
+    private (LibraryTab Tab, Button Button)[] _tabs = [];
+    private bool _miniBarShown;
 
     public MainPage(LibraryViewModel library, PlayerViewModel player, DownloadViewModel downloads)
     {
@@ -25,27 +26,65 @@ public partial class MainPage : ContentPage
         _downloads = downloads;
         BindingContext = library;
 
-        // 歌单增删改后刷新胶囊条（增删会改变集合，选中态也要重算）
-        _library.PlaylistsChanged += (_, _) => ApplyPlaylistChipVisual();
-
+        _tabs =
+        [
+            (LibraryTab.All, TabAll),
+            (LibraryTab.Favorites, TabFavorites),
+            (LibraryTab.Recent, TabRecent),
+            (LibraryTab.Recommend, TabRecommend),
+        ];
         ApplyTabVisual();
+
+        _library.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(LibraryViewModel.CurrentTab))
+            {
+                ApplyTabVisual();
+                // 切 Tab 时列表内容轻微淡入（不动 Header，只做透明度）
+                try
+                {
+                    TrackList.CancelAnimations();
+                    TrackList.Opacity = 0.6;
+                    TrackList.FadeToAsync(1, 190, Easing.SinOut);
+                }
+                catch { }
+            }
+        };
+
+        _player.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlayerViewModel.HasTrack)
+                && _player.HasTrack && !_miniBarShown)
+            {
+                _miniBarShown = true;
+                // 迷你播放条第一次出现：自底部滑入 + 淡入
+                try
+                {
+                    MiniBar.Opacity = 0;
+                    MiniBar.TranslationY = 48;
+                    MiniBar.FadeToAsync(1, 260, Easing.SinOut);
+                    MiniBar.TranslateToAsync(0, 0, 280, Easing.CubicOut);
+                }
+                catch { }
+            }
+        };
     }
 
-    /// <summary>页面首次显示时自动扫描一次，省去用户手动点击。</summary>
     protected override async void OnAppearing()
     {
         base.OnAppearing();
         ApplyTabVisual();
-        ApplyPlaylistChipVisual();
 
-        // 启动后第一件事：看一眼有没有上次的崩溃栈要呈给用户
-        await MaybeShowCrashReportAsync();
+        try
+        {
+            await MaybeShowCrashReportAsync();
 
-        if (_library.AllTracks.Count == 0 && !_library.IsScanning)
-            await _library.ScanCommand.ExecuteAsync(null);
+            if (_library.AllTracks.Count == 0 && !_library.IsScanning)
+                await _library.ScanCommand.ExecuteAsync(null);
+        }
+        catch (Exception ex) { AppPaths.LogError("主页加载", ex); }
     }
 
-    /// <summary>每次进程只在第一次 OnAppearing 弹崩溃提示。</summary>
     private static bool _crashPromptShown;
 
     private async Task MaybeShowCrashReportAsync()
@@ -56,7 +95,6 @@ public partial class MainPage : ContentPage
         var pending = CrashReporter.TakePending();
         if (pending is null) return;
 
-        // 弹窗里只显示前面几行，避免超长；完整内容用"复制日志"按钮提供
         var head = string.Join("\n", pending.Value.Content
             .Split('\n')
             .Take(18)
@@ -87,86 +125,60 @@ public partial class MainPage : ContentPage
     private void OnOpenFlyoutClicked(object? sender, EventArgs e)
         => Shell.Current.FlyoutIsPresented = true;
 
-    /// <summary>右上角放大镜：进入独立搜索页（跨音源检索）。</summary>
     private async void OnOpenSearchClicked(object? sender, EventArgs e)
     {
-        try
-        {
-            await Shell.Current.GoToAsync("//SearchPage");
-        }
-        catch (Exception ex)
-        {
-            AppPaths.LogError("打开搜索页", ex);
-        }
+        try { await Shell.Current.GoToAsync("//SearchPage"); }
+        catch (Exception ex) { AppPaths.LogError("打开搜索页", ex); }
+    }
+
+    private async void OnDownloadsTapped(object? sender, TappedEventArgs e)
+    {
+        try { await Shell.Current.GoToAsync("//DownloadsPage"); }
+        catch (Exception ex) { AppPaths.LogError("打开下载页", ex); }
     }
 
     #endregion
 
-    #region 标签页
+    #region 宫格 / 分段 Tab
 
-    private void OnTabAllClicked(object? sender, EventArgs e) => SwitchTab(LibraryTab.All);
-
-    private void OnTabFavoritesClicked(object? sender, EventArgs e) => SwitchTab(LibraryTab.Favorites);
-
-    private void OnTabPlaylistsClicked(object? sender, EventArgs e) => SwitchTab(LibraryTab.Playlists);
-
-    private void OnTabRecentClicked(object? sender, EventArgs e) => SwitchTab(LibraryTab.Recent);
-
-    private void SwitchTab(LibraryTab tab)
+    private void OnQuickTapped(object? sender, TappedEventArgs e)
     {
-        _library.CurrentTab = tab;
-
-        // 切歌单标签时自动选中第一个歌单，避免右侧列表空着让人困惑
-        if (tab == LibraryTab.Playlists && _library.SelectedPlaylist is null && _library.Playlists.Count > 0)
-            _library.SelectedPlaylist = _library.Playlists[0];
-
-        PlaylistStrip.IsVisible = tab == LibraryTab.Playlists;
-        ApplyTabVisual();
-        ApplyPlaylistChipVisual();
+        if (TryParseTab(e.Parameter, out var tab))
+            _library.CurrentTab = tab;
     }
 
-    /// <summary>高亮当前标签：选中项用强调色实底白字，其余透明灰字。</summary>
+    private void OnTabClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button { CommandParameter: string p } && TryParseTab(p, out var tab))
+            _library.CurrentTab = tab;
+    }
+
+    private static bool TryParseTab(object? value, out LibraryTab tab)
+    {
+        tab = LibraryTab.All;
+        if (value is not string s) return false;
+        if (Enum.TryParse<LibraryTab>(s, ignoreCase: true, out var parsed))
+        {
+            tab = parsed;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>分段 Tab 选中态：选中实底白字，未选透明灰字（不重建样式，只改颜色/字重）。</summary>
     private void ApplyTabVisual()
     {
-        Style(TabAllBtn, _library.CurrentTab == LibraryTab.All);
-        Style(TabFavBtn, _library.CurrentTab == LibraryTab.Favorites);
-        Style(TabPlBtn, _library.CurrentTab == LibraryTab.Playlists);
-        Style(TabRecentBtn, _library.CurrentTab == LibraryTab.Recent);
+        var primary = ThemeService.Get("AmPrimary");
+        var secondary = ThemeService.Get("AmTextSecondary");
+        var onPrimary = ThemeService.Get("AmTextOnPrimary");
 
-        static void Style(Button btn, bool active)
+        foreach (var (tab, button) in _tabs)
         {
-            btn.BackgroundColor = active ? ThemeService.Get("AmPrimary") : Colors.Transparent;
-            btn.TextColor = active ? ThemeService.Get("AmTextOnPrimary") : ThemeService.Get("AmTextSecondary");
-            btn.FontAttributes = active ? FontAttributes.Bold : FontAttributes.None;
+            var active = tab == _library.CurrentTab;
+            button.BackgroundColor = active ? primary : Colors.Transparent;
+            button.TextColor = active ? onPrimary : secondary;
+            button.FontAttributes = active ? FontAttributes.Bold : FontAttributes.None;
         }
-    }
-
-    /// <summary>高亮当前选中的歌单胶囊。</summary>
-    private void ApplyPlaylistChipVisual()
-    {
-        var selected = _library.SelectedPlaylist;
-
-        foreach (var child in PlaylistChips.Children)
-        {
-            if (child is not Border chip) continue;
-
-            var isActive = selected is not null &&
-                           chip.BindingContext is Playlist p &&
-                           ReferenceEquals(p, selected);
-
-            chip.BackgroundColor = isActive ? ThemeService.Get("AmPrimary") : ThemeService.Get("AmChipBg");
-
-            if (chip.Content is Label label)
-                label.TextColor = isActive ? ThemeService.Get("AmTextOnPrimary") : ThemeService.Get("AmTextSecondary");
-        }
-    }
-
-    private void OnPlaylistChipTapped(object? sender, TappedEventArgs e)
-    {
-        if ((sender as Element)?.BindingContext is not Playlist playlist) return;
-
-        _library.SelectedPlaylist = playlist;
-        ApplyPlaylistChipVisual();
     }
 
     #endregion
@@ -175,99 +187,71 @@ public partial class MainPage : ContentPage
 
     private async void OnTrackTapped(object? sender, TappedEventArgs e)
     {
-        if ((sender as Element)?.BindingContext is Track track)
+        if ((sender as Element)?.BindingContext is not Track track) return;
+        try
         {
             await _library.PlayTrackCommand.ExecuteAsync(track);
             _player.SetFavoriteState(_library.IsFavorite(track));
         }
+        catch (Exception ex) { AppPaths.LogError("播放曲目", ex); }
     }
 
-    /// <summary>曲目行右侧「⋯」菜单：播放、下一首、喜欢、加入歌单、下载、从歌单移除。</summary>
     private async void OnTrackMenuClicked(object? sender, EventArgs e)
     {
         if ((sender as Element)?.BindingContext is not Track track) return;
 
-        var isFav = _library.IsFavorite(track);
-        // 只按来源判断：在线曲目播过一次后 FilePath 上会有播放缓冲，不能当成"本地已有文件"
-        var isLocal = track.IsLocalTrack;
-
-        var options = new List<string>
+        try
         {
-            "立即播放",
-            "下一首播放",
-            isFav ? "取消喜欢" : "加入我喜欢",
-            "加入歌单",
-        };
+            var isFav = _library.IsFavorite(track);
+            var isLocal = track.IsLocalTrack;
 
-        if (!isLocal) options.Add("下载到本地");
-
-        if (_library.CurrentTab == LibraryTab.Playlists && _library.SelectedPlaylist is not null)
-        {
-            options.Add("从当前歌单移除");
-            options.Add("重命名歌单");
-            options.Add("删除歌单");
-        }
-
-        var action = await DisplayActionSheet(track.Title, "取消", null, options.ToArray());
-        if (string.IsNullOrEmpty(action) || action == "取消") return;
-
-        switch (action)
-        {
-            case "立即播放":
-                await _library.PlayTrackCommand.ExecuteAsync(track);
-                _player.SetFavoriteState(_library.IsFavorite(track));
-                break;
-
-            case "下一首播放":
-                // 队列为空时先把它播起来，否则"下一首"没有落点
-                if (!_player.HasTrack)
-                {
-                    await _library.PlayTrackCommand.ExecuteAsync(track);
-                    break;
-                }
-                _player.InsertNextCommand.Execute(track);
-                break;
-
-            case "加入我喜欢":
-            case "取消喜欢":
-                _library.ToggleFavoriteCommand.Execute(track);
-                _player.SetFavoriteState(_library.IsFavorite(track));
-                ApplyTabVisual();
-                break;
-
-            case "加入歌单":
-                await AddToPlaylistAsync(track);
-                break;
-
-            case "下载到本地":
-                await _downloads.EnqueueAsync(track);
-                break;
-
-            case "从当前歌单移除":
-                _library.RemoveFromPlaylistCommand.Execute(track);
-                ApplyPlaylistChipVisual();
-                break;
-
-            case "重命名歌单":
-                await _library.RenamePlaylistCommand.ExecuteAsync(_library.SelectedPlaylist);
-                ApplyPlaylistChipVisual();
-                break;
-
-            case "删除歌单":
+            var options = new List<string>
             {
-                var target = _library.SelectedPlaylist;
-                if (target is null) break;
-                var confirm = await DisplayAlert("删除歌单", $"确定删除「{target.Name}」吗？此操作不可撤销。", "删除", "取消");
-                if (!confirm) break;
-                _library.DeletePlaylistCommand.Execute(target);
-                PlaylistStrip.IsVisible = _library.CurrentTab == LibraryTab.Playlists;
-                ApplyPlaylistChipVisual();
-                break;
+                "立即播放",
+                "下一首播放",
+                isFav ? "取消喜欢" : "加入我喜欢",
+                "加入歌单",
+            };
+
+            if (!isLocal) options.Add("下载到本地");
+
+            var action = await DisplayActionSheet(track.Title, "取消", null, options.ToArray());
+            if (string.IsNullOrEmpty(action) || action == "取消") return;
+
+            switch (action)
+            {
+                case "立即播放":
+                    await _library.PlayTrackCommand.ExecuteAsync(track);
+                    _player.SetFavoriteState(_library.IsFavorite(track));
+                    break;
+
+                case "下一首播放":
+                    if (!_player.HasTrack)
+                    {
+                        await _library.PlayTrackCommand.ExecuteAsync(track);
+                        break;
+                    }
+                    _player.InsertNextCommand.Execute(track);
+                    break;
+
+                case "加入我喜欢":
+                case "取消喜欢":
+                    _library.ToggleFavoriteCommand.Execute(track);
+                    _player.SetFavoriteState(_library.IsFavorite(track));
+                    break;
+
+                case "加入歌单":
+                    await AddToPlaylistAsync(track);
+                    break;
+
+                case "下载到本地":
+                    await _downloads.EnqueueAsync(track);
+                    break;
             }
         }
+        catch (Exception ex) { AppPaths.LogError("曲目菜单", ex); }
     }
 
-    /// <summary>选择目标歌单（无歌单时提供新建入口）。</summary>
     private async Task AddToPlaylistAsync(Track track)
     {
         var names = _library.Playlists.Select(p => p.Name).ToList();
@@ -289,28 +273,19 @@ public partial class MainPage : ContentPage
         await DisplayAlert("已加入", $"「{track.Title}」已加入「{picked}」", "好");
     }
 
-    private async void OnCreatePlaylistClicked(object? sender, EventArgs e)
-    {
-        var name = await DisplayPromptAsync("新建歌单", "输入歌单名称", "创建", "取消", "我的歌单");
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        _library.CreatePlaylistCommand.Execute(name);
-        ApplyPlaylistChipVisual();
-    }
-
     #endregion
 
-    /// <summary>点击迷你条左侧区域：打开播放详情页。</summary>
     private async void OnMiniPlayerTapped(object? sender, TappedEventArgs e)
     {
         if (!_player.HasTrack) return;
-        await Navigation.PushModalAsync(new PlayerPage(_player));
+        try { await Navigation.PushModalAsync(new PlayerPage(_player)); }
+        catch (Exception ex) { AppPaths.LogError("打开播放页", ex); }
     }
 
-    /// <summary>点击迷你条右侧列表按钮：打开播放详情页并直接展开播放队列。</summary>
     private async void OnOpenQueueClicked(object? sender, EventArgs e)
     {
         if (!_player.HasTrack) return;
-        await Navigation.PushModalAsync(new PlayerPage(_player, startInQueueMode: true));
+        try { await Navigation.PushModalAsync(new PlayerPage(_player, startInQueueMode: true)); }
+        catch (Exception ex) { AppPaths.LogError("打开队列页", ex); }
     }
 }

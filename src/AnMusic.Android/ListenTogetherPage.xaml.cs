@@ -1,4 +1,5 @@
 using AnMusic.Android.ViewModels;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -27,6 +28,7 @@ public partial class ListenTogetherPage : ContentPage
     {
         base.OnDisappearing();
         // 离开页面即断开：房间常驻会一直占用端口和长轮询，用户很难察觉
-        await _vm.CleanupAsync();
+        try { await _vm.CleanupAsync(); }
+        catch (Exception ex) { AppPaths.LogError("一起听清理", ex); }
     }
 }

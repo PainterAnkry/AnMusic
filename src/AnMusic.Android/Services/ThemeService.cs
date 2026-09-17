@@ -29,8 +29,8 @@ public static class ThemeService
     /// <summary>全部皮肤（顺序即设置页展示顺序，与桌面端一致）。</summary>
     public static readonly IReadOnlyList<Skin> Skins =
     [
-        new("Light",     "浅色",   false, "#F6F7F9", "#2B7DE9", 0),
-        new("Dark",      "深色",   true,  "#17191D", "#3B8CFF", 0),
+        new("Light",     "浅色",   false, "#F6F7F9", "#E6212A", 0),
+        new("Dark",      "深色",   true,  "#17191D", "#E6212A", 0),
         new("DeepSpace", "深空蓝", true,  "#0D1420", "#06B6D4", 5),
         new("Midnight",  "午夜紫", true,  "#141020", "#8B5CF6", 1),
         new("Forest",    "护眼绿", false, "#F2F7F0", "#10B981", 2),
@@ -41,7 +41,7 @@ public static class ThemeService
     /// <summary>6 套强调色：主色 / 悬浮色 / 浅底色（与桌面端同一组数值）。</summary>
     private static readonly (Color Accent, Color Hover, Color Soft)[] AccentPalettes =
     [
-        (Color.FromArgb("#2B7DE9"), Color.FromArgb("#4C93F0"), Color.FromArgb("#E3EEFC")), // 0 科技蓝
+        (Color.FromArgb("#E6212A"), Color.FromArgb("#F04A52"), Color.FromArgb("#FDECEE")), // 0 网易红
         (Color.FromArgb("#7C3AED"), Color.FromArgb("#9561F2"), Color.FromArgb("#ECE3FC")), // 1 暗夜紫
         (Color.FromArgb("#10B981"), Color.FromArgb("#34D399"), Color.FromArgb("#DCF7EA")), // 2 森林绿
         (Color.FromArgb("#F59E0B"), Color.FromArgb("#FBB734"), Color.FromArgb("#FDF2DC")), // 3 日落橙
@@ -51,7 +51,7 @@ public static class ThemeService
 
     /// <summary>强调色显示名（下标即 AccentColorIndex）。</summary>
     public static readonly IReadOnlyList<string> AccentNames =
-        ["科技蓝", "暗夜紫", "森林绿", "日落橙", "玫瑰红", "海洋青"];
+        ["网易红", "暗夜紫", "森林绿", "日落橙", "玫瑰红", "海洋青"];
 
     /// <summary>当前皮肤 Id。</summary>
     public static string CurrentSkinId { get; private set; } = "Light";

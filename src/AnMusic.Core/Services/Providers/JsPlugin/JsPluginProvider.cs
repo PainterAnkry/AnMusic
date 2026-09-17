@@ -1,6 +1,8 @@
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AnMusic.Models;
 using Jint;
 using Jint.Native;
@@ -19,7 +21,37 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
     // 延迟求值：安卓端宿主启动时会重设 DataRoot
     public static string CacheDir => Services.AppPaths.PluginAudioCacheDir;
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    /// <summary>
+    /// 插件共享 Cookie 罐：酷我等源要求 csrf 头与 kw_token Cookie 关联，
+    /// 服务端 Set-Cookie 也需要跨请求保留（由 CookieManager JS 桥读取）。
+    /// </summary>
+    private static readonly CookieContainer SharedCookies = new();
+
+    /// <summary>
+    /// 插件统一 HTTP 客户端：必须开启自动解压——酷狗 mobilecdn 等接口恒返回 gzip，
+    /// 裸 <c>new HttpClient()</c> 不解压会让插件拿到乱码导致解析失败。
+    /// </summary>
+    private static readonly HttpClient Http = new(new HttpClientHandler
+    {
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+        AllowAutoRedirect = true,
+        UseCookies = true,
+        CookieContainer = SharedCookies,
+    })
+    { Timeout = TimeSpan.FromSeconds(30) };
+
+    /// <summary>
+    /// 不自动跟随重定向的客户端：用于手动解析播放地址。
+    /// .NET 出于安全不会自动跟随 https→http 的降级 302（网易云外链正是此形态），
+    /// 需要宿主读出 Location 后自行跳转，否则下载直接抛 302 异常。
+    /// </summary>
+    private static readonly HttpClient NoRedirectHttp = new(new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false,
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
+    })
+    { Timeout = TimeSpan.FromSeconds(30) };
 
     private static readonly JsonSerializerOptions CamelCase = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -77,6 +109,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         var engine = NewEngine(TimeSpan.FromSeconds(15));
         ConfigureRuntime(engine);
         engine.Execute(code);
+        AdaptLegacyFactoryPlugin(engine, code);
         _engine = engine;
 
         _exports = engine.GetValue("module").AsObject().Get("exports");
@@ -91,6 +124,75 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             : Path.GetFileNameWithoutExtension(filePath);
         Version = version.IsString() ? version.AsString() : "";
         DisplayName = Id;
+    }
+
+    /// <summary>
+    /// 兼容旧版「函数包裹」插件：官方 MusicFreePlugins v0.0 分支（netease.js / qq.js /
+    /// kugou.js 等）的文件只声明 <c>function netease(packages) { ... return {...} }</c>，
+    /// 没有 module.exports。MusicFree App 侧由宿主把依赖打包成 packages 调用该工厂函数。
+    /// 这里在检测到空导出时做同样的事：查找顶层工厂函数，用宿主内置依赖组装 packages 后执行，
+    /// 把返回的插件对象挂到 module.exports。现代自带 module.exports 的插件完全不受影响。
+    /// </summary>
+    private static void AdaptLegacyFactoryPlugin(Engine engine, string code)
+    {
+        try
+        {
+            var hasExports = engine.Evaluate(
+                "(function(){var m=module.exports;return !!(m&&(m.platform||(typeof m.search==='function')));})()");
+            if (hasExports.IsBoolean() && hasExports.AsBoolean()) return;
+
+            // 形如：function netease(packages) { —— 取所有候选，逐个按全局函数名探测
+            var candidates = Regex.Matches(code,
+                    @"(?:^|\n)\s*function\s+([A-Za-z_$][\w$]*)\s*\(\s*packages\b",
+                    RegexOptions.Multiline)
+                .Select(m => m.Groups[1].Value)
+                .Distinct()
+                .ToList();
+
+            foreach (var name in candidates)
+            {
+                engine.SetValue("__factoryName", name);
+                var applied = engine.Evaluate("""
+                    (function(){
+                        try {
+                            var fn = globalThis[__factoryName];
+                            if (typeof fn !== 'function') return false;
+                            var packages = {
+                                axios: require('axios'),
+                                CryptoJs: require('crypto-js'),
+                                CryptoJS: require('crypto-js'),
+                                qs: require('qs'),
+                                bigInt: require('big-integer'),
+                                dayjs: require('dayjs'),
+                                cheerio: require('cheerio'),
+                                he: require('he'),
+                                // 酷我等插件用 CookieManager 读写 kw_token；桥接到宿主共享 Cookie 罐
+                                CookieManager: {
+                                    flush: function () { return Promise.resolve(); },
+                                    get: function (u) { return __cookieGetAsync(String(u)).then(function (s) { return s === 'null' ? null : JSON.parse(s); }); },
+                                    set: function (u, k, v) { return __cookieSetAsync(String(u), String(k), String(v)); },
+                                    remove: function (u, k) { return __cookieRemoveAsync(String(u), String(k)); },
+                                    clearAll: function () { return Promise.resolve(); }
+                                }
+                            };
+                            var plugin = fn(packages);
+                            if (plugin && (plugin.platform || typeof plugin.search === 'function')) {
+                                module.exports = plugin;
+                                return true;
+                            }
+                        } catch (e) {
+                            try { __hostLog('旧版插件适配失败(' + __factoryName + '): ' + (e && e.message ? e.message : e)); } catch (e2) {}
+                        }
+                        return false;
+                    })()
+                    """);
+                if (applied.IsBoolean() && applied.AsBoolean()) return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Services.AppPaths.LogError("旧版插件适配", ex);
+        }
     }
 
     /// <summary>构造 Jint 引擎并执行运行时兼容层 + 插件代码（懒加载，仅在首次使用时调用）。</summary>
@@ -125,6 +227,10 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         engine.SetValue("__bytesToString", new Func<int[], string, string>(BytesToString));
         engine.SetValue("__textEncode", new Func<string, int[]>(s => [.. System.Text.Encoding.UTF8.GetBytes(s)]));
         engine.SetValue("__textDecode", new Func<int[], string>(b => System.Text.Encoding.UTF8.GetString(b.Select(i => (byte)i).ToArray())));
+        // CookieManager 宿主桥：酷我等插件依赖 kw_token Cookie 与 csrf 头的关联
+        engine.SetValue("__cookieGetAsync", new Func<string, Task<string>>(CookieGetAsync));
+        engine.SetValue("__cookieSetAsync", new Func<string, string, string, Task>(CookieSetAsync));
+        engine.SetValue("__cookieRemoveAsync", new Func<string, string, Task>(CookieRemoveAsync));
         // setTimeout：记录但不执行。插件常用 setTimeout(reject, 10000) 做超时保护，
         // 引擎内同步立即执行会导致请求被瞬间拒绝（"Timeout of 00:00:10 reached"）。
         // 禁用插件侧超时后由宿主 CallAsync 的 45s 兜底统一处理真实超时。
@@ -451,6 +557,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             using var req = new HttpRequestMessage(new HttpMethod(method), url);
 
             string? reqContentType = null;
+            string? manualCookie = null;
             if (!string.IsNullOrEmpty(headersJson))
             {
                 using var h = JsonDocument.Parse(headersJson);
@@ -458,11 +565,33 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
                 {
                     if (p.Value.ValueKind != JsonValueKind.String) continue;
                     var name = p.Name;
+                    var val = p.Value.GetString() ?? "";
                     if (name.Equals("Content-Type", StringComparison.OrdinalIgnoreCase))
-                        reqContentType = p.Value.GetString(); // content-type 属于 HttpContent，单独取出
+                        reqContentType = val; // content-type 属于 HttpContent，单独取出
+                    else if (name.Equals("Accept-Encoding", StringComparison.OrdinalIgnoreCase))
+                        continue; // 解压交给 HttpClientHandler，插件声明的 br/gzip 交由处理器统一协商
+                    else if (name.Equals("Cookie", StringComparison.OrdinalIgnoreCase))
+                        manualCookie = val;   // UseCookies=true 时手动 Cookie 头会被忽略，转存进 CookieContainer
                     else
-                        req.Headers.TryAddWithoutValidation(name, p.Value.GetString());
+                        req.Headers.TryAddWithoutValidation(name, val);
                 }
+            }
+            if (!string.IsNullOrEmpty(manualCookie))
+            {
+                // 形如 kw_token=ABC; x=y —— 逐对写入请求域，处理器发送时会与容器内已有 Cookie 合并
+                try
+                {
+                    foreach (var pair in manualCookie.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var kv = pair.Trim();
+                        var eq = kv.IndexOf('=');
+                        if (eq <= 0) continue;
+                        var ckName = kv[..eq].Trim();
+                        var ckVal = kv[(eq + 1)..].Trim();
+                        SharedCookies.Add(new Uri(url), new Cookie(ckName, ckVal) { HttpOnly = false });
+                    }
+                }
+                catch { /* 单个 Cookie 写入失败不阻断请求 */ }
             }
             if (!string.IsNullOrEmpty(body) && method is not "GET" and not "HEAD")
                 req.Content = new StringContent(body, System.Text.Encoding.UTF8, reqContentType ?? "application/json");
@@ -504,6 +633,55 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
             File.AppendAllText(logPath, line + Environment.NewLine);
         }
         catch { /* 日志失败不影响请求 */ }
+    }
+
+    /// <summary>把插件传入的域名/URL 归一为 Uri（CookieContainer API 需要完整 Uri）。</summary>
+    private static bool TryCookieUri(string urlOrDomain, out Uri uri)
+    {
+        var s = (urlOrDomain ?? "").Trim();
+        if (!s.Contains("://", StringComparison.Ordinal)) s = "https://" + s.TrimStart('/');
+        return Uri.TryCreate(s, UriKind.Absolute, out uri!);
+    }
+
+    /// <summary>CookieManager.get(url/domain)：返回 MusicFree 形态 { name: { value } } 的 JSON；无 Cookie 返回 null。</summary>
+    private static Task<string> CookieGetAsync(string urlOrDomain)
+    {
+        try
+        {
+            if (TryCookieUri(urlOrDomain, out var uri))
+            {
+                var values = SharedCookies.GetCookies(uri).Cast<Cookie>()
+                    .GroupBy(c => c.Name)
+                    .ToDictionary(g => g.Key, g => g.Last().Value);
+                if (values.Count == 0) return Task.FromResult("null");
+                return Task.FromResult(JsonSerializer.Serialize(
+                    values.ToDictionary(kv => kv.Key, kv => new { value = kv.Value })));
+            }
+        }
+        catch { /* 取 Cookie 失败按无值处理 */ }
+        return Task.FromResult("null");
+    }
+
+    private static Task CookieSetAsync(string urlOrDomain, string name, string value)
+    {
+        try
+        {
+            if (TryCookieUri(urlOrDomain, out var uri) && !string.IsNullOrEmpty(name))
+                SharedCookies.Add(uri, new Cookie(name, value ?? ""));
+        }
+        catch { /* 写 Cookie 失败不影响插件主流程 */ }
+        return Task.CompletedTask;
+    }
+
+    private static Task CookieRemoveAsync(string urlOrDomain, string name)
+    {
+        try
+        {
+            if (TryCookieUri(urlOrDomain, out var uri) && !string.IsNullOrEmpty(name))
+                SharedCookies.Add(uri, new Cookie(name, "") { Expired = true });
+        }
+        catch { /* 忽略 */ }
+        return Task.CompletedTask;
     }
 
     /// <summary>Buffer.from：字符串按 hex/base64/utf8 解码为字节数组。</summary>
@@ -827,6 +1005,7 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         }
 
         url = NormalizeMediaUrl(url);
+        url = await ResolveFinalMediaUrlAsync(url, ct);
 
         Directory.CreateDirectory(CacheDir);
         var ext = GetUrlExtension(url);
@@ -886,6 +1065,37 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
 
     /// <summary>按目标路径的解析并发锁。</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _resolveGates = new();
+
+    /// <summary>
+    /// 手动跟随播放地址的 30x 跳转（允许 https→http 降级，最多 8 跳），
+    /// 返回最终可直接下载的地址。非 30x 响应（含 4xx/5xx）原样返回，交由下载阶段报错。
+    /// </summary>
+    private static async Task<string> ResolveFinalMediaUrlAsync(string url, CancellationToken ct)
+    {
+        var current = url;
+        for (var hop = 0; hop < 8; hop++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, current);
+                req.Headers.UserAgent.ParseAdd(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                using var resp = await NoRedirectHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } location)
+                {
+                    current = new Uri(new Uri(current), location).AbsoluteUri;
+                    continue;
+                }
+            }
+            catch (HttpRequestException)
+            {
+                // 跳转探测失败时直接让下载阶段尝试原地址并给出原生错误
+            }
+            return current;
+        }
+        return current;
+    }
 
     /// <summary>规范插件返回的播放地址（协议相对补全、非法字符转义）。</summary>
     private static string NormalizeMediaUrl(string url)

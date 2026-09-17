@@ -25,7 +25,7 @@
            QueueView  当前播放列表
          顶部与底部控制条常驻，中间区域切换。
          ══════════════════════════════════════════════════════════ -->
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
         <!-- ══ 顶栏 ══ -->
         <Grid Grid.Row="0"
@@ -95,7 +95,7 @@
         </Border>
 
         <!-- ══ 中间可切换区域 ══ -->
-        <Grid Grid.Row="1" Padding="20,8">
+        <Grid Grid.Row="2" Padding="20,8">
 
             <!-- ── ① 封面视图 ── -->
             <VerticalStackLayout x:Name="CoverView"
@@ -107,7 +107,8 @@
                         <TapGestureRecognizer Tapped="OnCoverTapped" />
                     </Grid.GestureRecognizers>
 
-                    <Border WidthRequest="292"
+                    <Border x:Name="DiscBorder"
+                            WidthRequest="292"
                             HeightRequest="292"
                             BackgroundColor="{DynamicResource AmCoverPlaceholder}"
                             StrokeThickness="0"

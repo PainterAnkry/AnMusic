@@ -199,7 +199,10 @@ public partial class EqualizerPage : ContentPage
     }
 
     private async void OnBackClicked(object? sender, EventArgs e)
-        => await Navigation.PopModalAsync();
+    {
+        try { await Navigation.PopModalAsync(); }
+        catch { /* 已经是栈底，忽略 */ }
+    }
 
     #endregion
 }

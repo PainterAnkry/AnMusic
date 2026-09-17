@@ -9,15 +9,16 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AnMusic.Android.ViewModels;
 
-/// <summary>可搜索的音乐来源（本地 + 在线插件）。</summary>
-public sealed class SearchSource
+/// <summary>可搜索的音乐来源（在线插件音源）。</summary>
+public sealed partial class SearchSource : ObservableObject
 {
     public required string Id { get; init; }
     public required string DisplayName { get; init; }
-    public bool IsOnline { get; init; }
 
-    /// <summary>供界面直接绑定的显示名（本地源加个图标前缀）。</summary>
-    public string Label => IsOnline ? DisplayName : $"📁 {DisplayName}";
+    [ObservableProperty] private bool _isSelected;
+
+    /// <summary>供界面直接绑定的显示名。</summary>
+    public string Label => DisplayName;
 }
 
 /// <summary>
@@ -47,6 +48,13 @@ public sealed partial class SearchViewModel : ObservableObject
 
         // 搜索历史是跨端持久化数据（Core 的 userdata.json），与桌面端共用同一份
         foreach (var word in _store.SearchHistory) History.Add(word);
+
+        // 插件是后台异步加载/在插件页安装的：注册中心一变就刷新音源选项，
+        // 不用等用户重进搜索页
+        _registry.ProvidersChanged += () =>
+        {
+            MainThread.BeginInvokeOnMainThread(ReloadSources);
+        };
 
         ReloadSources();
     }
@@ -84,22 +92,35 @@ public sealed partial class SearchViewModel : ObservableObject
         var previousId = SelectedSource?.Id;
 
         Sources.Clear();
-        Sources.Add(new SearchSource { Id = "local-file", DisplayName = "本地音乐", IsOnline = false });
-
         foreach (var provider in _registry.OnlineMusicProviders)
         {
             Sources.Add(new SearchSource
             {
                 Id = provider.Id,
                 DisplayName = provider.DisplayName,
-                IsOnline = true,
             });
         }
 
-        SelectedSource = Sources.FirstOrDefault(s => s.Id == previousId) ?? Sources.FirstOrDefault();
+        var pick = Sources.FirstOrDefault(s => s.Id == previousId) ?? Sources.FirstOrDefault();
+        if (pick is not null) SelectedSource = pick;
+        else SelectedSource = null;
 
-        if (Sources.Count <= 1)
-            StatusText = "未发现在线音源：把音源 .js 插件放入插件目录后重启应用即可出现在这里";
+        SyncSelection();
+
+        if (Sources.Count == 0)
+            StatusText = "未发现在线音源：先到「我的 → 音源插件」安装网易云/QQ/B站等 .js 插件";
+    }
+
+    /// <summary>让当前选中项与集合中的 IsSelected 保持同步（供界面高亮）。</summary>
+    partial void OnSelectedSourceChanged(SearchSource? value)
+    {
+        SyncSelection();
+    }
+
+    private void SyncSelection()
+    {
+        var active = SelectedSource?.Id;
+        foreach (var s in Sources) s.IsSelected = s.Id == active;
     }
 
     /// <summary>当前已加载的插件数（设置页与调试用）。</summary>
@@ -138,7 +159,7 @@ public sealed partial class SearchViewModel : ObservableObject
 
         if (SelectedSource is null)
         {
-            StatusText = "请先选择搜索来源";
+            StatusText = "未发现在线音源：先到「我的 → 音源插件」安装插件";
             return;
         }
 

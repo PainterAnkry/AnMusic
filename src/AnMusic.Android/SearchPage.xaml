@@ -4,6 +4,7 @@
              xmlns:models="clr-namespace:AnMusic.Models;assembly=AnMusic.Core"
              xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
              xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             xmlns:svc="clr-namespace:AnMusic.Android.Services"
              x:Class="AnMusic.Android.SearchPage"
              x:DataType="vm:SearchViewModel"
              Shell.NavBarIsVisible="False"
@@ -71,7 +72,7 @@
                     Command="{Binding SearchCommand}" />
         </Grid>
 
-        <!-- ══ 音源选择 ══ -->
+        <!-- ══ 音源选择：去掉本地，只显示已安装的在线插件源 ══ -->
         <VerticalStackLayout Grid.Row="1" Spacing="6">
             <ScrollView Orientation="Horizontal"
                         HorizontalScrollBarVisibility="Never"
@@ -81,16 +82,37 @@
                                        Spacing="8">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="vm:SearchSource">
-                            <Border Style="{DynamicResource AmChip}"
-                                    HeightRequest="34"
+                            <Border HeightRequest="34"
                                     Padding="14,0"
-                                    VerticalOptions="Center">
+                                    VerticalOptions="Center"
+                                    svc:PressFeedback.IsEnabled="True"
+                                    BackgroundColor="{DynamicResource AmSurface}"
+                                    Stroke="{DynamicResource AmDivider}"
+                                    StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 17">
+                                <Border.Triggers>
+                                    <DataTrigger TargetType="Border"
+                                                 Binding="{Binding IsSelected}"
+                                                 Value="True">
+                                        <Setter Property="BackgroundColor" Value="{DynamicResource AmPrimary}" />
+                                        <Setter Property="Stroke" Value="{DynamicResource AmPrimary}" />
+                                    </DataTrigger>
+                                </Border.Triggers>
                                 <Border.GestureRecognizers>
                                     <TapGestureRecognizer Tapped="OnSourceChipTapped" />
                                 </Border.GestureRecognizers>
                                 <Label Text="{Binding Label}"
-                                       Style="{DynamicResource AmChipText}"
-                                       VerticalOptions="Center" />
+                                       VerticalOptions="Center"
+                                       TextColor="{DynamicResource AmTextPrimary}"
+                                       FontSize="13">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding IsSelected}"
+                                                     Value="True">
+                                            <Setter Property="TextColor" Value="{DynamicResource AmTextOnPrimary}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
                             </Border>
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
@@ -139,12 +161,14 @@
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:Track">
-                        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{DynamicResource AmSurface}">
+                        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{DynamicResource AmBg}">
 
                             <Grid Grid.Row="0"
                                   Padding="16,10"
                                   ColumnDefinitions="Auto,*,Auto,Auto"
-                                  ColumnSpacing="12">
+                                  ColumnSpacing="12"
+                                  svc:PressFeedback.IsEnabled="True"
+                                  svc:PressFeedback.Scale="0.985">
                                 <Grid.GestureRecognizers>
                                     <TapGestureRecognizer Tapped="OnResultTapped" />
                                 </Grid.GestureRecognizers>
@@ -222,7 +246,8 @@
                         <DataTemplate x:DataType="x:String">
                             <Border Style="{DynamicResource AmChip}"
                                     Margin="0,0,8,8"
-                                    Padding="14,7">
+                                    Padding="14,7"
+                                    svc:PressFeedback.IsEnabled="True">
                                 <Border.GestureRecognizers>
                                     <TapGestureRecognizer Tapped="OnHistoryTapped" />
                                 </Border.GestureRecognizers>

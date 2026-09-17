@@ -1,4 +1,5 @@
 using AnMusic.Android.ViewModels;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -20,5 +21,8 @@ public partial class ImportPage : ContentPage
     }
 
     private async void OnScanClicked(object? sender, EventArgs e)
-        => await _vm.ScanSystemCommand.ExecuteAsync(null);
+    {
+        try { await _vm.ScanSystemCommand.ExecuteAsync(null); }
+        catch (Exception ex) { AppPaths.LogError("扫描系统音乐", ex); }
+    }
 }

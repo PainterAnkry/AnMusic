@@ -19,11 +19,12 @@ public enum SearchSource { Local, NetEase, QQMusic, Bilibili }
 
 /// <summary>主内容区显示的视图。</summary>
 /// <remarks>
+/// Home 是启动落地页：把现有功能按卡片摆出来（不引入新功能），见 MainViewModel.Home.cs。
 /// BilibiliParts 是"B 站分P 全集"这类一次性列表：它必须是独立视图 ——
 /// 早期实现复用了 SearchResults，导致从搜索结果点进分P 后再点「返回」，
 /// 目标视图还是 SearchResults（等于原地不动），搜索结果也已经被分P 列表覆盖掉了。
 /// </remarks>
-public enum ViewMode { AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads, BilibiliParts }
+public enum ViewMode { Home, AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads, BilibiliParts }
 
 /// <summary>
 /// 主 ViewModel：装配各子 ViewModel，管理歌单、我喜欢、最近播放、搜索与导航。
@@ -102,7 +103,7 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>当前视图模式。</summary>
     [ObservableProperty]
-    private ViewMode _viewMode = ViewMode.AllTracks;
+    private ViewMode _viewMode = ViewMode.Home;
 
     /// <summary>搜索关键词。</summary>
     [ObservableProperty]
@@ -312,6 +313,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>内容区标题（跟随视图切换）。</summary>
     public string CurrentViewTitle => ViewMode switch
     {
+        ViewMode.Home => "主页",
         ViewMode.SearchResults => "搜索结果",
         ViewMode.Playlist => SelectedPlaylist?.Name ?? "歌单",
         ViewMode.Favorites => "我喜欢",
@@ -325,6 +327,7 @@ public partial class MainViewModel : ObservableObject
     };
 
     /// <summary>侧边栏高亮状态（供 DataTrigger 使用）。</summary>
+    public bool IsHomeView => ViewMode == ViewMode.Home;
     public bool IsAllTracksView => ViewMode == ViewMode.AllTracks;
     public bool IsSearchView => ViewMode == ViewMode.SearchResults;
     public bool IsPlaylistView => ViewMode == ViewMode.Playlist;
@@ -341,8 +344,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>侧边栏「搜索结果」入口是否显示：分P 全集也算搜索这一支，入口不能凭空消失。</summary>
     public bool IsSearchSectionVisible => IsSearchView || IsBilibiliPartsView;
 
-    /// <summary>曲目列表是否可见（设置页/下载页用各自的面板）。</summary>
-    public bool IsTrackListVisible => !IsShowingSettings && ViewMode != ViewMode.Downloads;
+    /// <summary>曲目列表是否可见（设置页/下载页/主页用各自的布局）。</summary>
+    public bool IsTrackListVisible =>
+        !IsShowingSettings && ViewMode is not (ViewMode.Downloads or ViewMode.Home);
 
     /// <summary>按时段的小问候（早安 / 中午好 / 晚安），显示在内容区标题右侧。</summary>
     [ObservableProperty]
@@ -389,11 +393,13 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var empty = (CurrentTracks?.Count ?? 0) == 0 && ViewMode != ViewMode.Downloads;
+        var empty = (CurrentTracks?.Count ?? 0) == 0
+                    && ViewMode is not (ViewMode.Downloads or ViewMode.Home);
         var loading = ViewMode == ViewMode.AllTracks && Library.IsLoading;
 
         EmptyStateText = ViewMode switch
         {
+            ViewMode.Home => "",
             ViewMode.AllTracks => loading
                 ? "正在扫描音乐文件夹…"
                 : "音乐库还是空的\n点击右上角「📂 打开文件夹」选择你的音乐目录",
@@ -420,6 +426,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>当前显示的曲目列表。</summary>
     public System.Collections.IList CurrentTracks => ViewMode switch
     {
+        ViewMode.Home => (System.Collections.IList)System.Array.Empty<Track>(), // 主页是卡片布局，没有曲目列表
         ViewMode.SearchResults => (System.Collections.IList)SearchResults,
         ViewMode.Playlist => (System.Collections.IList?)SelectedPlaylist?.Tracks ?? Library.Tracks,
         ViewMode.Favorites => (System.Collections.IList)Favorites,
@@ -455,11 +462,15 @@ public partial class MainViewModel : ObservableObject
         _miniPlayerWindowFactory = miniPlayerWindowFactory;
         LoadUserData();
 
-        // 空状态响应各数据集合变化
-        foreach (var col in new System.Collections.IList[] { Library.Tracks, Favorites, Recent, RankingTracks, ListeningStatsTracks, RadioTracks, BilibiliPartTracks })
+        // 空状态 + 主页卡片响应各数据集合变化
+        foreach (var col in new System.Collections.IList[] { Library.Tracks, Favorites, Recent, RankingTracks, ListeningStatsTracks, RadioTracks, BilibiliPartTracks, UserPlaylists })
         {
             if (col is System.Collections.Specialized.INotifyCollectionChanged ncc)
-                ncc.CollectionChanged += (_, _) => RefreshEmptyState();
+                ncc.CollectionChanged += (_, _) =>
+                {
+                    RefreshEmptyState();
+                    if (IsHomeView) RefreshHome(); // 主页上的"收藏 N 首/歌单 N 个"要跟着变
+                };
         }
         // 音乐库扫描状态变化时刷新空引导
         Library.PropertyChanged += (_, e) =>
@@ -489,6 +500,8 @@ public partial class MainViewModel : ObservableObject
 
         // 初始视图可能是空音乐库，构造完成后立即算一次空状态
         RefreshEmptyState();
+        // 启动落地页是主页：先把卡片建好（收藏数/歌单/最近播放都来自刚落盘的用户数据）
+        RefreshHome();
 
         // 按时段问候：启动即算一次，之后每小时边界附近自动刷新（跨时段不用重启）
         RefreshGreeting();
@@ -624,10 +637,14 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsListeningStatsView));
         OnPropertyChanged(nameof(IsRadioView));
         OnPropertyChanged(nameof(IsDownloadView));
+        OnPropertyChanged(nameof(IsHomeView));
         OnPropertyChanged(nameof(IsBilibiliPartsView));
         OnPropertyChanged(nameof(IsSearchSectionVisible));
         OnPropertyChanged(nameof(IsTrackListVisible));
         RefreshEmptyState();
+
+        // 进主页时重建卡片：用最新数据（收藏数、歌单封面、最近播放…）
+        if (value == ViewMode.Home) RefreshHome();
     }
 
     partial void OnSelectedPlaylistChanged(Playlist? value)
@@ -658,6 +675,12 @@ public partial class MainViewModel : ObservableObject
         // 各视图自身的加载结果文案在其切换完成后另行写入
         SearchStatus = "";
     }
+
+    /// <summary>
+    /// 侧边栏「主页」入口。
+    /// </summary>
+    [RelayCommand]
+    private void ShowHome() => SetViewMode(ViewMode.Home);
 
     [RelayCommand]
     private void ShowAllTracks() => SetViewMode(ViewMode.AllTracks);

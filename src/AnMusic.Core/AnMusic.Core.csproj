@@ -9,7 +9,7 @@
     <AssemblyName>AnMusic.Core</AssemblyName>
     <Product>AnMusic</Product>
     <Company>PainterAnkry</Company>
-    <Version>3.3.2</Version>
+    <Version>3.3.3</Version>
   </PropertyGroup>
 
   <!-- 插件宿主内置 JS 库（require('crypto-js') 等宿主模块），随 Core 一起发布到各端 -->
@@ -19,6 +19,11 @@
     <EmbeddedResource Include="Assets\Plugins\big-integer.min.js" />
     <EmbeddedResource Include="Assets\Plugins\jsencrypt.min.js" />
     <EmbeddedResource Include="Assets\Plugins\he.min.js" />
+  </ItemGroup>
+
+  <!-- AnMusic 维护的内置音源插件（端点失效时随 App 更新修正），由宿主按开关释放到插件目录 -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Plugins\Builtin\*.js" />
   </ItemGroup>
 
   <ItemGroup>

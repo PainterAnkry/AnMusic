@@ -1,4 +1,4 @@
-﻿using AnMusic.Android.Services;
+using AnMusic.Android.Services;
 using AnMusic.Android.ViewModels;
 using AnMusic.Services;
 using AnMusic.Services.Audio;
@@ -119,6 +119,7 @@ public static class MauiProgram
         services.AddTransient<ListenTogetherPage>();
         services.AddTransient<PluginsPage>();
         services.AddTransient<ImportPage>();
+        services.AddTransient<NotesPage>();
     }
 
     /// <summary>后台加载插件并注册，让在线搜索能命中插件音源。</summary>
@@ -129,6 +130,8 @@ public static class MauiProgram
             var registry = Services.GetRequiredService<ProviderRegistry>();
             var loader = Services.GetRequiredService<JsPluginLoader>();
 
+            // 安卓端释放并启用内置修正版音源（网易云/QQ/酷狗/酷我），保证开箱即能在线搜歌
+            JsPluginLoader.EnableBuiltinPlugins = true;
             var errors = await loader.LoadAllAsync();
             foreach (var err in errors)
                 AppPaths.LogError("加载音源插件", new InvalidOperationException(err));

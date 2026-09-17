@@ -1,13 +1,15 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.2**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.3**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.2-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.3-orange)
 
 ## 功能特性
 
 ### 音乐播放
+- 🏠 **主页**：卡片式落地页——横幅入口（个性电台/排行榜/听歌排行/最近播放/我喜欢）、
+  我的歌单、快捷入口（下载管理/一起听/均衡器/桌面歌词/音源插件），全部由现有功能聚合而来
 - 本地音频播放（mp3 / flac / wav / m4a / aac / wma / ogg），基于 NAudio 3.1
 - **多音源在线搜索**：网易云、QQ音乐、B站（插件源可继续扩展），自动缓冲到本地后播放
 - 搜索结果分页展示：每批 **50 条**，点击**「加载更多」**继续翻页，跨页自动去重
@@ -19,6 +21,8 @@
 - 在线歌曲**下载到本地**（重名自动编号）；全局媒体键；音量/窗口状态记忆
 
 ### 歌词
+- **歌词页（播放器布局）**：左侧黑胶唱片（专辑封面作中心标签，播放时缓缓旋转，暂停即停）+ 右侧曲目信息、
+  快捷操作（收藏/下载/桌面歌词/翻译）与左对齐歌词
 - 自动匹配：本地同名 `.lrc` + LRCLIB 在线歌词库
 - **手动歌词搜索**：输入歌名（支持 `歌名 - 歌手`）在线匹配，命中当前播放曲目即同步装载，其他歌曲以预览展示
 - **桌面歌词**：独立置顶悬浮窗（可拖动/置顶/隐藏）；歌词卡片播放模式

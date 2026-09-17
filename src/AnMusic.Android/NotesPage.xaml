@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="AnMusic.Android.NotesPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{DynamicResource AmBg}">
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ══ 顶栏 ══ -->
+        <Grid Grid.Row="0"
+              Style="{DynamicResource AmTopBar}"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0"
+                    Text="‹"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="26"
+                    Clicked="OnBackClicked" />
+            <Label Grid.Column="1"
+                   Text="笔记"
+                   Style="{DynamicResource AmPageTitle}"
+                   Margin="4,0,0,0" />
+            <Button Grid.Column="2"
+                    Text="☰"
+                    Style="{DynamicResource AmIconButton}"
+                    FontSize="20"
+                    Clicked="OnOpenFlyoutClicked" />
+        </Grid>
+
+        <VerticalStackLayout Grid.Row="1"
+                             VerticalOptions="Center"
+                             HorizontalOptions="Center"
+                             Spacing="12"
+                             Padding="40">
+            <Label Text="📝"
+                   FontSize="52"
+                   HorizontalOptions="Center" />
+            <Label Text="音乐笔记"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   TextColor="{DynamicResource AmTextPrimary}"
+                   HorizontalOptions="Center" />
+            <Label Text="记录听歌心情、专辑短评、歌词摘抄…
+功能正在开发中。"
+                   Style="{DynamicResource AmCaptionText}"
+                   HorizontalTextAlignment="Center" />
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

@@ -1,5 +1,6 @@
 using AnMusic.Android.Services;
 using AnMusic.Android.ViewModels;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -96,16 +97,28 @@ public partial class SettingsPage : ContentPage
     #region 跳转
 
     private async void OnOpenUserPageTapped(object? sender, TappedEventArgs e)
-        => await Shell.Current.GoToAsync("//UserPage");
+    {
+        try { await Shell.Current.GoToAsync("//UserPage"); }
+        catch (Exception ex) { AppPaths.LogError("设置打开用户页", ex); }
+    }
 
     private async void OnOpenEqualizerTapped(object? sender, TappedEventArgs e)
-        => await Navigation.PushModalAsync(new EqualizerPage(MauiProgram.Services.GetService<EqualizerService>()!));
+    {
+        try { await Navigation.PushModalAsync(new EqualizerPage(MauiProgram.Services.GetService<EqualizerService>()!)); }
+        catch (Exception ex) { AppPaths.LogError("设置打开均衡器", ex); }
+    }
 
     private async void OnOpenDownloadsTapped(object? sender, TappedEventArgs e)
-        => await Shell.Current.GoToAsync("//DownloadsPage");
+    {
+        try { await Shell.Current.GoToAsync("//DownloadsPage"); }
+        catch (Exception ex) { AppPaths.LogError("设置打开下载页", ex); }
+    }
 
     private async void OnOpenPluginsClicked(object? sender, TappedEventArgs e)
-        => await Shell.Current.GoToAsync("//PluginsPage");
+    {
+        try { await Shell.Current.GoToAsync("//PluginsPage"); }
+        catch (Exception ex) { AppPaths.LogError("设置打开插件页", ex); }
+    }
 
     #endregion
 
@@ -113,26 +126,30 @@ public partial class SettingsPage : ContentPage
 
     private async void OnSleepTimerTapped(object? sender, EventArgs e)
     {
-        string[] options = ["15 分钟", "30 分钟", "45 分钟", "60 分钟", "播完当前曲目后停止", "取消定时"];
-        var action = await DisplayActionSheet("定时关闭", "返回", null, options);
-
-        switch (action)
+        try
         {
-            case null or "返回":
-                return;
+            string[] options = ["15 分钟", "30 分钟", "45 分钟", "60 分钟", "播完当前曲目后停止", "取消定时"];
+            var action = await DisplayActionSheet("定时关闭", "返回", null, options);
 
-            case "播完当前曲目后停止":
-                _vm.StopAfterCurrentTrack();
-                break;
+            switch (action)
+            {
+                case null or "返回":
+                    return;
 
-            case "取消定时":
-                _vm.ApplySleepTimer(0);
-                break;
+                case "播完当前曲目后停止":
+                    _vm.StopAfterCurrentTrack();
+                    break;
 
-            default:
-                _vm.ApplySleepTimer(int.Parse(action.Split(' ')[0]));
-                break;
+                case "取消定时":
+                    _vm.ApplySleepTimer(0);
+                    break;
+
+                default:
+                    _vm.ApplySleepTimer(int.Parse(action.Split(' ')[0]));
+                    break;
+            }
         }
+        catch (Exception ex) { AppPaths.LogError("设置定时关闭", ex); }
     }
 
     #endregion

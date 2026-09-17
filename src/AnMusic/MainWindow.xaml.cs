@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using AnMusic.Models;
 using AnMusic.Services.Settings;
 using AnMusic.ViewModels;
@@ -71,8 +72,47 @@ public partial class MainWindow : Window
         {
             if (e.PropertyName == nameof(PlaybackBarViewModel.CoverPath))
                 Views.Animations.SwapFade(PlayBarCover, 0.3, 260);
+            // 歌词页的黑胶唱片跟随播放状态转动 / 停住
+            if (e.PropertyName == nameof(PlaybackBarViewModel.IsPlaying))
+                UpdateDiscSpin();
         };
 
+    }
+
+    /// <summary>歌词页黑胶唱片的转动动画（播放中转、暂停即停在当前角度）。</summary>
+    private Storyboard? _discSpin;
+
+    private void UpdateDiscSpin()
+    {
+        if (DiscRotate is null) return; // 歌词页还没构建出来
+
+        if (_viewModel.PlaybackBar.IsPlaying)
+        {
+            _discSpin ??= CreateDiscSpin();
+            _discSpin.Begin(this, true);
+        }
+        else
+        {
+            _discSpin?.Stop(this);
+        }
+    }
+
+    /// <summary>唱片每 24 秒转一圈（够慢，不晃眼）。</summary>
+    private Storyboard CreateDiscSpin()
+    {
+        var spin = new DoubleAnimation
+        {
+            From = 0,
+            To = 360,
+            Duration = new Duration(TimeSpan.FromSeconds(24)),
+            RepeatBehavior = RepeatBehavior.Forever,
+        };
+        Storyboard.SetTarget(spin, DiscRotate);
+        Storyboard.SetTargetProperty(spin, new PropertyPath(nameof(RotateTransform.Angle)));
+
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(spin);
+        return storyboard;
     }
 
     #region 快捷键
@@ -732,6 +772,31 @@ public partial class MainWindow : Window
     {
         MorePopup.IsOpen = false;
         _viewModel.ShareCurrentTrack();
+    }
+
+    /// <summary>
+    /// 主页卡片点击：优先执行卡片自带的既有命令；均衡器 / 一起听这类需要窗口或弹层的入口
+    /// 由这里打开现成的窗口/面板（不新增功能）。
+    /// </summary>
+    private void HomeCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: HomeCard card } element) return;
+        e.Handled = true;
+
+        switch (card.ActionKey)
+        {
+            case "eq":
+                EqButton_Click(element, new RoutedEventArgs());
+                return;
+            case "together":
+                MorePopup.IsOpen = false;
+                ListenTogetherPopup.PlacementTarget = element; // 面板贴着被点的卡片弹出
+                ListenTogetherPopup.IsOpen = true;
+                return;
+        }
+
+        if (card.Command?.CanExecute(card.CommandParameter) == true)
+            card.Command.Execute(card.CommandParameter);
     }
 
     /// <summary>标题栏 🎨 皮肤按钮：开关皮肤选择面板。</summary>

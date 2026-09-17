@@ -194,15 +194,51 @@
         </Grid>
     </Shell.FlyoutContent>
 
-    <ShellContent Route="MainPage" ContentTemplate="{DataTemplate local:MainPage}" />
-    <ShellContent Route="SearchPage" ContentTemplate="{DataTemplate local:SearchPage}" />
+    <!-- ══════════════════════════════════════════════════════════════
+         底部 TabBar：首页 / 搜索 / 笔记 / 我的
+         与左侧 Flyout 共存，Flyout 放全部工具入口，TabBar 放最常用入口。
+         ══════════════════════════════════════════════════════════════ -->
+    <TabBar>
+        <ShellContent Title="首页"
+                      ContentTemplate="{DataTemplate local:MainPage}"
+                      Route="MainPage">
+            <ShellContent.Icon>
+                <FontImageSource Glyph="🏠" Size="22" />
+            </ShellContent.Icon>
+        </ShellContent>
+
+        <ShellContent Title="搜索"
+                      ContentTemplate="{DataTemplate local:SearchPage}"
+                      Route="SearchPage">
+            <ShellContent.Icon>
+                <FontImageSource Glyph="🔍" Size="22" />
+            </ShellContent.Icon>
+        </ShellContent>
+
+        <ShellContent Title="笔记"
+                      ContentTemplate="{DataTemplate local:NotesPage}"
+                      Route="NotesPage">
+            <ShellContent.Icon>
+                <FontImageSource Glyph="📝" Size="22" />
+            </ShellContent.Icon>
+        </ShellContent>
+
+        <ShellContent Title="我的"
+                      ContentTemplate="{DataTemplate local:UserPage}"
+                      Route="UserPage">
+            <ShellContent.Icon>
+                <FontImageSource Glyph="👤" Size="22" />
+            </ShellContent.Icon>
+        </ShellContent>
+    </TabBar>
+
+    <!-- Flyout 也能到达的页面（不被 TabBar 包含） -->
     <ShellContent Route="DiscoverPage" ContentTemplate="{DataTemplate local:DiscoverPage}" />
     <ShellContent Route="StatsPage" ContentTemplate="{DataTemplate local:StatsPage}" />
     <ShellContent Route="ListenTogetherPage" ContentTemplate="{DataTemplate local:ListenTogetherPage}" />
     <ShellContent Route="DownloadsPage" ContentTemplate="{DataTemplate local:DownloadsPage}" />
     <ShellContent Route="PluginsPage" ContentTemplate="{DataTemplate local:PluginsPage}" />
     <ShellContent Route="ImportPage" ContentTemplate="{DataTemplate local:ImportPage}" />
-    <ShellContent Route="UserPage" ContentTemplate="{DataTemplate local:UserPage}" />
     <ShellContent Route="SettingsPage" ContentTemplate="{DataTemplate local:SettingsPage}" />
 
 </Shell>

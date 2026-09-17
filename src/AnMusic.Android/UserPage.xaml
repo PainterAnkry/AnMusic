@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:AnMusic.Models;assembly=AnMusic.Core"
              xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
              xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             xmlns:svc="clr-namespace:AnMusic.Android.Services"
              x:Class="AnMusic.Android.UserPage"
              x:DataType="vm:UserViewModel"
              Shell.NavBarIsVisible="False"
@@ -26,7 +28,7 @@
                     FontSize="26"
                     Clicked="OnBackClicked" />
             <Label Grid.Column="1"
-                   Text="用户中心"
+                   Text="我的"
                    Style="{DynamicResource AmPageTitle}"
                    Margin="4,0,0,0" />
             <Button Grid.Column="2"
@@ -37,26 +39,41 @@
         </Grid>
 
         <ScrollView Grid.Row="1">
-            <VerticalStackLayout Padding="16,28,16,28" Spacing="14">
+            <VerticalStackLayout Spacing="0">
 
-                <!-- ══════════ 资料卡：头像 + 昵称 ══════════ -->
-                <Border Style="{DynamicResource AmCard}" Padding="20,32">
-                    <VerticalStackLayout Spacing="18" HorizontalOptions="Fill">
+                <!-- ══════════ 顶部资料卡（网易云风格红色渐变） ══════════ -->
+                <Grid HeightRequest="260">
+                    <Grid.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#E6212A" Offset="0" />
+                            <GradientStop Color="#C81E26" Offset="1" />
+                        </LinearGradientBrush>
+                    </Grid.Background>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                        <!-- 头像：点击更换，右下角带相机角标 -->
-                        <Grid HorizontalOptions="Center">
+                    <!-- 头像 + 昵称 -->
+                    <VerticalStackLayout Grid.Row="0"
+                                         VerticalOptions="Center"
+                                         HorizontalOptions="Center"
+                                         Spacing="10"
+                                         Margin="0,30,0,0">
+                        <Grid HorizontalOptions="Center"
+                              svc:PressFeedback.IsEnabled="True"
+                              svc:PressFeedback.Scale="0.94">
                             <Grid.GestureRecognizers>
                                 <TapGestureRecognizer Tapped="OnChangeAvatarTapped" />
                             </Grid.GestureRecognizers>
-
-                            <Border WidthRequest="110"
-                                    HeightRequest="110"
+                            <Border WidthRequest="96"
+                                    HeightRequest="96"
                                     BackgroundColor="{DynamicResource AmPrimary}"
                                     StrokeThickness="0"
-                                    StrokeShape="RoundRectangle 55">
+                                    StrokeShape="RoundRectangle 48">
                                 <Grid>
                                     <Label Text="{Binding NicknameInitial}"
-                                           FontSize="42"
+                                           FontSize="36"
                                            FontAttributes="Bold"
                                            TextColor="{DynamicResource AmTextOnPrimary}"
                                            HorizontalOptions="Center"
@@ -64,73 +81,206 @@
                                            IsVisible="{Binding HasAvatar, Converter={StaticResource InvertBool}}" />
                                     <Image Source="{Binding AvatarSource}"
                                            Aspect="AspectFill"
-                                           WidthRequest="110"
-                                           HeightRequest="110"
+                                           WidthRequest="96"
+                                           HeightRequest="96"
                                            IsVisible="{Binding HasAvatar}">
                                         <Image.Clip>
-                                            <EllipseGeometry Center="55,55" RadiusX="55" RadiusY="55" />
+                                            <EllipseGeometry Center="48,48" RadiusX="48" RadiusY="48" />
                                         </Image.Clip>
                                     </Image>
                                 </Grid>
                             </Border>
-
-                            <Border WidthRequest="32"
-                                    HeightRequest="32"
+                            <Border WidthRequest="28"
+                                    HeightRequest="28"
                                     BackgroundColor="{DynamicResource AmSurface}"
                                     StrokeThickness="1"
                                     Stroke="{DynamicResource AmDivider}"
-                                    StrokeShape="RoundRectangle 16"
+                                    StrokeShape="RoundRectangle 14"
                                     HorizontalOptions="End"
                                     VerticalOptions="End"
                                     Padding="0">
                                 <Label Text="📷"
-                                       FontSize="14"
+                                       FontSize="12"
                                        HorizontalOptions="Center"
                                        VerticalOptions="Center" />
                             </Border>
                         </Grid>
 
-                        <!-- 昵称 -->
-                        <VerticalStackLayout Spacing="2" HorizontalOptions="Fill">
-                            <Entry x:Name="NicknameEntry"
-                                   Text="{Binding Nickname}"
-                                   Style="{DynamicResource AmFieldEntry}"
-                                   FontSize="18"
+                        <HorizontalStackLayout Spacing="8" HorizontalOptions="Center">
+                            <Label Text="{Binding Nickname}"
+                                   FontSize="20"
                                    FontAttributes="Bold"
-                                   HorizontalTextAlignment="Center"
-                                   ReturnType="Done"
-                                   Completed="OnNicknameCommitted"
-                                   Unfocused="OnNicknameCommitted" />
-                            <Label Text="点击昵称即可修改"
-                                   Style="{DynamicResource AmCaptionText}"
-                                   HorizontalOptions="Center" />
-                        </VerticalStackLayout>
-
-                        <!-- 头像操作 -->
-                        <HorizontalStackLayout Spacing="20" HorizontalOptions="Center">
-                            <Label Text="更换头像"
-                                   Style="{DynamicResource AmLinkText}"
-                                   FontSize="13">
-                                <Label.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnChangeAvatarTapped" />
-                                </Label.GestureRecognizers>
-                            </Label>
-                            <Label Text="移除头像"
-                                   Style="{DynamicResource AmLinkText}"
-                                   FontSize="13"
-                                   IsVisible="{Binding HasAvatar}">
-                                <Label.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnRemoveAvatarTapped" />
-                                </Label.GestureRecognizers>
-                            </Label>
+                                   TextColor="#FFFFFF" />
+                            <Border BackgroundColor="#33FFFFFF"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 10"
+                                    Padding="8,2"
+                                    VerticalOptions="Center">
+                                <Label Text="{Binding LevelText}"
+                                       FontSize="11"
+                                       TextColor="#FFFFFF" />
+                            </Border>
                         </HorizontalStackLayout>
-                    </VerticalStackLayout>
-                </Border>
 
-                <Label Text="头像与昵称保存在本机应用数据目录，不会上传。"
-                       Style="{DynamicResource AmCaptionText}"
-                       HorizontalTextAlignment="Center"
-                       Margin="0,8,0,0" />
+                        <Label Text="{Binding TotalListeningText}"
+                               FontSize="12"
+                               TextColor="#CCFFFFFF"
+                               HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+
+                    <!-- 统计行 -->
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="*,*,*,*"
+                          Padding="20,14"
+                          ColumnSpacing="8">
+                        <VerticalStackLayout Grid.Column="0" Spacing="2">
+                            <Label Text="0" FontAttributes="Bold" FontSize="16" HorizontalOptions="Center" TextColor="#FFFFFF" />
+                            <Label Text="关注" FontSize="12" TextColor="#CCFFFFFF" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2">
+                            <Label Text="0" FontAttributes="Bold" FontSize="16" HorizontalOptions="Center" TextColor="#FFFFFF" />
+                            <Label Text="粉丝" FontSize="12" TextColor="#CCFFFFFF" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2" Spacing="2">
+                            <Label Text="{Binding LevelText}" FontAttributes="Bold" FontSize="16" HorizontalOptions="Center" TextColor="#FFFFFF" />
+                            <Label Text="等级" FontSize="12" TextColor="#CCFFFFFF" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="3" Spacing="2">
+                            <Label Text="{Binding TotalListeningText}" FontAttributes="Bold" FontSize="16" HorizontalOptions="Center" TextColor="#FFFFFF" />
+                            <Label Text="听歌" FontSize="12" TextColor="#CCFFFFFF" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </Grid>
+
+                <!-- ══════════ 内容 Tab ══════════ -->
+                <Grid ColumnDefinitions="*,*,*,*" Padding="0,10,0,6" BackgroundColor="{DynamicResource AmBg}" RowDefinitions="Auto,Auto">
+                    <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="6">
+                        <Label x:Name="TabMusic" Text="音乐" FontSize="15" FontAttributes="Bold" TextColor="{DynamicResource AmPrimary}" HorizontalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTabMusicTapped" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <BoxView x:Name="IndMusic" WidthRequest="20" HeightRequest="3" CornerRadius="2" Color="{DynamicResource AmPrimary}" HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="6">
+                        <Label x:Name="TabPodcast" Text="播客" FontSize="15" TextColor="{DynamicResource AmTextSecondary}" HorizontalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTabPodcastTapped" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <BoxView x:Name="IndPodcast" WidthRequest="20" HeightRequest="3" CornerRadius="2" Color="{DynamicResource AmPrimary}" HorizontalOptions="Center" IsVisible="False" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Row="0" Grid.Column="2" Spacing="6">
+                        <Label x:Name="TabComments" Text="评论" FontSize="15" TextColor="{DynamicResource AmTextSecondary}" HorizontalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTabCommentsTapped" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <BoxView x:Name="IndComments" WidthRequest="20" HeightRequest="3" CornerRadius="2" Color="{DynamicResource AmPrimary}" HorizontalOptions="Center" IsVisible="False" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Row="0" Grid.Column="3" Spacing="6">
+                        <Label x:Name="TabNotes" Text="笔记" FontSize="15" TextColor="{DynamicResource AmTextSecondary}" HorizontalOptions="Center">
+                            <Label.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnTabNotesTapped" />
+                            </Label.GestureRecognizers>
+                        </Label>
+                        <BoxView x:Name="IndNotes" WidthRequest="20" HeightRequest="3" CornerRadius="2" Color="{DynamicResource AmPrimary}" HorizontalOptions="Center" IsVisible="False" />
+                    </VerticalStackLayout>
+                </Grid>
+
+                <!-- ══════════ 音乐内容 ══════════ -->
+                <VerticalStackLayout x:Name="MusicContent" Spacing="14" Padding="16,8,16,28">
+
+                    <!-- 我喜欢的音乐 -->
+                    <Border Style="{DynamicResource AmCard}" Padding="14"
+                            svc:PressFeedback.IsEnabled="True"
+                            svc:PressFeedback.Scale="0.98">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnOpenFavoritesTapped" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <Border Grid.Column="0"
+                                    WidthRequest="56"
+                                    HeightRequest="56"
+                                    BackgroundColor="{DynamicResource AmPrimary}"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 8">
+                                <Label Text="♥" FontSize="26" TextColor="{DynamicResource AmTextOnPrimary}" HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <Label Text="我喜欢的音乐" Style="{DynamicResource AmTitleText}" FontSize="15" />
+                                <Label Text="{Binding FavoriteCountText, StringFormat='{}{0} 首'}" Style="{DynamicResource AmCaptionText}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="›" FontSize="22" TextColor="{DynamicResource AmTextTertiary}" VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- 我的歌单 -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="我的歌单" Style="{DynamicResource AmSectionTitle}" />
+                        <Button Grid.Column="1"
+                                Text="＋"
+                                Style="{DynamicResource AmIconButton}"
+                                FontSize="18"
+                                Clicked="OnCreatePlaylistClicked" />
+                    </Grid>
+
+                    <CollectionView x:Name="PlaylistList"
+                                    ItemsSource="{Binding Playlists}"
+                                    SelectionMode="None"
+                                    HeightRequest="240">
+                        <CollectionView.EmptyView>
+                            <Label Text="还没有歌单"
+                                   Style="{DynamicResource AmCaptionText}"
+                                   HorizontalOptions="Center"
+                                   Margin="0,20" />
+                        </CollectionView.EmptyView>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:Playlist">
+                                <Grid Padding="0,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12"
+                                      svc:PressFeedback.IsEnabled="True"
+                                      svc:PressFeedback.Scale="0.97">
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnPlaylistTapped" />
+                                    </Grid.GestureRecognizers>
+                                    <Border Grid.Column="0"
+                                            WidthRequest="48"
+                                            HeightRequest="48"
+                                            BackgroundColor="{DynamicResource AmCoverPlaceholder}"
+                                            StrokeThickness="0"
+                                            StrokeShape="RoundRectangle 6">
+                                        <Label Text="🎵" FontSize="18" HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                        <Label Text="{Binding Name}" Style="{DynamicResource AmTitleText}" FontSize="14" />
+                                        <Label Text="{Binding Tracks.Count, StringFormat='{}{0} 首'}" Style="{DynamicResource AmCaptionText}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" Text="›" FontSize="20" TextColor="{DynamicResource AmTextTertiary}" VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+
+                <!-- ══════════ 其它 Tab 占位 ══════════ -->
+                <VerticalStackLayout x:Name="OtherContent"
+                                     IsVisible="False"
+                                     VerticalOptions="Center"
+                                     HorizontalOptions="Center"
+                                     Spacing="12"
+                                     Padding="40,60">
+                    <Label Text="🎧"
+                           FontSize="52"
+                           HorizontalOptions="Center" />
+                    <Label Text="内容筹备中"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           TextColor="{DynamicResource AmTextPrimary}"
+                           HorizontalOptions="Center" />
+                    <Label Text="这里后续会接入更多个人内容。"
+                           Style="{DynamicResource AmCaptionText}"
+                           HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

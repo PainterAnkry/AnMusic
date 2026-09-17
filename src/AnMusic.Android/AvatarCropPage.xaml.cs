@@ -193,7 +193,8 @@ public partial class AvatarCropPage : ContentPage
     private async void OnCancelClicked(object? sender, EventArgs e)
     {
         _completion.TrySetResult(false);
-        await Navigation.PopModalAsync();
+        try { await Navigation.PopModalAsync(); }
+        catch { /* 已经是栈底 */ }
     }
 
     #endregion

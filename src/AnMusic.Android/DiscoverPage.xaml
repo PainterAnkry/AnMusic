@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:AnMusic.Android.ViewModels"
              xmlns:conv="clr-namespace:AnMusic.Android.Converters"
+             xmlns:svc="clr-namespace:AnMusic.Android.Services"
              x:Class="AnMusic.Android.DiscoverPage"
              x:DataType="vm:RadioViewModel"
              Shell.NavBarIsVisible="False"
@@ -49,7 +50,9 @@
 
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="vm:RadioModeOption">
-                            <Border Style="{DynamicResource AmCard}" Padding="16,16">
+                            <Border Style="{DynamicResource AmCard}" Padding="16,16"
+                                    svc:PressFeedback.IsEnabled="True"
+                                    svc:PressFeedback.Scale="0.98">
                                 <Border.GestureRecognizers>
                                     <TapGestureRecognizer Tapped="OnModeTapped" />
                                 </Border.GestureRecognizers>

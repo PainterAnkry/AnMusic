@@ -1,6 +1,7 @@
 using AnMusic.Android.Services;
 using AnMusic.Android.ViewModels;
 using AnMusic.Models;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -34,12 +35,18 @@ public partial class SearchPage : ContentPage
         // 进入页面时刷新音源列表：插件是后台异步加载的，
         // 首页进来时可能还没装好，这里再拉一次以确保能选到。
         _vm.ReloadSources();
+
+        // 搜索完成时结果区淡入上滑一次（IsSearching: true -> false）
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SearchViewModel.IsSearching) && !_vm.IsSearching && _vm.Results.Count > 0)
+                MainThread.BeginInvokeOnMainThread(() => Services.Anim.ViewIn(ResultList));
+        };
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        ApplySourceVisual();
         SearchEntry.Focus();
     }
 
@@ -77,27 +84,6 @@ public partial class SearchPage : ContentPage
 
         // 切换音源后上一次的结果已无意义，清掉避免混淆
         _vm.ClearResultsCommand.Execute(null);
-        ApplySourceVisual();
-    }
-
-    /// <summary>高亮选中的音源胶囊（换成强调色实底白字）。</summary>
-    private void ApplySourceVisual()
-    {
-        var selected = _vm.SelectedSource;
-
-        foreach (var child in SourceChips.Children)
-        {
-            if (child is not Border chip) continue;
-
-            var isActive = selected is not null &&
-                           chip.BindingContext is SearchSource s &&
-                           ReferenceEquals(s, selected);
-
-            chip.BackgroundColor = isActive ? ThemeService.Get("AmPrimary") : ThemeService.Get("AmChipBg");
-
-            if (chip.Content is Label label)
-                label.TextColor = isActive ? ThemeService.Get("AmTextOnPrimary") : ThemeService.Get("AmTextSecondary");
-        }
     }
 
     #endregion
@@ -124,6 +110,7 @@ public partial class SearchPage : ContentPage
                     TextColor = ThemeService.Get("AmTextSecondary"),
                 },
             };
+            Services.PressFeedback.SetIsEnabled(chip, true);
 
             var tap = new TapGestureRecognizer();
             tap.Tapped += (_, _) => _vm.SearchWithCommand.Execute(word);
@@ -141,55 +128,63 @@ public partial class SearchPage : ContentPage
     {
         if ((sender as Element)?.BindingContext is not Track track) return;
 
-        await _vm.PlayResultCommand.ExecuteAsync(track);
-        if (_library is not null)
-            _player.SetFavoriteState(_library.IsFavorite(track));
+        try
+        {
+            await _vm.PlayResultCommand.ExecuteAsync(track);
+            if (_library is not null)
+                _player.SetFavoriteState(_library.IsFavorite(track));
 
-        await Navigation.PushModalAsync(new PlayerPage(_player));
+            await Navigation.PushModalAsync(new PlayerPage(_player));
+        }
+        catch (Exception ex) { AppPaths.LogError("搜索结果播放", ex); }
     }
 
     private async void OnResultMenuClicked(object? sender, EventArgs e)
     {
         if ((sender as Element)?.BindingContext is not Track track) return;
 
-        var isFav = _library?.IsFavorite(track) ?? false;
-        var options = new List<string>
+        try
         {
-            "立即播放",
-            "下一首播放",
-            isFav ? "取消喜欢" : "加入我喜欢",
-            "加入歌单",
-            "下载到本地",
-        };
+            var isFav = _library?.IsFavorite(track) ?? false;
+            var options = new List<string>
+            {
+                "立即播放",
+                "下一首播放",
+                isFav ? "取消喜欢" : "加入我喜欢",
+                "加入歌单",
+                "下载到本地",
+            };
 
-        var action = await DisplayActionSheet(track.Title, "取消", null, options.ToArray());
-        if (string.IsNullOrEmpty(action) || action == "取消") return;
+            var action = await DisplayActionSheet(track.Title, "取消", null, options.ToArray());
+            if (string.IsNullOrEmpty(action) || action == "取消") return;
 
-        switch (action)
-        {
-            case "立即播放":
-                await _vm.PlayResultCommand.ExecuteAsync(track);
-                if (_library is not null) _player.SetFavoriteState(_library.IsFavorite(track));
-                break;
+            switch (action)
+            {
+                case "立即播放":
+                    await _vm.PlayResultCommand.ExecuteAsync(track);
+                    if (_library is not null) _player.SetFavoriteState(_library.IsFavorite(track));
+                    break;
 
-            case "下一首播放":
-                _player.InsertNextCommand.Execute(track);
-                break;
+                case "下一首播放":
+                    _player.InsertNextCommand.Execute(track);
+                    break;
 
-            case "加入我喜欢":
-            case "取消喜欢":
-                if (_library is null) return;
-                _library.ToggleFavoriteCommand.Execute(track);
-                break;
+                case "加入我喜欢":
+                case "取消喜欢":
+                    if (_library is null) return;
+                    _library.ToggleFavoriteCommand.Execute(track);
+                    break;
 
-            case "加入歌单":
-                await AddToPlaylistAsync(track);
-                break;
+                case "加入歌单":
+                    await AddToPlaylistAsync(track);
+                    break;
 
-            case "下载到本地":
-                if (_downloads is not null) await _downloads.EnqueueAsync(track);
-                break;
+                case "下载到本地":
+                    if (_downloads is not null) await _downloads.EnqueueAsync(track);
+                    break;
+            }
         }
+        catch (Exception ex) { AppPaths.LogError("搜索结果菜单", ex); }
     }
 
     private async Task AddToPlaylistAsync(Track track)

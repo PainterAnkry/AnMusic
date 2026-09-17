@@ -1,3 +1,4 @@
+using AnMusic.Models;
 using AnMusic.Services;
 using AnMusic.Services.Playlist;
 using AnMusic.Services.Settings;
@@ -131,12 +132,16 @@ public sealed partial class UserViewModel : ObservableObject
     [ObservableProperty] private string _totalListeningText = "0 分钟";
     [ObservableProperty] private string _totalPlayCountText = "0 次";
 
+    /// <summary>我的歌单（直接绑定到用户中心列表）。</summary>
+    public IReadOnlyList<Playlist> Playlists => _store.Playlists;
+
     /// <summary>刷新曲库统计（侧边栏/用户中心打开时调用）。</summary>
     public void RefreshStats()
     {
         FavoriteCountText = _store.Favorites.Count.ToString();
         PlaylistCountText = _store.Playlists.Count.ToString();
         RecentCountText = _store.Recent.Count.ToString();
+        OnPropertyChanged(nameof(Playlists));
         RefreshLevel();
     }
 

@@ -10,13 +10,13 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AnMusic.Android.ViewModels;
 
-/// <summary>主内容区标签页。</summary>
+/// <summary>主内容区标签页（参考网易云首页 Pill Tab）。</summary>
 public enum LibraryTab
 {
     /// <summary>全部本地歌曲。</summary>
     All,
 
-    /// <summary>我喜欢的音乐。</summary>
+    /// <summary>我喜欢的音乐（心动）。</summary>
     Favorites,
 
     /// <summary>用户自建歌单。</summary>
@@ -24,6 +24,9 @@ public enum LibraryTab
 
     /// <summary>最近播放。</summary>
     Recent,
+
+    /// <summary>每日推荐：从本地曲库随机抽 30 首。</summary>
+    Recommend,
 }
 
 /// <summary>
@@ -132,6 +135,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         LibraryTab.Favorites => "我喜欢的音乐",
         LibraryTab.Playlists => SelectedPlaylist?.Name ?? "歌单",
         LibraryTab.Recent => "最近播放",
+        LibraryTab.Recommend => "每日推荐",
         _ => "本地音乐",
     };
 
@@ -345,6 +349,9 @@ public sealed partial class LibraryViewModel : ObservableObject
             LibraryTab.Favorites => Favorites.AsEnumerable(),
             LibraryTab.Playlists => SelectedPlaylist?.Tracks ?? [],
             LibraryTab.Recent => Recent,
+            LibraryTab.Recommend => AllTracks.Count == 0
+                ? []
+                : AllTracks.OrderBy(_ => Random.Shared.Next()).Take(30).AsEnumerable(),
             _ => AllTracks,
         };
 

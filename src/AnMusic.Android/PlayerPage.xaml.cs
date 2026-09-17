@@ -1,6 +1,7 @@
 using AnMusic.Android.Services;
 using AnMusic.Android.ViewModels;
 using AnMusic.Models;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -51,8 +52,8 @@ public partial class PlayerPage : ContentPage
         base.OnAppearing();
         if (_player.IsCoverSpinEnabled && _player.IsPlaying) StartCoverSpin();
 
-        // 模态页进场：自底向上滑入；首次出现后再切换视图才挂动画
-        Anim.PageEnter(this);
+        // 模态页进场：自底部滑入
+        Anim.ModalEnter(this);
         _viewReady = true;
     }
 
@@ -69,6 +70,12 @@ public partial class PlayerPage : ContentPage
                 break;
 
             case nameof(PlayerViewModel.IsPlaying):
+                UpdateCoverSpin();
+                break;
+
+            case nameof(PlayerViewModel.CurrentTrack):
+                // 换歌：唱片角度归零后按当前播放状态重启旋转
+                DiscBorder.Rotation = 0;
                 UpdateCoverSpin();
                 break;
         }
@@ -160,10 +167,11 @@ public partial class PlayerPage : ContentPage
 
     private void StartCoverSpin()
     {
-        StopCoverSpin();
+        this.AbortAnimation(SpinAnimationName);
 
-        // 24 秒转一圈：足够慢，不抢视线，又能看出在转
-        var animation = new Animation(v => CoverImage.Rotation = v, 0, 360);
+        // 24 秒转一圈。从「当前角度」起转，暂停后恢复不跳变；每圈终点角度与起点重合，循环无接缝。
+        var start = DiscBorder.Rotation % 360;
+        var animation = new Animation(v => DiscBorder.Rotation = (start + v) % 360, 0, 360);
         animation.Commit(
             this,
             SpinAnimationName,
@@ -171,13 +179,13 @@ public partial class PlayerPage : ContentPage
             length: 24000,
             easing: Easing.Linear,
             finished: null,
-            repeat: () => _player.IsCoverSpinEnabled && _player.IsPlaying);
+            repeat: () => _player.IsCoverSpinEnabled && _player.IsPlaying && CoverView.IsVisible);
     }
 
     private void StopCoverSpin()
     {
+        // 只中止动画、保留当前角度（暂停时唱片停在原地，符合网易云交互）
         this.AbortAnimation(SpinAnimationName);
-        CoverImage.Rotation = 0;
     }
 
     #endregion
@@ -218,7 +226,14 @@ public partial class PlayerPage : ContentPage
     #region 顶部操作
 
     private async void OnCloseClicked(object? sender, EventArgs e)
-        => await Navigation.PopModalAsync();
+    {
+        try
+        {
+            await Anim.ModalExitAsync(this);
+            await Navigation.PopModalAsync();
+        }
+        catch (Exception ex) { AppPaths.LogError("关闭播放页", ex); }
+    }
 
     private void OnFavoriteClicked(object? sender, EventArgs e)
     {
@@ -248,49 +263,53 @@ public partial class PlayerPage : ContentPage
     {
         if (_player.CurrentTrack is not { } track) return;
 
-        var options = new List<string>
+        try
         {
-            "歌曲信息",
-            "定时关闭",
-            "下一首播放",
-            "加入歌单",
-            _player.IsCoverSpinEnabled ? "关闭封面旋转" : "开启封面旋转",
-        };
+            var options = new List<string>
+            {
+                "歌曲信息",
+                "定时关闭",
+                "下一首播放",
+                "加入歌单",
+                _player.IsCoverSpinEnabled ? "关闭封面旋转" : "开启封面旋转",
+            };
 
-        var action = await DisplayActionSheet(track.Title, "取消", null, options.ToArray());
-        if (string.IsNullOrEmpty(action) || action == "取消") return;
+            var action = await DisplayActionSheet(track.Title, "取消", null, options.ToArray());
+            if (string.IsNullOrEmpty(action) || action == "取消") return;
 
-        switch (action)
-        {
-            case "歌曲信息":
-                await DisplayAlert(
-                    "歌曲信息",
-                    $"标题：{track.Title}\n歌手：{track.Artist}\n专辑：{track.Album}\n来源：{track.ProviderId}",
-                    "好");
-                break;
+            switch (action)
+            {
+                case "歌曲信息":
+                    await DisplayAlert(
+                        "歌曲信息",
+                        $"标题：{track.Title}\n歌手：{track.Artist}\n专辑：{track.Album}\n来源：{track.ProviderId}",
+                        "好");
+                    break;
 
-            case "定时关闭":
-                await ShowSleepTimerOptionsAsync();
-                break;
+                case "定时关闭":
+                    await ShowSleepTimerOptionsAsync();
+                    break;
 
-            case "下一首播放":
-                _player.InsertNextCommand.Execute(track);
-                break;
+                case "下一首播放":
+                    _player.InsertNextCommand.Execute(track);
+                    break;
 
-            case "加入歌单":
-                await AddToPlaylistAsync(track);
-                break;
+                case "加入歌单":
+                    await AddToPlaylistAsync(track);
+                    break;
 
-            case "关闭封面旋转":
-                _player.IsCoverSpinEnabled = false;
-                StopCoverSpin();
-                break;
+                case "关闭封面旋转":
+                    _player.IsCoverSpinEnabled = false;
+                    StopCoverSpin();
+                    break;
 
-            case "开启封面旋转":
-                _player.IsCoverSpinEnabled = true;
-                UpdateCoverSpin();
-                break;
+                case "开启封面旋转":
+                    _player.IsCoverSpinEnabled = true;
+                    UpdateCoverSpin();
+                    break;
+            }
         }
+        catch (Exception ex) { AppPaths.LogError("播放页更多菜单", ex); }
     }
 
     /// <summary>定时关闭：常用时长 + 播完当前曲目 + 取消。</summary>
@@ -355,11 +374,15 @@ public partial class PlayerPage : ContentPage
     {
         if ((sender as Element)?.BindingContext is not Track track) return;
 
-        await _player.PlayQueueItemCommand.ExecuteAsync(track);
-        if (_library is not null)
-            _player.SetFavoriteState(_library.IsFavorite(track));
+        try
+        {
+            await _player.PlayQueueItemCommand.ExecuteAsync(track);
+            if (_library is not null)
+                _player.SetFavoriteState(_library.IsFavorite(track));
 
-        ShowCover();
+            ShowCover();
+        }
+        catch (Exception ex) { AppPaths.LogError("队列项播放", ex); }
     }
 
     /// <summary>队列行菜单：下一首播放 / 上移 / 下移 / 移出队列。</summary>
@@ -367,28 +390,32 @@ public partial class PlayerPage : ContentPage
     {
         if ((sender as Element)?.BindingContext is not Track track) return;
 
-        string[] options = ["下一首播放", "上移", "下移", "从列表移除"];
-        var action = await DisplayActionSheet(track.Title, "取消", null, options);
-        if (string.IsNullOrEmpty(action) || action == "取消") return;
-
-        switch (action)
+        try
         {
-            case "下一首播放":
-                _player.InsertNextCommand.Execute(track);
-                break;
+            string[] options = ["下一首播放", "上移", "下移", "从列表移除"];
+            var action = await DisplayActionSheet(track.Title, "取消", null, options);
+            if (string.IsNullOrEmpty(action) || action == "取消") return;
 
-            case "上移":
-                _player.MoveQueueItem(track, -1);
-                break;
+            switch (action)
+            {
+                case "下一首播放":
+                    _player.InsertNextCommand.Execute(track);
+                    break;
 
-            case "下移":
-                _player.MoveQueueItem(track, 1);
-                break;
+                case "上移":
+                    _player.MoveQueueItem(track, -1);
+                    break;
 
-            case "从列表移除":
-                _player.RemoveFromQueueCommand.Execute(track);
-                break;
+                case "下移":
+                    _player.MoveQueueItem(track, 1);
+                    break;
+
+                case "从列表移除":
+                    _player.RemoveFromQueueCommand.Execute(track);
+                    break;
+            }
         }
+        catch (Exception ex) { AppPaths.LogError("队列项菜单", ex); }
     }
 
     #endregion

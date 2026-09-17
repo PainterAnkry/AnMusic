@@ -1,4 +1,5 @@
 using AnMusic.Android.ViewModels;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -32,9 +33,13 @@ public partial class StatsPage : ContentPage
     private async void OnItemTapped(object? sender, TappedEventArgs e)
     {
         if ((sender as Element)?.BindingContext is not RankedTrack item) return;
-        await _vm.PlayCommand.ExecuteAsync(item);
+        try { await _vm.PlayCommand.ExecuteAsync(item); }
+        catch (Exception ex) { AppPaths.LogError("排行项播放", ex); }
     }
 
     private async void OnClearClicked(object? sender, EventArgs e)
-        => await _vm.ClearCommand.ExecuteAsync(null);
+    {
+        try { await _vm.ClearCommand.ExecuteAsync(null); }
+        catch (Exception ex) { AppPaths.LogError("清除统计", ex); }
+    }
 }

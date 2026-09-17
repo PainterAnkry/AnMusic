@@ -1,9 +1,9 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <!-- ══════════════════════════════════════════════════════════════
-         AnMusic 安卓端颜色令牌 · 默认值（浅色 + 科技蓝）
+         AnMusic 安卓端颜色令牌 · 默认值（浅色 + 网易红）
          ──────────────────────────────────────────────────────────────
          这里的值是「启动瞬间的兜底」：App 构造时会立刻调用
          ThemeService.Apply(...) 把整套颜色按用户所选皮肤覆写一遍。
@@ -12,12 +12,12 @@
          会在解析时固化取值，运行时换肤不会生效。
          ══════════════════════════════════════════════════════════════ -->
 
-    <!-- ── 品牌 / 强调 ── -->
-    <Color x:Key="AmPrimary">#2B7DE9</Color>
-    <Color x:Key="AmPrimaryDark">#2367C4</Color>
-    <Color x:Key="AmPrimaryHover">#4C93F0</Color>
-    <Color x:Key="AmPrimarySoft">#E3EEFC</Color>
-    <Color x:Key="AmAccent">#2B7DE9</Color>
+    <!-- ── 品牌 / 强调（网易云音乐品牌红 #E6212A）── -->
+    <Color x:Key="AmPrimary">#E6212A</Color>
+    <Color x:Key="AmPrimaryDark">#C81E26</Color>
+    <Color x:Key="AmPrimaryHover">#F04A52</Color>
+    <Color x:Key="AmPrimarySoft">#FDECEE</Color>
+    <Color x:Key="AmAccent">#E6212A</Color>
     <Color x:Key="AmTextOnPrimary">#FFFFFF</Color>
 
     <!-- ── 背景层级（浅 -> 深）── -->

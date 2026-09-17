@@ -1,26 +1,20 @@
 using AnMusic.Android.Services;
 using AnMusic.Android.ViewModels;
+using AnMusic.Models;
 using AnMusic.Services;
-using Microsoft.Maui.ApplicationModel;
-using Microsoft.Maui.Media;
-using Microsoft.Maui.Storage;
 
 namespace AnMusic.Android;
 
-/// <summary>
-/// 用户中心：头像（相册选图 + 方形裁剪）与昵称。
-/// </summary>
 public partial class UserPage : ContentPage
 {
     private readonly UserViewModel _user;
-
-    /// <summary>防止重复触发选图流程。</summary>
-    private bool _picking;
+    private readonly LibraryViewModel? _library;
 
     public UserPage(UserViewModel user)
     {
         InitializeComponent();
         _user = user;
+        _library = MauiProgram.Services.GetService<LibraryViewModel>();
         BindingContext = user;
     }
 
@@ -30,8 +24,7 @@ public partial class UserPage : ContentPage
         _user.Refresh();
     }
 
-    private void OnOpenFlyoutClicked(object? sender, EventArgs e)
-        => Shell.Current.FlyoutIsPresented = true;
+    #region 导航
 
     private async void OnBackClicked(object? sender, EventArgs e)
     {
@@ -39,9 +32,48 @@ public partial class UserPage : ContentPage
         catch { await Navigation.PopAsync(); }
     }
 
-    #region 昵称
+    private void OnOpenFlyoutClicked(object? sender, EventArgs e)
+        => Shell.Current.FlyoutIsPresented = true;
 
-    private void OnNicknameCommitted(object? sender, EventArgs e) => _user.CommitNickname();
+    private async void OnOpenFavoritesTapped(object? sender, TappedEventArgs e)
+    {
+        try
+        {
+            if (_library is not null) _library.CurrentTab = LibraryTab.Favorites;
+            await Shell.Current.GoToAsync("//MainPage");
+        }
+        catch (Exception ex) { AppPaths.LogError("打开我喜欢", ex); }
+    }
+
+    #endregion
+
+    #region Tab 切换
+
+    private void OnTabMusicTapped(object? sender, TappedEventArgs e) => ShowTab("music");
+    private void OnTabPodcastTapped(object? sender, TappedEventArgs e) => ShowTab("other", TabPodcast, IndPodcast);
+    private void OnTabCommentsTapped(object? sender, TappedEventArgs e) => ShowTab("other", TabComments, IndComments);
+    private void OnTabNotesTapped(object? sender, TappedEventArgs e) => ShowTab("other", TabNotes, IndNotes);
+
+    private void ShowTab(string tab, Label? selected = null, VisualElement? indicator = null)
+    {
+        MusicContent.IsVisible = tab == "music";
+        OtherContent.IsVisible = tab != "music";
+
+        // 选中态：红色加粗 + 红色下划线
+        var tabs = new[] { TabMusic, TabPodcast, TabComments, TabNotes };
+        var inds = new[] { IndMusic, IndPodcast, IndComments, IndNotes };
+        for (var i = 0; i < tabs.Length; i++)
+        {
+            var active = selected is null ? tabs[i] == TabMusic : tabs[i] == selected;
+            tabs[i].TextColor = active
+                ? (Color)Application.Current!.Resources["AmPrimary"]
+                : (Color)Application.Current.Resources["AmTextSecondary"];
+            tabs[i].FontAttributes = active ? FontAttributes.Bold : FontAttributes.None;
+            inds[i].IsVisible = active;
+        }
+
+        Anim.ViewIn(tab == "music" ? MusicContent : OtherContent);
+    }
 
     #endregion
 
@@ -49,73 +81,61 @@ public partial class UserPage : ContentPage
 
     private async void OnChangeAvatarTapped(object? sender, TappedEventArgs e)
     {
-        if (_picking) return;
-        _picking = true;
-
         try
         {
-            var picked = await MediaPicker.Default.PickPhotoAsync();
-            if (picked is null) return;
-
-            // 相册返回的是流，先落到缓存文件才能用位图 API 处理
-            var rawPath = Path.Combine(FileSystem.CacheDirectory, "avatar_pick.jpg");
-            await using (var source = await picked.OpenReadAsync())
-            await using (var target = File.Create(rawPath))
+            var result = await MediaPicker.Default.PickPhotoAsync(new MediaPickerOptions
             {
-                await source.CopyToAsync(target);
-            }
+                Title = "选择头像"
+            });
+            if (result is null) return;
 
-            // 归一化：按 EXIF 摆正 + 限制最长边，避免原图过大导致 OOM
-            var normalizedPath = Path.Combine(FileSystem.CacheDirectory, "avatar_crop.png");
-            var normalized = await AvatarImageHelper.NormalizeAsync(rawPath, normalizedPath);
+            // 先把系统返回的图片复制到应用缓存，避免 URI 权限问题
+            var tmp = Path.Combine(FileSystem.CacheDirectory, $"avatar_pick_{Guid.NewGuid():N}.jpg");
+            using (var src = await result.OpenReadAsync())
+            using (var dst = File.Create(tmp))
+                await src.CopyToAsync(dst);
 
-            if (normalized is null)
-            {
-                await DisplayAlert("无法读取", "这张图片无法解析，请换一张试试。", "好");
-                return;
-            }
-
-            var cropPage = new AvatarCropPage(normalized);
-            await Navigation.PushModalAsync(cropPage);
-
-            if (await cropPage.Completion)
-                _user.RefreshAvatar();
-        }
-        catch (FeatureNotSupportedException)
-        {
-            await DisplayAlert("不支持", "当前设备不支持从相册选图。", "好");
-        }
-        catch (PermissionException)
-        {
-            await DisplayAlert("需要权限", "请在系统设置中允许 AnMusic 读取照片后重试。", "好");
+            var crop = new AvatarCropPage(tmp);
+            await Navigation.PushModalAsync(crop);
+            _ = await crop.Completion;
+            _user.RefreshAvatar();
         }
         catch (Exception ex)
         {
             AppPaths.LogError("选择头像", ex);
-            await DisplayAlert("选择失败", ex.Message, "好");
-        }
-        finally
-        {
-            _picking = false;
+            await DisplayAlert("出错", $"无法选择图片：{ex.Message}", "好");
         }
     }
 
-    private async void OnRemoveAvatarTapped(object? sender, TappedEventArgs e)
+    #endregion
+
+    #region 歌单
+
+    private async void OnCreatePlaylistClicked(object? sender, EventArgs e)
     {
-        var confirm = await DisplayAlert("移除头像", "确定要恢复为默认头像吗？", "移除", "取消");
-        if (!confirm) return;
+        try
+        {
+            var name = await DisplayPromptAsync("新建歌单", "输入歌单名称", "创建", "取消", "我的歌单");
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            _library?.CreatePlaylistCommand.Execute(name);
+            _user.RefreshStats();
+        }
+        catch (Exception ex) { AppPaths.LogError("新建歌单", ex); }
+    }
+
+    private async void OnPlaylistTapped(object? sender, TappedEventArgs e)
+    {
+        if ((sender as Element)?.BindingContext is not Playlist playlist) return;
+        if (_library is null) return;
 
         try
         {
-            var path = UserViewModel.AvatarFilePath;
-            if (File.Exists(path)) File.Delete(path);
+            _library.CurrentTab = LibraryTab.Playlists;
+            _library.SelectedPlaylist = playlist;
+            await Shell.Current.GoToAsync("//MainPage");
         }
-        catch (Exception ex)
-        {
-            AppPaths.LogError("删除头像文件", ex);
-        }
-
-        _user.ClearAvatar();
+        catch (Exception ex) { AppPaths.LogError("打开歌单", ex); }
     }
 
     #endregion

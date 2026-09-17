@@ -47,15 +47,25 @@ public sealed class ProviderRegistry
             return _dynamic.FirstOrDefault(p => string.Equals(p.Id, providerId, StringComparison.Ordinal));
     }
 
+    /// <summary>动态音源增删后触发（搜索页据此自动刷新音源选项卡，无需重进页面）。</summary>
+    public event Action? ProvidersChanged;
+
     /// <summary>动态注册音乐源（外部 .js 插件加载后调用）。</summary>
     public void Register(IMusicProvider provider)
     {
-        lock (_gate) _dynamic.Add(provider);
+        lock (_gate)
+        {
+            // 同 Id 的旧实例先移除（插件重装/升级后实例会变）
+            _dynamic.RemoveAll(p => string.Equals(p.Id, provider.Id, StringComparison.Ordinal));
+            _dynamic.Add(provider);
+        }
+        ProvidersChanged?.Invoke();
     }
 
     /// <summary>移除全部插件音源（重新加载插件时调用）。</summary>
     public void UnregisterJsPlugins()
     {
         lock (_gate) _dynamic.RemoveAll(p => p is JsPlugin.JsPluginProvider);
+        ProvidersChanged?.Invoke();
     }
 }

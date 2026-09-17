@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
@@ -29,6 +29,12 @@
         <Setter Property="Shell.BackgroundColor" Value="{DynamicResource AmSurface}" />
         <Setter Property="Shell.ForegroundColor" Value="{DynamicResource AmPrimary}" />
         <Setter Property="Shell.TitleColor" Value="{DynamicResource AmTextPrimary}" />
+        <!-- 底部 TabBar：选中品牌红、未选灰，与网易云一致 -->
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{DynamicResource AmSurface}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{DynamicResource AmPrimary}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{DynamicResource AmTextTertiary}" />
+        <Setter Property="Shell.TabBarDisabledColor" Value="{DynamicResource AmTextTertiary}" />
     </Style>
 
     <!-- ══ 文字层级 ══ -->
@@ -101,11 +107,31 @@
         <Setter Property="BackgroundColor" Value="{DynamicResource AmPrimary}" />
         <Setter Property="TextColor" Value="{DynamicResource AmTextOnPrimary}" />
         <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontAttributes" Value="Bold" />
         <Setter Property="CornerRadius" Value="21" />
         <Setter Property="HeightRequest" Value="42" />
         <Setter Property="Padding" Value="22,0" />
         <Setter Property="MinimumWidthRequest" Value="0" />
         <Setter Property="MinimumHeightRequest" Value="0" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{DynamicResource AmPrimaryDark}" />
+                            <Setter Property="Scale" Value="0.97" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{DynamicResource AmCoverPlaceholder}" />
+                            <Setter Property="TextColor" Value="{DynamicResource AmTextOnPrimary}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
     </Style>
 
     <Style x:Key="AmGhostButton" TargetType="Button">
@@ -117,6 +143,24 @@
         <Setter Property="Padding" Value="22,0" />
         <Setter Property="MinimumWidthRequest" Value="0" />
         <Setter Property="MinimumHeightRequest" Value="0" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{DynamicResource AmDivider}" />
+                            <Setter Property="Scale" Value="0.97" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{DynamicResource AmTextTertiary}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
     </Style>
 
     <Style x:Key="AmOutlineButton" TargetType="Button">
@@ -148,6 +192,19 @@
         <Setter Property="HeightRequest" Value="42" />
         <Setter Property="MinimumWidthRequest" Value="0" />
         <Setter Property="MinimumHeightRequest" Value="0" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Pressed">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{DynamicResource AmChipBg}" />
+                            <Setter Property="Scale" Value="0.92" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
     </Style>
 
     <!-- 纯文字按钮（顶栏右侧「搜索」「取消」之类） -->
@@ -270,6 +327,22 @@
     <Style x:Key="AmChipText" TargetType="Label">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="TextColor" Value="{DynamicResource AmTextSecondary}" />
+    </Style>
+
+    <!-- 网易云风格 Pill Tab：圆角长条，选中实底白字 -->
+    <Style x:Key="AmPill" TargetType="Border">
+        <Setter Property="BackgroundColor" Value="{DynamicResource AmSurface}" />
+        <Setter Property="Stroke" Value="{DynamicResource AmDivider}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 18" />
+        <Setter Property="Padding" Value="16,7" />
+        <Setter Property="VerticalOptions" Value="Center" />
+    </Style>
+
+    <Style x:Key="AmPillText" TargetType="Label">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextColor" Value="{DynamicResource AmTextPrimary}" />
+        <Setter Property="VerticalOptions" Value="Center" />
     </Style>
 
     <Style x:Key="AmBadge" TargetType="Border">

@@ -1,4 +1,5 @@
 using AnMusic.Android.ViewModels;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -28,7 +29,8 @@ public partial class DiscoverPage : ContentPage
 
     private async void OnModeTapped(object? sender, TappedEventArgs e)
     {
-        if ((sender as BindableObject)?.BindingContext is RadioModeOption option)
-            await _vm.StartAsync(option);
+        if ((sender as BindableObject)?.BindingContext is not RadioModeOption option) return;
+        try { await _vm.StartAsync(option); }
+        catch (Exception ex) { AppPaths.LogError("启动电台", ex); }
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Text.Json;
 
 namespace AnMusic.Services.Providers.JsPlugin;
@@ -28,6 +29,24 @@ public sealed class JsPluginLoader
 {
     /// <summary>统一 HTTP 出口（含 UA / 超时 / 代理设置）。</summary>
     private static HttpClient Http => Services.Net.HttpService.Client;
+
+    /// <summary>
+    /// 是否随加载释放内置修正版音源插件。各端宿主按需开启（安卓端开启）。
+    /// 内置插件会在扫描前写入插件目录（带版本戳，随 App 更新自动覆盖）。
+    /// </summary>
+    public static bool EnableBuiltinPlugins { get; set; }
+
+    /// <summary>内置插件版本号：修正端点后 +1，旧版本戳会触发重新释放。</summary>
+    private const int BuiltinPluginVersion = 2;
+
+    /// <summary>(资源逻辑名, 释放文件名)</summary>
+    private static readonly (string Resource, string File)[] BuiltinPlugins =
+    [
+        ("AnMusic.Assets.Plugins.Builtin.anmusic-netease.js", "anmusic-netease.js"),
+        ("AnMusic.Assets.Plugins.Builtin.anmusic-qq.js", "anmusic-qq.js"),
+        ("AnMusic.Assets.Plugins.Builtin.anmusic-kugou.js", "anmusic-kugou.js"),
+        ("AnMusic.Assets.Plugins.Builtin.anmusic-kuwo.js", "anmusic-kuwo.js"),
+    ];
 
     private readonly CoverCacheService _covers;
     private readonly List<JsPluginProvider> _plugins = [];
@@ -131,7 +150,8 @@ public sealed class JsPluginLoader
             return errors;
         }
 
-        // 先按清单下载远程插件，再统一扫描
+        // 先释放内置修正版音源插件，再按清单下载远程插件，最后统一扫描
+        await EnsureBuiltinPluginsAsync();
         var manifestErrors = await SyncFromManifestAsync();
         errors.AddRange(manifestErrors);
 
@@ -165,6 +185,52 @@ public sealed class JsPluginLoader
         catch { /* 日志失败不影响加载 */ }
 
         return errors;
+    }
+
+    /// <summary>
+    /// 释放内置修正版音源插件到插件目录（按版本戳幂等覆盖）。
+    /// 已被用户删除的内置插件也会随版本更新重新写入——内置源是"开箱即能搜歌"的底线。
+    /// </summary>
+    private static async Task EnsureBuiltinPluginsAsync()
+    {
+        if (!EnableBuiltinPlugins) return;
+        try
+        {
+            var stampPath = Path.Combine(PluginDir, ".builtin-ver");
+            var stamp = File.Exists(stampPath) ? File.ReadAllText(stampPath).Trim() : "";
+            var versionMatch = stamp == BuiltinPluginVersion.ToString();
+
+            var asm = Assembly.GetExecutingAssembly();
+            var wroteAny = false;
+            foreach (var (resource, fileName) in BuiltinPlugins)
+            {
+                var dest = Path.Combine(PluginDir, fileName);
+
+                // 版本戳匹配且文件仍在：跳过。用户误删的内置文件会立即补回（无需等版本更新）。
+                if (versionMatch && File.Exists(dest) && new FileInfo(dest).Length > 0)
+                    continue;
+
+                using var stream = asm.GetManifestResourceStream(resource);
+                if (stream is null)
+                {
+                    Trace.WriteLine($"[JsPlugin] 内置插件资源缺失: {resource}");
+                    continue;
+                }
+                var tmp = dest + ".tmp";
+                await using (var fs = File.Create(tmp))
+                    await stream.CopyToAsync(fs);
+                File.Move(tmp, dest, true);
+                wroteAny = true;
+                Trace.WriteLine($"[JsPlugin] 内置插件已释放: {fileName}");
+            }
+            if (wroteAny || !versionMatch)
+                File.WriteAllText(stampPath, BuiltinPluginVersion.ToString());
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[JsPlugin] 内置插件释放失败: {ex.Message}");
+            Services.AppPaths.LogError("释放内置插件", ex);
+        }
     }
 
     /// <summary>过滤文件名非法字符。</summary>

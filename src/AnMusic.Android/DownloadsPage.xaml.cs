@@ -1,5 +1,6 @@
 using AnMusic.Android.Services;
 using AnMusic.Android.ViewModels;
+using AnMusic.Services;
 
 namespace AnMusic.Android;
 
@@ -93,7 +94,10 @@ public partial class DownloadsPage : ContentPage
     }
 
     private async void OnClearAllCacheClicked(object? sender, EventArgs e)
-        => await _vm.ClearAllCacheCommand.ExecuteAsync(null);
+    {
+        try { await _vm.ClearAllCacheCommand.ExecuteAsync(null); }
+        catch (Exception ex) { AppPaths.LogError("清空缓冲缓存", ex); }
+    }
 
     #endregion
 }

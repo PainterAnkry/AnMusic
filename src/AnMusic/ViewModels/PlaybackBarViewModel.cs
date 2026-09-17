@@ -33,6 +33,27 @@ public partial class PlaybackBarViewModel : ObservableObject
     [ObservableProperty]
     private string? _coverPath;
 
+    /// <summary>
+    /// 当前曲目来源的展示名（本地文件 / 各音源显示名），歌词页信息行用。
+    /// </summary>
+    public string CurrentSourceText
+    {
+        get
+        {
+            if (CurrentTrack is not { } track) return "";
+            if (track.IsLocalTrack) return "本地文件";
+            return _registry.Find(track.ProviderId)?.DisplayName ?? track.ProviderId switch
+            {
+                "bilibili" => "B站音频",
+                "netease" => "网易云音乐",
+                "qqmusic" => "QQ音乐",
+                _ => "在线音源",
+            };
+        }
+    }
+
+    partial void OnCurrentTrackChanged(Track? value) => OnPropertyChanged(nameof(CurrentSourceText));
+
     [ObservableProperty]
     private bool _isPlaying;
 
