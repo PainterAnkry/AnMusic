@@ -81,8 +81,7 @@ public partial class MainViewModel
         }
         if (index >= 0) _queue.JumpTo(index);
         await _playbackBar.LoadAndPlayAsync(track);
-        await Lyrics.LoadLyricsAsync(track);
-        RecordRecent(track);
+        RecordRecent(track); // 歌词由 TrackChanged → OnTrackStarted 统一装载
         RefreshQueuePanel();
     }
 

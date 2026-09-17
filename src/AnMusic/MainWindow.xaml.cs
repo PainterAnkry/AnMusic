@@ -5,7 +5,7 @@ using System.Windows.Interop;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using AnMusic.Models;
 using AnMusic.Services.Settings;
 using AnMusic.ViewModels;
@@ -76,43 +76,60 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(PlaybackBarViewModel.IsPlaying))
                 UpdateDiscSpin();
         };
+        // 歌词页开关也要跟着启停（关着的时候没必要空转）
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsLyricsOpen)) UpdateDiscSpin();
+        };
 
     }
 
-    /// <summary>歌词页黑胶唱片的转动动画（播放中转、暂停即停在当前角度）。</summary>
-    private Storyboard? _discSpin;
+    /// <summary>
+    /// 歌词页黑胶唱片的转动：播放时匀速转（24 秒一圈），暂停即停在当前角度。
+    /// </summary>
+    /// <remarks>
+    /// 用 DispatcherTimer 逐帧累加角度，而不是 Storyboard：
+    /// 一来暂停/继续天然就是"停表/继续"，不需要管理动画时钟；
+    /// 二来只在"歌词页打开且正在播放"时才走动，不白烧帧。
+    /// </remarks>
+    private DispatcherTimer? _discSpinTimer;
+    private DateTime _discSpinLastTick;
+
+    private const double DiscSecondsPerTurn = 24;
 
     private void UpdateDiscSpin()
     {
         if (DiscRotate is null) return; // 歌词页还没构建出来
 
-        if (_viewModel.PlaybackBar.IsPlaying)
-        {
-            _discSpin ??= CreateDiscSpin();
-            _discSpin.Begin(this, true);
-        }
+        if (_viewModel.IsLyricsOpen && _viewModel.PlaybackBar.IsPlaying)
+            StartDiscSpin();
         else
-        {
-            _discSpin?.Stop(this);
-        }
+            StopDiscSpin();
     }
 
-    /// <summary>唱片每 24 秒转一圈（够慢，不晃眼）。</summary>
-    private Storyboard CreateDiscSpin()
+    private void StartDiscSpin()
     {
-        var spin = new DoubleAnimation
-        {
-            From = 0,
-            To = 360,
-            Duration = new Duration(TimeSpan.FromSeconds(24)),
-            RepeatBehavior = RepeatBehavior.Forever,
-        };
-        Storyboard.SetTarget(spin, DiscRotate);
-        Storyboard.SetTargetProperty(spin, new PropertyPath(nameof(RotateTransform.Angle)));
+        if (_discSpinTimer is not null) return;
 
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(spin);
-        return storyboard;
+        _discSpinLastTick = DateTime.UtcNow;
+        _discSpinTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(33) // 约 30fps，转得很慢，够顺滑又不费
+        };
+        _discSpinTimer.Tick += (_, _) =>
+        {
+            var now = DateTime.UtcNow;
+            var elapsed = (now - _discSpinLastTick).TotalSeconds;
+            _discSpinLastTick = now;
+            DiscRotate.Angle = (DiscRotate.Angle + elapsed / DiscSecondsPerTurn * 360) % 360;
+        };
+        _discSpinTimer.Start();
+    }
+
+    private void StopDiscSpin()
+    {
+        _discSpinTimer?.Stop();
+        _discSpinTimer = null;
     }
 
     #region 快捷键
@@ -177,15 +194,15 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(_viewModel.Settings.BackgroundImagePath))
         {
-            Resources.Remove("BgPanel");
             Resources.Remove("BgMainAlpha");
             Resources.Remove("BgContentAlpha");
             Resources.Remove("BgPlaybar");
             return;
         }
 
-        // 面板 60%、列表/歌词区/标题行 40%、设置页 35% 不透明度；浅色主题下过高的白色蒙层会让图片完全透不出来
-        Resources["BgPanel"] = MakeTranslucent("BgPanel", 0.60);
+        // 只让"内容区"半透明（壁纸透出来），窗口外壳保持皮肤本色：
+        // BgPanel 是标题栏 / 视图标题行 / 侧边栏的底色，一旦跟着透明，
+        // 浅色壁纸透上来会让深色皮肤的标题栏变成浅色、文字糊到看不清（换皮肤时尤其明显）。
         Resources["BgMainAlpha"] = MakeTranslucent("BgMainAlpha", 0.40);
         Resources["BgContentAlpha"] = MakeTranslucent("BgContentAlpha", 0.35);
         Resources["BgPlaybar"] = MakeTranslucent("BgPlaybar", 0.60);
@@ -774,26 +791,11 @@ public partial class MainWindow : Window
         _viewModel.ShareCurrentTrack();
     }
 
-    /// <summary>
-    /// 主页卡片点击：优先执行卡片自带的既有命令；均衡器 / 一起听这类需要窗口或弹层的入口
-    /// 由这里打开现成的窗口/面板（不新增功能）。
-    /// </summary>
+    /// <summary>主页卡片点击：执行卡片自带的既有命令。</summary>
     private void HomeCard_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: HomeCard card } element) return;
+        if (sender is not FrameworkElement { DataContext: HomeCard card }) return;
         e.Handled = true;
-
-        switch (card.ActionKey)
-        {
-            case "eq":
-                EqButton_Click(element, new RoutedEventArgs());
-                return;
-            case "together":
-                MorePopup.IsOpen = false;
-                ListenTogetherPopup.PlacementTarget = element; // 面板贴着被点的卡片弹出
-                ListenTogetherPopup.IsOpen = true;
-                return;
-        }
 
         if (card.Command?.CanExecute(card.CommandParameter) == true)
             card.Command.Execute(card.CommandParameter);

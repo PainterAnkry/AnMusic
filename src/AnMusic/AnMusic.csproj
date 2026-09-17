@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- 版本号唯一来源：运行时通过程序集读取（见 SettingsViewModel.CurrentVersion） -->
-    <Version>3.3.3</Version>
+    <Version>3.3.4</Version>
     <Product>AnMusic</Product>
     <AssemblyTitle>AnMusic</AssemblyTitle>
     <Company>PainterAnkry</Company>
@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+    <!-- 主页卡片/歌单的默认封面（无自有封面时用，设计图，见 Assets/home） -->
+    <Resource Include="Assets\home\*.png" />
   </ItemGroup>
 
   <!-- 平台无关业务逻辑（模型/音源/歌词/队列/设置）统一放在 Core，供桌面端与安卓端复用 -->

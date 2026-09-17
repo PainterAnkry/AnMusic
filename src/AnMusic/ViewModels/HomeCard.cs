@@ -21,19 +21,21 @@ public sealed class HomeCard
     /// <summary>一句说明（用现有数据算出来，例如"收藏的 12 首"）。</summary>
     public string Description { get; init; } = "";
 
-    /// <summary>封面来源曲目（可为空，空则显示占位）。</summary>
+    /// <summary>封面来源曲目（可为空，空则用默认封面）。</summary>
     public Track? CoverTrack { get; init; }
+
+    /// <summary>
+    /// 歌单卡片绑定的歌单（自定义封面 / 最近添加的歌曲封面都由它提供）。
+    /// </summary>
+    public Playlist? Playlist { get; init; }
+
+    /// <summary>内置默认封面的打包地址（无自有封面时显示，保证卡片不空）。</summary>
+    public string DefaultCover { get; init; } = "";
 
     /// <summary>点击执行的既有命令。</summary>
     public ICommand? Command { get; init; }
 
     public object? CommandParameter { get; init; }
-
-    /// <summary>
-    /// 需要界面层配合的入口（非空时忽略 <see cref="Command"/>）：
-    /// <c>eq</c> = 均衡器窗口，<c>together</c> = 一起听面板。
-    /// </summary>
-    public string ActionKey { get; init; } = "";
 
     /// <summary>是否是"新建歌单"这类虚线占位卡。</summary>
     public bool IsPlaceholder { get; init; }

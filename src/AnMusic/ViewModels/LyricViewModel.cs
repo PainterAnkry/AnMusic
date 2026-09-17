@@ -136,8 +136,18 @@ public partial class LyricViewModel : ObservableObject
         _engine.PositionChanged += OnPositionChanged;
     }
 
+    /// <summary>
+    /// 已经加载歌词的曲目标识（<c>ProviderId:Id</c>）。
+    /// </summary>
+    /// <remarks>
+    /// 用来避免"同一首重播"时重复加载：单曲循环会在每次播完后重新 LoadAndPlayAsync，
+    /// 若无脑重载，歌词列表会被清空再填一遍，界面会闪一下。
+    /// </remarks>
+    public string LoadedTrackKey { get; private set; } = "";
+
     public async Task LoadLyricsAsync(Track track)
     {
+        LoadedTrackKey = $"{track.ProviderId}:{track.Id}";
         RefreshLyricStyle();
         _trackTitle = track.Title;
         _trackArtist = track.Artist;

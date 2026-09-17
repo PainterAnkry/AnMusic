@@ -1098,10 +1098,17 @@
                         <ItemsControl ItemsSource="{Binding UserPlaylists}" Margin="0,2,0,0">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="6" Padding="10,7" Cursor="Hand"
+                                    <Border CornerRadius="6" Padding="8,6" Cursor="Hand"
                                             MouseLeftButtonDown="SidebarPlaylist_Click" ToolTip="打开歌单">
                                         <Border.ContextMenu>
                                             <ContextMenu>
+                                                <MenuItem Header="🖼  设置自定义封面"
+                                                          Command="{Binding Data.ChoosePlaylistCoverCommand, Source={StaticResource VmProxy}}"
+                                                          CommandParameter="{Binding}"/>
+                                                <MenuItem Header="↺  恢复默认封面（最近添加的歌曲）"
+                                                          Command="{Binding Data.ResetPlaylistCoverCommand, Source={StaticResource VmProxy}}"
+                                                          CommandParameter="{Binding}"/>
+                                                <Separator/>
                                                 <MenuItem Header="✏  重命名歌单" Click="RenamePlaylist_Click"/>
                                                 <MenuItem Header="⬆  批量导入歌曲"
                                                           Command="{Binding Data.ImportTracksToPlaylistCommand, Source={StaticResource VmProxy}}"
@@ -1124,8 +1131,26 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
-                                        <TextBlock Text="{Binding Name}" Foreground="{DynamicResource FgNormal}"
-                                                   FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                        <DockPanel>
+                                            <!-- 封面：自定义封面优先，否则用最近添加的歌曲封面（随封面缓存异步刷新） -->
+                                            <Border DockPanel.Dock="Left" Width="26" Height="26" CornerRadius="4"
+                                                    Background="{DynamicResource BgControl}" Margin="0,0,8,0"
+                                                    ClipToBounds="True">
+                                                <Grid>
+                                                    <TextBlock Text="🎵" FontSize="11" Foreground="{DynamicResource FgMuted}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Image Source="{Binding DefaultCoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=64}"
+                                                           Stretch="UniformToFill"
+                                                           Visibility="{Binding CoverPath, Converter={StaticResource StrNotEmptyToCollapsed}}"/>
+                                                    <Image Source="{Binding CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=64}"
+                                                           Stretch="UniformToFill"
+                                                           Visibility="{Binding CoverPath, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Text="{Binding Name}" Foreground="{DynamicResource FgNormal}"
+                                                       FontSize="12" TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center"/>
+                                        </DockPanel>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -1228,7 +1253,7 @@
                                 <Button Command="{Binding ShowAllTracksCommand}">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
-                                            <Setter Property="Content" Value="🎵  全部音乐"/>
+                                            <Setter Property="Content" Value="🎵  本地歌曲"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsAllTracksView}" Value="True">
                                                     <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
@@ -1371,8 +1396,9 @@
                     </DockPanel>
                 </Border>
 
-                <!-- 搜索状态条 -->
-                <Border Grid.Row="2" Padding="12,5" Background="{DynamicResource AccentSoft}">
+                <!-- 搜索状态条：没有文案也不在加载时整条收起（否则就是一条空横带） -->
+                <Border Grid.Row="2" Padding="12,5" Background="{DynamicResource AccentSoft}"
+                        Visibility="{Binding IsStatusBarVisible, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal">
                         <!-- 搜索进行中：小转圈 + 状态文案 -->
                         <controls:LoadingSpinner Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,7,0"
@@ -1516,10 +1542,10 @@
                         <TextBlock Text="{Binding HomeSummary}" Foreground="{DynamicResource FgMuted}"
                                    FontSize="12" Margin="2,0,0,14"/>
 
-                        <!-- ① 横幅：五个既有视图入口（封面取现有数据，缺封面时是纯色卡） -->
+                        <!-- ① 横幅：既有视图入口（封面取现有数据，缺封面时用内置设计图） -->
                         <ItemsControl ItemsSource="{Binding HomeBanners}">
                             <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate>
+                                <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -1528,9 +1554,13 @@
                                         <Border Height="116" CornerRadius="8" Background="{DynamicResource BgControl}"
                                                 ClipToBounds="True">
                                             <Grid>
-                                                <!-- 封面背景（等比铺满）+ 底部渐暗，保证文字可读又不压掉封面 -->
+                                                <!-- 封面：有曲目封面用曲目封面，否则用内置设计图（不出现空卡片） -->
+                                                <Image Source="{Binding DefaultCover, Converter={StaticResource PathToImageConv}, ConverterParameter=240}"
+                                                       Stretch="UniformToFill"/>
                                                 <Image Source="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=240}"
-                                                       Stretch="UniformToFill" Opacity="0.9"/>
+                                                       Stretch="UniformToFill"
+                                                       Visibility="{Binding CoverTrack.CoverKey, Converter={StaticResource StrNotEmptyToVis}}"/>
+                                                <!-- 底部渐暗，保证文字可读又不压掉封面 -->
                                                 <Border>
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -1572,6 +1602,18 @@
                                 <DataTemplate>
                                     <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
                                             Click="HomeCard_Click" ToolTip="{Binding Title}">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="🖼  设置自定义封面"
+                                                          Command="{Binding Data.ChoosePlaylistCoverCommand, Source={StaticResource VmProxy}}"
+                                                          CommandParameter="{Binding Playlist}"
+                                                          Visibility="{Binding IsPlaceholder, Converter={StaticResource InvBoolToVis}}"/>
+                                                <MenuItem Header="↺  恢复默认封面（最近添加的歌曲）"
+                                                          Command="{Binding Data.ResetPlaylistCoverCommand, Source={StaticResource VmProxy}}"
+                                                          CommandParameter="{Binding Playlist}"
+                                                          Visibility="{Binding IsPlaceholder, Converter={StaticResource InvBoolToVis}}"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
                                         <StackPanel HorizontalAlignment="Left">
                                             <Border Width="148" Height="148" CornerRadius="8"
                                                     Background="{DynamicResource BgControl}" ClipToBounds="True">
@@ -1596,8 +1638,13 @@
                                                                        Foreground="{DynamicResource FgMuted}"/>
                                                         </StackPanel>
                                                     </Border>
-                                                    <Image Source="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
-                                                           Stretch="UniformToFill"/>
+                                                    <!-- 默认封面 = 最近添加的那首歌；自定义封面优先 -->
+                                                    <Image Source="{Binding Playlist.DefaultCoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
+                                                           Stretch="UniformToFill"
+                                                           Visibility="{Binding Playlist.CoverPath, Converter={StaticResource StrNotEmptyToCollapsed}}"/>
+                                                    <Image Source="{Binding Playlist.CoverPath, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
+                                                           Stretch="UniformToFill"
+                                                           Visibility="{Binding Playlist.CoverPath, Converter={StaticResource StrNotEmptyToVis}}"/>
                                                 </Grid>
                                             </Border>
                                             <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
@@ -1612,30 +1659,40 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- ③ 快捷入口：既有面板/窗口（下载管理/一起听/均衡器/桌面歌词/音源插件） -->
-                        <TextBlock Text="快捷入口" Style="{StaticResource HomeSectionTitle}" Margin="2,24,0,10"/>
-                        <ItemsControl ItemsSource="{Binding HomeShortcuts}">
+                        <!-- ③ 最近在听：最近播放过的曲目，点一下直接开播（用既有数据，不是新功能） -->
+                        <DockPanel Margin="2,24,0,10">
+                            <TextBlock DockPanel.Dock="Right" Text="点封面即播（以最近播放为队列）" FontSize="11"
+                                       Foreground="{DynamicResource FgMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Text="最近在听" Style="{StaticResource HomeSectionTitle}"/>
+                        </DockPanel>
+                        <TextBlock Text="还没有播放记录 —— 随便点首歌听听，这里会自动记录"
+                                   Foreground="{DynamicResource FgMuted}" FontSize="11.5" Margin="2,0,0,10"
+                                   Visibility="{Binding HasNoRecent, Converter={StaticResource BoolToVis}}"/>
+                        <ItemsControl ItemsSource="{Binding HomeRecentTracks}">
                             <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate>
+                                <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
-                                            Click="HomeCard_Click" ToolTip="{Binding Description}">
-                                        <Border Background="{DynamicResource BgControl}" CornerRadius="8" Padding="12,10">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Icon}" FontSize="18" VerticalAlignment="Center"
-                                                           Margin="0,0,10,0"/>
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgPrimary}"
-                                                               FontSize="12.5" FontWeight="SemiBold"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                               FontSize="10.5" Margin="0,2,0,0"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Border>
+                                            Click="HomeCard_Click" ToolTip="{Binding Title}">
+                                        <StackPanel HorizontalAlignment="Left">
+                                            <Border Width="148" Height="148" CornerRadius="8"
+                                                    Background="{DynamicResource BgControl}" ClipToBounds="True">
+                                                <Grid>
+                                                    <TextBlock Text="🎵" FontSize="24" Foreground="{DynamicResource FgMuted}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Image Source="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"
+                                                           Stretch="UniformToFill"/>
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
+                                                       FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="148"/>
+                                            <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
+                                                       FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="148"/>
+                                        </StackPanel>
                                     </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

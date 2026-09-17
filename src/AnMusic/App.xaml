@@ -33,6 +33,117 @@
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
+
+            <!-- ══ 滚动条：跟随皮肤配色的细长圆角样式 ══
+                 默认 WPF 滚动条是系统自带的浅灰方块，换肤完全不变（深色皮肤下尤其突兀），
+                 所以这里统一换成"透明轨道 + 圆角滑块"，滑块颜色取当前皮肤的文字色/强调色。 -->
+            <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="IsTabStop" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border x:Name="bar" Background="{DynamicResource FgMuted}" CornerRadius="4" Margin="2"/>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bar" Property="Background" Value="{DynamicResource FgSecondary}"/>
+                                </Trigger>
+                                <Trigger Property="IsDragging" Value="True">
+                                    <Setter TargetName="bar" Property="Background" Value="{DynamicResource Accent}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <!-- 轨道两端的翻页按钮：只保留点击翻页能力，不画箭头 -->
+            <Style x:Key="ScrollPageButtonStyle" TargetType="RepeatButton">
+                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                <Setter Property="Focusable" Value="False"/>
+                <Setter Property="IsTabStop" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RepeatButton">
+                            <Border Background="Transparent"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
+                <Grid Background="Transparent">
+                    <Track x:Name="PART_Track" IsDirectionReversed="True">
+                        <Track.DecreaseRepeatButton>
+                            <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource ScrollPageButtonStyle}"/>
+                        </Track.DecreaseRepeatButton>
+                        <Track.Thumb>
+                            <Thumb Style="{StaticResource ScrollThumbStyle}"/>
+                        </Track.Thumb>
+                        <Track.IncreaseRepeatButton>
+                            <RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource ScrollPageButtonStyle}"/>
+                        </Track.IncreaseRepeatButton>
+                    </Track>
+                </Grid>
+            </ControlTemplate>
+            <ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
+                <Grid Background="Transparent">
+                    <Track x:Name="PART_Track" Orientation="Horizontal" IsDirectionReversed="False">
+                        <Track.DecreaseRepeatButton>
+                            <RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource ScrollPageButtonStyle}"/>
+                        </Track.DecreaseRepeatButton>
+                        <Track.Thumb>
+                            <Thumb Style="{StaticResource ScrollThumbStyle}"/>
+                        </Track.Thumb>
+                        <Track.IncreaseRepeatButton>
+                            <RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource ScrollPageButtonStyle}"/>
+                        </Track.IncreaseRepeatButton>
+                    </Track>
+                </Grid>
+            </ControlTemplate>
+            <!-- 隐式样式：全局所有 ScrollBar（列表/页面/下拉/文本框）都跟着皮肤走 -->
+            <Style TargetType="ScrollBar">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Width" Value="10"/>
+                <Setter Property="MinWidth" Value="10"/>
+                <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}"/>
+                <Style.Triggers>
+                    <Trigger Property="Orientation" Value="Horizontal">
+                        <Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}"/>
+                        <Setter Property="Width" Value="Auto"/>
+                        <Setter Property="MinWidth" Value="0"/>
+                        <Setter Property="Height" Value="10"/>
+                        <Setter Property="MinHeight" Value="10"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+            <!-- ══ 列表表头（列标题行）════
+                 GridViewColumnHeader 是 WPF 默认控件：皮肤换不动，永远是系统浅色渐变条，
+                 深色主题下就是列表顶部一条扎眼的白带（用户反馈的就是它）。
+                 这里统一换成主题底色 + 底部细分隔线，列头内容铺满整列（整列都可点排序）。 -->
+            <ControlTemplate x:Key="ThemedColumnHeaderTemplate" TargetType="GridViewColumnHeader">
+                <Border x:Name="bd"
+                        Background="{DynamicResource BgPanel}"
+                        BorderBrush="{DynamicResource BorderSubtle}"
+                        BorderThickness="0,0,0,1"
+                        Padding="0,3">
+                    <ContentPresenter HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Center"
+                                      RecognizesAccessKey="True"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgControl}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgControlHover}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+            <!-- 隐式样式：所有列表的列标题行都跟随皮肤 -->
+            <Style TargetType="GridViewColumnHeader">
+                <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Template" Value="{StaticResource ThemedColumnHeaderTemplate}"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

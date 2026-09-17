@@ -122,7 +122,7 @@ public static class ThemeService
     /// <summary>强调色下标上限（夹取用，随方案增减自动跟随）。</summary>
     public static int MaxAccentIndex => AccentPalettes.Length - 1;
 
-    /// <summary>应用强调色方案（0-5）。</summary>
+    /// <summary>应用强调色方案（0-6）。</summary>
     public static void ApplyAccent(int index)
     {
         var app = Application.Current;
@@ -131,8 +131,31 @@ public static class ThemeService
         index = Math.Clamp(index, 0, AccentPalettes.Length - 1);
         var (accent, hover, soft) = AccentPalettes[index];
 
+        // 调色板里的 soft 是"浅色底"（给浅色主题用的近乎白色）。
+        // 深色皮肤上直接套用，搜索状态条 / 选中项底色会变成一条刺眼的白带
+        // （用户反馈的"主页下方一横白色"就是它），所以深色皮肤改成
+        // "向皮肤底色靠拢的强调色浅染"——与安卓端同一套做法。
+        if (IsDark)
+            soft = Mix(BackgroundColor(app), accent, 0.26);
+
         app.Resources["Accent"] = new SolidColorBrush(accent);
         app.Resources["AccentHover"] = new SolidColorBrush(hover);
         app.Resources["AccentSoft"] = new SolidColorBrush(soft);
+    }
+
+    /// <summary>当前皮肤的底色（拿不到时按深色兜底）。</summary>
+    private static Color BackgroundColor(Application app)
+        => app.TryFindResource("BgMain") is SolidColorBrush brush
+            ? brush.Color
+            : Color.FromRgb(0x17, 0x19, 0x1D);
+
+    /// <summary>线性混色：t=0 取 a，t=1 取 b。</summary>
+    private static Color Mix(Color a, Color b, double t)
+    {
+        var k = Math.Clamp(t, 0, 1);
+        return Color.FromRgb(
+            (byte)Math.Round(a.R + (b.R - a.R) * k),
+            (byte)Math.Round(a.G + (b.G - a.G) * k),
+            (byte)Math.Round(a.B + (b.B - a.B) * k));
     }
 }

@@ -297,6 +297,14 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSearchMoreVisible;
 
+    /// <summary>
+    /// 状态提示条是否显示：没有文案、也不在搜索/加载时整条收起。
+    /// </summary>
+    /// <remarks>
+    /// 以前这条永远占着一行（空的时候就是一条纯色横带，看着像"莫名多出一条线"）。
+    /// </remarks>
+    public bool IsStatusBarVisible => SearchStatus.Length > 0 || IsSearching || IsLoadingParts;
+
     /// <summary>“加载更多”按钮文案。</summary>
     [ObservableProperty]
     private string _searchMoreText = "加载更多";
@@ -323,7 +331,7 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Radio => "个性电台",
         ViewMode.Downloads => "下载管理",
         ViewMode.BilibiliParts => BilibiliListTitle,
-        _ => "全部音乐"
+        _ => "本地歌曲"
     };
 
     /// <summary>侧边栏高亮状态（供 DataTrigger 使用）。</summary>
@@ -379,8 +387,13 @@ public partial class MainViewModel : ObservableObject
     partial void OnIsSearchingChanged(bool value)
     {
         OnPropertyChanged(nameof(IsBusyWaiting));
+        OnPropertyChanged(nameof(IsStatusBarVisible));
         RefreshEmptyState();
     }
+
+    partial void OnSearchStatusChanged(string value) => OnPropertyChanged(nameof(IsStatusBarVisible));
+
+    partial void OnIsLoadingPartsChanged(bool value) => OnPropertyChanged(nameof(IsStatusBarVisible));
 
     /// <summary>根据当前视图与数据状态刷新空列表引导文案/可见性。</summary>
     public void RefreshEmptyState()
@@ -578,8 +591,7 @@ public partial class MainViewModel : ObservableObject
         }
         _queue.SetItems(list, Math.Max(0, index));
         await _playbackBar.LoadAndPlayAsync(track);
-        await Lyrics.LoadLyricsAsync(track);
-        RecordRecent(track);
+        RecordRecent(track); // 歌词由 TrackChanged → OnTrackStarted 统一装载
     }
 
     /// <summary>播放当前列表全部曲目（从第一首开始）。</summary>
@@ -589,14 +601,19 @@ public partial class MainViewModel : ObservableObject
         if (tracks.Count == 0) return;
         _queue.SetItems(tracks, 0);
         await _playbackBar.LoadAndPlayAsync(tracks[0]);
-        await Lyrics.LoadLyricsAsync(tracks[0]);
         RecordRecent(tracks[0]);
     }
 
     /// <summary>
-    /// 曲目开始播放：累加播放次数（听歌排行用）、写入最近播放；
+    /// 曲目开始播放：累加播放次数（听歌排行用）、写入最近播放、装载歌词；
     /// 正在看听歌排行时立即刷新，数字即时变化。
     /// </summary>
+    /// <remarks>
+    /// 歌词必须在这里跟着"曲目变化"走：所有切歌路径（点歌、下一首/上一首、自动切歌、
+    /// 播放队列双击）最终都会经过 <see cref="PlaybackBarViewModel.LoadAndPlayAsync"/> 并触发
+    /// <c>TrackChanged</c>。以前只在"点歌播放"的几条路径里显式调用 LoadLyricsAsync，
+    /// 结果自动切歌/上一首下一首之后歌词还停在上一条。
+    /// </remarks>
     private void OnTrackStarted(Track track)
     {
         if (track is null) return;
@@ -605,6 +622,10 @@ public partial class MainViewModel : ObservableObject
         _store.PlayCounts.TryGetValue(key, out var count);
         _store.PlayCounts[key] = count + 1;
         _store.Save();
+
+        // 同一首重播（单曲循环）不重载，避免歌词闪一下
+        if (Lyrics.LoadedTrackKey != key)
+            _ = Lyrics.LoadLyricsAsync(track);
 
         RecordRecent(track);
 
@@ -961,7 +982,6 @@ public partial class MainViewModel : ObservableObject
         {
             _queue.SetItems([.. RadioTracks], 0);
             await _playbackBar.LoadAndPlayAsync(RadioTracks[0]);
-            await Lyrics.LoadLyricsAsync(RadioTracks[0]);
             RecordRecent(RadioTracks[0]);
         }
     }
