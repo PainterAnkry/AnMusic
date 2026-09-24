@@ -119,4 +119,13 @@ public sealed class UserSettings
     /// 在设置页填一个地址即可，不需要发新版本。
     /// </remarks>
     public string AnnouncementUrl { get; set; } = "";
+
+    /// <summary>
+    /// 手动「打开本地文件」加进来的音频文件路径。
+    /// </summary>
+    /// <remarks>
+    /// 曲库是按目录扫描出来的，扫描时会整体重建；这些散落的文件记在这里，
+    /// 每次扫描完再合并回去，否则重启后就"消失"了。
+    /// </remarks>
+    public List<string>? ExtraLocalFiles { get; set; }
 }

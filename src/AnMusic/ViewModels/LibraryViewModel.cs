@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using AnMusic.Models;
 using AnMusic.Services.Playlist;
@@ -14,9 +15,10 @@ namespace AnMusic.ViewModels;
 /// </summary>
 public partial class LibraryViewModel : ObservableObject
 {
-    private readonly IMusicProvider _localProvider;
+    private readonly LocalFileProvider _localProvider;
     private readonly PlaybackBarViewModel _playbackBar;
     private readonly IPlaylistQueue _queue;
+    private readonly Services.Settings.UserSettingsService _settingsService;
 
     public ObservableCollection<Track> Tracks { get; } = [];
 
@@ -29,11 +31,13 @@ public partial class LibraryViewModel : ObservableObject
     public LibraryViewModel(
         LocalFileProvider localProvider,
         PlaybackBarViewModel playbackBar,
-        IPlaylistQueue queue)
+        IPlaylistQueue queue,
+        Services.Settings.UserSettingsService settingsService)
     {
         _localProvider = localProvider;
         _playbackBar = playbackBar;
         _queue = queue;
+        _settingsService = settingsService;
     }
 
     [RelayCommand]
@@ -61,7 +65,8 @@ public partial class LibraryViewModel : ObservableObject
             var tracks = await _localProvider.SearchAsync(directory);
             foreach (var t in tracks)
                 Tracks.Add(t);
-            StatusText = $"共 {tracks.Count} 首曲目";
+            var extra = MergeExtraFiles();
+            StatusText = extra > 0 ? $"共 {Tracks.Count} 首曲目（含手动添加 {extra} 首）" : $"共 {tracks.Count} 首曲目";
         }
         catch (Exception ex)
         {
@@ -71,6 +76,32 @@ public partial class LibraryViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    /// <summary>
+    /// 把「打开本地文件」手动加进来的文件合并回曲库，返回合并数量。
+    /// </summary>
+    /// <remarks>
+    /// 扫描会整体重建列表，所以每次扫完都要把这些散落文件补回去，否则重启后就没了。
+    /// </remarks>
+    private int MergeExtraFiles()
+    {
+        var files = _settingsService.Settings.ExtraLocalFiles;
+        if (files is null || files.Count == 0) return 0;
+
+        var known = Tracks
+            .Select(t => t.FilePath)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var merged = 0;
+        foreach (var file in files.ToList())
+        {
+            if (!File.Exists(file) || !known.Add(file)) continue;
+            Tracks.Add(_localProvider.CreateTrackFromFile(file));
+            merged++;
+        }
+        return merged;
     }
 
     [RelayCommand]

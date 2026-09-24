@@ -39,6 +39,23 @@
         <!-- ContextMenu/Popup 不在窗口视觉树中，AncestorType 绑定失效；经代理访问 MainViewModel 命令 -->
         <converters:BindingProxy x:Key="VmProxy" Data="{Binding}"/>
 
+        <!-- 右键菜单：图标单独占一列（定宽居中）+ 文字放 Header。
+             以前把 emoji 直接写进 Header 字符串，emoji 的行盒比中文大，图标和文字看着不居中。 -->
+        <Style x:Key="MenuIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource FgSecondary}"/>
+        </Style>
+        <Style TargetType="MenuItem">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
+
         <Style x:Key="TrackListStyle" TargetType="ListViewItem">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource FgNormal}"/>
@@ -50,25 +67,36 @@
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>
-                        <MenuItem Header="▶  播放"
+                        <MenuItem Header="播放"
                                   Command="{Binding Data.PlayTrackCommand, Source={StaticResource VmProxy}}"
-                                  CommandParameter="{Binding}"/>
-                        <MenuItem Header="⏭  下一首播放"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Icon><TextBlock Text="&#xE768;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="下一首播放"
                                   Command="{Binding Data.PlayNextCommand, Source={StaticResource VmProxy}}"
-                                  CommandParameter="{Binding}"/>
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Icon><TextBlock Text="&#xE893;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
                         <!-- 仅 B 站曲目：多分P 视频搜索结果只有一条，这里展开全集（分P 列表） -->
-                        <MenuItem Header="📺  查看全集（分P）"
+                        <MenuItem Header="查看全集（分P）"
                                   Command="{Binding Data.OpenBilibiliPartsCommand, Source={StaticResource VmProxy}}"
                                   CommandParameter="{Binding}"
-                                  Visibility="{Binding ProviderId, Converter={StaticResource ProviderIdToVis}, ConverterParameter=bilibili}"/>
-                        <MenuItem Header="❤  加入/移出 我喜欢"
+                                  Visibility="{Binding ProviderId, Converter={StaticResource ProviderIdToVis}, ConverterParameter=bilibili}">
+                            <MenuItem.Icon><TextBlock Text="&#xE714;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="加入/移出 我喜欢"
                                   Command="{Binding Data.ToggleFavoriteCommand, Source={StaticResource VmProxy}}"
-                                  CommandParameter="{Binding}"/>
-                        <MenuItem Header="⬇  下载到本地"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Icon><TextBlock Text="&#xE734;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="下载到本地"
                                   Command="{Binding Data.DownloadTrackCommand, Source={StaticResource VmProxy}}"
-                                  CommandParameter="{Binding}"/>
-                        <MenuItem Header="➕  添加到歌单"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Icon><TextBlock Text="&#xE896;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="添加到歌单"
                                   ItemsSource="{Binding Data.UserPlaylists, Source={StaticResource VmProxy}}">
+                            <MenuItem.Icon><TextBlock Text="&#xE710;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
                             <MenuItem.ItemContainerStyle>
                                 <Style TargetType="MenuItem">
                                     <Setter Property="Header" Value="{Binding Name}"/>
@@ -77,16 +105,30 @@
                                 </Style>
                             </MenuItem.ItemContainerStyle>
                         </MenuItem>
-                        <MenuItem Header="👤  查看歌手（搜索）"
-                                  Command="{Binding Data.SearchForTextCommand, Source={StaticResource VmProxy}}"
-                                  CommandParameter="{Binding Artist}"/>
-                        <MenuItem Header="💿  查看专辑（搜索）"
-                                  Command="{Binding Data.SearchForTextCommand, Source={StaticResource VmProxy}}"
-                                  CommandParameter="{Binding Album}"/>
-                        <MenuItem Header="➖  从歌单中删除"
+                        <MenuItem Header="查看歌手"
+                                  Command="{Binding Data.ShowArtistCommand, Source={StaticResource VmProxy}}"
+                                  CommandParameter="{Binding Artist}">
+                            <MenuItem.Icon><TextBlock Text="&#xE77B;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="查看专辑"
+                                  Command="{Binding Data.ShowAlbumCommand, Source={StaticResource VmProxy}}"
+                                  CommandParameter="{Binding Album}">
+                            <MenuItem.Icon><TextBlock Text="&#xE8F1;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <!-- 仅本地歌曲视图：选文件加进曲库（路径会记住，重扫目录后仍在）；
+                             分隔线跟着它一起显示，避免两个菜单项都隐藏时留下一条空分隔线 -->
+                        <Separator Visibility="{Binding Data.IsAllTracksView, Source={StaticResource VmProxy}, Converter={StaticResource BoolToVis}}"/>
+                        <MenuItem Header="打开本地文件"
+                                  Command="{Binding Data.OpenLocalFilesCommand, Source={StaticResource VmProxy}}"
+                                  Visibility="{Binding Data.IsAllTracksView, Source={StaticResource VmProxy}, Converter={StaticResource BoolToVis}}">
+                            <MenuItem.Icon><TextBlock Text="&#xE8E5;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="从歌单中删除"
                                   Command="{Binding Data.RemoveTrackFromPlaylistCommand, Source={StaticResource VmProxy}}"
                                   CommandParameter="{Binding}"
-                                  Visibility="{Binding Data.IsPlaylistView, Source={StaticResource VmProxy}, Converter={StaticResource BoolToVis}}"/>
+                                  Visibility="{Binding Data.IsPlaylistView, Source={StaticResource VmProxy}, Converter={StaticResource BoolToVis}}">
+                            <MenuItem.Icon><TextBlock Text="&#xE738;" Style="{StaticResource MenuIcon}"/></MenuItem.Icon>
+                        </MenuItem>
                     </ContextMenu>
                 </Setter.Value>
             </Setter>
@@ -1254,7 +1296,7 @@
                                         <Style TargetType="Button" BasedOn="{StaticResource SidebarBtn}">
                                             <Setter Property="Content" Value="🔍  搜索结果"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsSearchView}" Value="True">
+                                                <DataTrigger Binding="{Binding IsSearchSectionVisible}" Value="True">
                                                     <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                                                     <Setter Property="FontWeight" Value="Bold"/>
                                                 </DataTrigger>
@@ -1314,15 +1356,23 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- 视图标题栏：不透明背景，避免左右缝隙透出底层背景图 -->
-                <Border Grid.Row="0" Background="{DynamicResource BgPanel}" Padding="16,10">
+                <!-- 视图标题栏：不透明背景，避免左右缝隙透出底层背景图
+                     （歌手页/专辑页用自己的大头部，这里整体收起） -->
+                <Border Grid.Row="0" Background="{DynamicResource BgPanel}" Padding="16,10"
+                        Visibility="{Binding IsDetailHeaderVisible, Converter={StaticResource InvBoolToVis}}">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
                                     Visibility="{Binding IsHomeView, Converter={StaticResource InvBoolToVis}}">
+                            <!-- 仅本地歌曲视图：直接选文件加入曲库（路径会记住，重扫目录后仍在） -->
+                            <Button Content="📄 打开本地文件" Command="{Binding OpenLocalFilesCommand}"
+                                    Style="{StaticResource BtnStyle}" Margin="0,0,8,0"
+                                    Visibility="{Binding IsAllTracksView, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="选择一个或多个本地音频文件加入「本地歌曲」"/>
                             <Button Content="📂 打开文件夹" Command="{Binding Library.SelectDirectoryCommand}"
                                     Style="{StaticResource BtnStyle}" Margin="0,0,8,0"/>
                             <Button Content="▶ 播放全部"
@@ -1370,6 +1420,104 @@
                                        Margin="16,2,12,0" MaxWidth="360" ToolTip="{Binding Greeting}"/>
                         </StackPanel>
                     </DockPanel>
+                </Border>
+
+                <!-- 歌手页头部：圆形头像 + 名称 + 单曲/专辑数 + 播放全部 -->
+                <Border Grid.Row="0" Background="{DynamicResource BgPanel}" Padding="16,14"
+                        Visibility="{Binding IsArtistView, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="▶ 播放全部" Command="{Binding PlayAllCurrentCommand}"
+                                    Style="{StaticResource BtnStyle}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <!-- 圆形头像：该歌手第一首有封面的歌；没有封面时是占位 -->
+                            <Grid Width="96" Height="96">
+                                <Ellipse Fill="{DynamicResource BgControl}"/>
+                                <TextBlock Text="🎤" FontSize="30" Foreground="{DynamicResource FgMuted}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Ellipse>
+                                    <Ellipse.Fill>
+                                        <ImageBrush Stretch="UniformToFill"
+                                                    ImageSource="{Binding ArtistCoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Grid>
+                            <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
+                                <TextBlock Text="{Binding ArtistName}" FontSize="22" FontWeight="Bold"
+                                           Foreground="{DynamicResource FgPrimary}" TextTrimming="CharacterEllipsis"
+                                           MaxWidth="420" ToolTip="{Binding ArtistName}"/>
+                                <TextBlock Text="{Binding ArtistMeta}" FontSize="12"
+                                           Foreground="{DynamicResource FgMuted}" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- 专辑页头部：封面 + 名称 + 歌手/曲目数 + 播放全部 -->
+                <Border Grid.Row="0" Background="{DynamicResource BgPanel}" Padding="16,14"
+                        Visibility="{Binding IsAlbumView, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="▶ 播放全部" Command="{Binding PlayAllCurrentCommand}"
+                                    Style="{StaticResource BtnStyle}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <!-- 方形圆角封面：专辑内第一首有封面的歌 -->
+                            <Grid Width="96" Height="96">
+                                <Rectangle RadiusX="10" RadiusY="10" Fill="{DynamicResource BgControl}"/>
+                                <TextBlock Text="💿" FontSize="30" Foreground="{DynamicResource FgMuted}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Rectangle RadiusX="10" RadiusY="10">
+                                    <Rectangle.Fill>
+                                        <ImageBrush Stretch="UniformToFill"
+                                                    ImageSource="{Binding AlbumCoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+                            </Grid>
+                            <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
+                                <TextBlock Text="{Binding AlbumName}" FontSize="20" FontWeight="Bold"
+                                           Foreground="{DynamicResource FgPrimary}" TextTrimming="CharacterEllipsis"
+                                           MaxWidth="420" ToolTip="{Binding AlbumName}"/>
+                                <TextBlock Text="{Binding AlbumMeta}" FontSize="12"
+                                           Foreground="{DynamicResource FgMuted}" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- 搜索结果分类：综合 / 单曲 / 歌手 / 专辑 -->
+                <Border Grid.Row="1" Background="{DynamicResource BgPanel}" Padding="16,0"
+                        Visibility="{Binding IsSearchTabsVisible, Converter={StaticResource BoolToVis}}">
+                    <ListBox ItemsSource="{Binding SearchTabNames}"
+                             SelectedIndex="{Binding SearchTabIndex, Mode=TwoWay}"
+                             Background="Transparent" BorderThickness="0" Margin="0,4,0,6">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource BoardTab}"/>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+                </Border>
+
+                <!-- 歌手页页签：歌曲 / 专辑 -->
+                <Border Grid.Row="1" Background="{DynamicResource BgPanel}" Padding="16,0"
+                        Visibility="{Binding IsArtistView, Converter={StaticResource BoolToVis}}">
+                    <ListBox ItemsSource="{Binding ArtistTabNames}"
+                             SelectedIndex="{Binding ArtistTabIndex, Mode=TwoWay}"
+                             Background="Transparent" BorderThickness="0" Margin="0,4,0,6">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource BoardTab}"/>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
                 </Border>
 
                 <!-- 排行榜子榜单切换行（仅排行榜视图显示） -->
@@ -1421,7 +1569,213 @@
                     </StackPanel>
                 </Border>
 
-                <Grid Grid.Row="3" x:Name="ContentArea">
+                <!-- 搜索分类/歌手页的聚合内容：歌手卡 + 专辑卡（正方形圆角封面，与主页一致）。
+                     卡片区不自己滚动：滚轮事件转给下方曲目列表（见 code-behind），
+                     否则鼠标停在专辑卡上时滚不动，看不到下面的单曲列表。 -->
+                <Border Grid.Row="3" Background="Transparent"
+                        Visibility="{Binding IsSearchGroupPanelVisible, Converter={StaticResource BoolToVis}}"
+                        PreviewMouseWheel="SearchGroupPanel_PreviewMouseWheel">
+                    <StackPanel Margin="16,14,16,6">
+                        <!-- ① 综合页签：歌手卡（取最匹配的一位） -->
+                        <StackPanel Visibility="{Binding IsSearchMixedTab, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="歌手" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
+                            <ItemsControl ItemsSource="{Binding SearchTopArtists}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource HomeCardBtn}" Click="HomeCard_Click"
+                                                Margin="0,0,0,10" HorizontalAlignment="Left"
+                                                Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
+                                                ToolTip="查看歌手页">
+                                            <Border Background="{DynamicResource BgControl}" CornerRadius="10" Padding="12">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Grid Width="56" Height="56">
+                                                        <Ellipse Fill="{DynamicResource BgDeeper}"/>
+                                                        <TextBlock Text="🎤" FontSize="20" Foreground="{DynamicResource FgMuted}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Ellipse>
+                                                            <Ellipse.Fill>
+                                                                <ImageBrush Stretch="UniformToFill"
+                                                                            ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=96}"/>
+                                                            </Ellipse.Fill>
+                                                        </Ellipse>
+                                                    </Grid>
+                                                    <StackPanel VerticalAlignment="Center" Margin="12,0,0,0" MaxWidth="420">
+                                                        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgPrimary}"
+                                                                   FontSize="14" FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
+                                                                   FontSize="11" Margin="0,3,0,0"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- ② 综合页签：专辑卡一行（列多一点，卡片小一点，给下方列表留空间） -->
+                        <StackPanel Visibility="{Binding IsSearchMixedTab, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="专辑" Style="{StaticResource HomeSectionTitle}" Margin="0,6,0,10"/>
+                            <ItemsControl ItemsSource="{Binding SearchAlbums}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Columns="8"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
+                                                Click="HomeCard_Click"
+                                                Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
+                                                ToolTip="查看专辑">
+                                            <StackPanel HorizontalAlignment="Left">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
+                                                    <Grid Width="150" Height="150">
+                                                        <Rectangle RadiusX="8" RadiusY="8" Fill="{DynamicResource BgControl}"/>
+                                                        <TextBlock Text="💿" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Rectangle RadiusX="8" RadiusY="8">
+                                                            <Rectangle.Fill>
+                                                                <ImageBrush Stretch="UniformToFill"
+                                                                            ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                            </Rectangle.Fill>
+                                                        </Rectangle>
+                                                    </Grid>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
+                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
+                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- ③ 歌手页签：歌手卡片网格 -->
+                        <StackPanel Visibility="{Binding IsSearchArtistsTab, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="歌手" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
+                            <ItemsControl ItemsSource="{Binding SearchArtists}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
+                                                Click="HomeCard_Click"
+                                                Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
+                                                ToolTip="查看歌手">
+                                            <StackPanel HorizontalAlignment="Left">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
+                                                    <Grid Width="150" Height="150">
+                                                        <Ellipse Fill="{DynamicResource BgControl}"/>
+                                                        <TextBlock Text="🎤" FontSize="30" Foreground="{DynamicResource FgMuted}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Ellipse>
+                                                            <Ellipse.Fill>
+                                                                <ImageBrush Stretch="UniformToFill"
+                                                                            ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                            </Ellipse.Fill>
+                                                        </Ellipse>
+                                                    </Grid>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
+                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
+                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- ④ 专辑页签：专辑卡片网格 -->
+                        <StackPanel Visibility="{Binding IsSearchAlbumsTab, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="专辑" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
+                            <ItemsControl ItemsSource="{Binding SearchAlbums}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
+                                                Click="HomeCard_Click"
+                                                Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
+                                                ToolTip="查看专辑">
+                                            <StackPanel HorizontalAlignment="Left">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
+                                                    <Grid Width="150" Height="150">
+                                                        <Rectangle RadiusX="8" RadiusY="8" Fill="{DynamicResource BgControl}"/>
+                                                        <TextBlock Text="💿" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Rectangle RadiusX="8" RadiusY="8">
+                                                            <Rectangle.Fill>
+                                                                <ImageBrush Stretch="UniformToFill"
+                                                                            ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                            </Rectangle.Fill>
+                                                        </Rectangle>
+                                                    </Grid>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
+                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
+                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- ⑤ 歌手页「专辑」页签：该歌手的专辑卡片网格 -->
+                        <StackPanel Visibility="{Binding IsArtistAlbumsTab, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="专辑" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
+                            <ItemsControl ItemsSource="{Binding ArtistAlbums}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource HomeCardBtn}" Margin="0,0,10,0"
+                                                Click="HomeCard_Click"
+                                                Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
+                                                ToolTip="查看专辑">
+                                            <StackPanel HorizontalAlignment="Left">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
+                                                    <Grid Width="150" Height="150">
+                                                        <Rectangle RadiusX="8" RadiusY="8" Fill="{DynamicResource BgControl}"/>
+                                                        <TextBlock Text="💿" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Rectangle RadiusX="8" RadiusY="8">
+                                                            <Rectangle.Fill>
+                                                                <ImageBrush Stretch="UniformToFill"
+                                                                            ImageSource="{Binding CoverTrack.CoverKey, Converter={StaticResource PathToImageConv}, ConverterParameter=180}"/>
+                                                            </Rectangle.Fill>
+                                                        </Rectangle>
+                                                    </Grid>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
+                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
+                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Row="4" x:Name="ContentArea">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <ListView x:Name="TrackList"
                           ItemsSource="{Binding CurrentTracks}"
                           Background="{DynamicResource BgMainAlpha}" BorderThickness="0"
@@ -1788,9 +2142,13 @@
                         </Grid.RowDefinitions>
                         <Border Grid.Row="0" Padding="16,10" Background="{DynamicResource BgPanel}">
                             <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="📄 打开本地文件"
+                                        Command="{Binding OpenLocalFilesCommand}"
+                                        Style="{StaticResource BtnStyle}"
+                                        ToolTip="选择一个或多个本地音频文件加入「本地歌曲」"/>
                                 <TextBlock Text="{Binding DownloadTasks.Count, StringFormat={}{0} 个任务}"
                                            DockPanel.Dock="Right" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource FgMuted}" FontSize="12" Margin="10,0,0,0"/>
+                                           Foreground="{DynamicResource FgMuted}" FontSize="12" Margin="0,0,10,0"/>
                                 <TextBlock Text="下载管理" FontSize="15" FontWeight="Bold"
                                            Foreground="{DynamicResource FgPrimary}" VerticalAlignment="Center"/>
                                 <TextBlock Text="右键歌曲选「下载到本地」加入队列，任务会自动逐个下载"
@@ -1874,8 +2232,9 @@
                     </Grid>
                 </Grid>
 
-                <!-- 搜索分页：结果超过一批时显示“加载更多”（网易云/QQ音乐/B站） -->
-                <Border Grid.Row="4" Padding="0,8,0,10"
+                <!-- 搜索分页：结果超过一批时显示“加载更多”（网易云/QQ音乐/B站）。
+                     放在列表下方的独立一行，避免浮在曲目行上面。 -->
+                <Border Grid.Row="1" Padding="0,8,0,10"
                         Background="{DynamicResource BgMainAlpha}"
                         Visibility="{Binding IsSearchMoreVisible, Converter={StaticResource BoolToVis}}">
                     <Button Command="{Binding LoadMoreSearchResultsCommand}"

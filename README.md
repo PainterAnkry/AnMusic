@@ -1,17 +1,22 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.6**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.7**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.6-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.7-orange)
 
 ## 功能特性
 
 ### 音乐播放
 - 🏠 **主页**：卡片式落地页——横幅入口（本地歌曲/个性电台/排行榜/听歌排行/最近播放/我喜欢，无封面时用内置设计封面）、
   我的歌单（自定义封面，默认取最近添加的歌曲）、**最近在听**（点封面直接播），全部由现有功能聚合而来
-- 本地音频播放（mp3 / flac / wav / m4a / aac / wma / ogg），基于 NAudio 3.1
+- 本地音频播放（mp3 / flac / wav / m4a / aac / wma / ogg），基于 NAudio 3.1；
+  可「📂 打开文件夹」整目录扫描，也可「📄 打开本地文件」直接挑选散落的音频文件加入
+  （路径会记住，重扫目录后仍在）
 - **多音源在线搜索**：网易云、QQ音乐、B站（插件源可继续扩展），自动缓冲到本地后播放
+- **搜索结果分类**：综合 / 单曲 / 歌手 / 专辑 四个页签；综合页聚合出**歌手卡 + 专辑卡 + 单曲列表**
+- **歌手页 / 专辑页**：列表里点歌手名或专辑名即进入；歌手页有大头像、单曲/专辑数、`歌曲`/`专辑` 两个页签，
+  专辑页有封面、专辑信息与曲目列表，均可一键「播放全部」，返回键原路退回
 - 搜索结果分页展示：每批 **50 条**，点击**「加载更多」**继续翻页，跨页自动去重
 - **音源插件（MusicFree 兼容）**：把 `.js` 插件放进插件目录即接入（内置 axios、crypto-js、dayjs、jsencrypt 等宿主库，支持插件清单自动下载）
 - 排行榜（热歌/新歌等榜单）、个性电台（按“我喜欢”自动推荐续播）、听歌排行

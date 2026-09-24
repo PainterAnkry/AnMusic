@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -519,8 +520,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 列表里点击歌手名 / 专辑名：按该字段直接搜索（内部就是普通搜索，
-    /// 与右键菜单"查看歌手/查看专辑"走同一条路径）。
+    /// 列表里点击歌手名 / 专辑名：跳转到歌手页 / 专辑页（与右键菜单、歌词页点击走同一条路径）。
     /// B 站曲目的「专辑」列例外 —— 那是来源标记，点击改为打开该视频的分P 全集。
     /// </summary>
     private void CellSearch_Click(object sender, MouseButtonEventArgs e)
@@ -536,16 +536,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        var keyword = element.Tag as string switch
+        var kind = element.Tag as string;
+        if (kind == "Artist" && !string.IsNullOrWhiteSpace(track.Artist))
         {
-            "Artist" => track.Artist,
-            "Album" => track.Album,
-            _ => null
-        };
-        if (string.IsNullOrWhiteSpace(keyword)) return;
-
-        e.Handled = true; // 别再触发行选中/双击播放
-        _ = _viewModel.SearchForTextAsync(keyword);
+            e.Handled = true;
+            _ = _viewModel.ShowArtistPageAsync(track.Artist);
+            return;
+        }
+        if (kind == "Album" && !string.IsNullOrWhiteSpace(track.Album))
+        {
+            e.Handled = true;
+            _ = _viewModel.ShowAlbumPageAsync(track.Album);
+        }
     }
 
     /// <summary>右键菜单"重命名歌单"：弹出输入对话框。</summary>
@@ -801,6 +803,33 @@ public partial class MainWindow : Window
             card.Command.Execute(card.CommandParameter);
     }
 
+    /// <summary>
+    /// 搜索结果「综合」页的歌手/专辑卡片区收到滚轮 → 转给下方曲目列表。
+    /// </summary>
+    /// <remarks>
+    /// 卡片区本身不滚动，如果不转发，鼠标停在专辑卡上时整页滚不动
+    /// （用户反馈："卡在专辑模块，看不到最下面的单曲列表"）。
+    /// </remarks>
+    private void SearchGroupPanel_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (FindScrollViewer(TrackList) is not { } sv) return;
+        e.Handled = true;
+        sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta);
+    }
+
+    /// <summary>在可视树里找某个控件内部的 ScrollViewer（ListView 自带一个）。</summary>
+    private static ScrollViewer? FindScrollViewer(DependencyObject? root)
+    {
+        if (root is null) return null;
+        if (root is ScrollViewer sv) return sv;
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+            if (FindScrollViewer(VisualTreeHelper.GetChild(root, i)) is { } found)
+                return found;
+        return null;
+    }
+
     /// <summary>标题栏 🎨 皮肤按钮：开关皮肤选择面板。</summary>
     private void SkinButton_Click(object sender, RoutedEventArgs e)
         => SkinPopup.IsOpen = !SkinPopup.IsOpen;
@@ -856,23 +885,23 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>歌词页点击歌手名 → 搜索该歌手。</summary>
+    /// <summary>歌词页点击歌手名 → 打开歌手页。</summary>
     private async void LyricArtist_Click(object sender, MouseButtonEventArgs e)
     {
         if (_viewModel.PlaybackBar.CurrentArtist is { Length: > 0 } artist)
         {
             _viewModel.ToggleLyricsCommand.Execute(null); // 收起歌词
-            await _viewModel.SearchForTextAsync(artist);
+            await _viewModel.ShowArtistPageAsync(artist);
         }
     }
 
-    /// <summary>歌词页点击专辑名 → 搜索该专辑。</summary>
+    /// <summary>歌词页点击专辑名 → 打开专辑页。</summary>
     private async void LyricAlbum_Click(object sender, MouseButtonEventArgs e)
     {
         if (_viewModel.PlaybackBar.CurrentTrack?.Album is { Length: > 0 } album)
         {
             _viewModel.ToggleLyricsCommand.Execute(null); // 收起歌词
-            await _viewModel.SearchForTextAsync(album);
+            await _viewModel.ShowAlbumPageAsync(album);
         }
     }
 

@@ -24,7 +24,7 @@ public enum SearchSource { Local, NetEase, QQMusic, Bilibili }
 /// 早期实现复用了 SearchResults，导致从搜索结果点进分P 后再点「返回」，
 /// 目标视图还是 SearchResults（等于原地不动），搜索结果也已经被分P 列表覆盖掉了。
 /// </remarks>
-public enum ViewMode { Home, AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads, BilibiliParts }
+public enum ViewMode { Home, AllTracks, SearchResults, Playlist, Favorites, Recent, Ranking, ListeningStats, Radio, Downloads, BilibiliParts, Artist, Album }
 
 /// <summary>
 /// 主 ViewModel：装配各子 ViewModel，管理歌单、我喜欢、最近播放、搜索与导航。
@@ -341,6 +341,8 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Radio => "个性电台",
         ViewMode.Downloads => "下载管理",
         ViewMode.BilibiliParts => BilibiliListTitle,
+        ViewMode.Artist => ArtistName.Length > 0 ? ArtistName : "歌手",
+        ViewMode.Album => AlbumName.Length > 0 ? AlbumName : "专辑",
         _ => "本地歌曲"
     };
 
@@ -359,12 +361,23 @@ public partial class MainViewModel : ObservableObject
     /// <summary>B 站分P 全集视图（一次性列表，与搜索结果分开）。</summary>
     public bool IsBilibiliPartsView => ViewMode == ViewMode.BilibiliParts;
 
-    /// <summary>侧边栏「搜索结果」入口是否显示：分P 全集也算搜索这一支，入口不能凭空消失。</summary>
-    public bool IsSearchSectionVisible => IsSearchView || IsBilibiliPartsView;
+    /// <summary>歌手详情页（搜索结果里点歌手名/歌手卡进入）。</summary>
+    public bool IsArtistView => ViewMode == ViewMode.Artist;
+
+    /// <summary>专辑详情页（搜索结果里点专辑名/专辑卡进入）。</summary>
+    public bool IsAlbumView => ViewMode == ViewMode.Album;
+
+    /// <summary>歌手页 / 专辑页：内容区用大头部（头像/封面 + 名称 + 播放全部）替代紧凑标题行。</summary>
+    public bool IsDetailHeaderVisible => IsArtistView || IsAlbumView;
+
+    /// <summary>侧边栏「搜索结果」入口是否显示：分P 全集、歌手页、专辑页都算搜索这一支。</summary>
+    public bool IsSearchSectionVisible => IsSearchView || IsBilibiliPartsView || IsArtistView || IsAlbumView;
 
     /// <summary>曲目列表是否可见（设置页/下载页/主页用各自的布局）。</summary>
     public bool IsTrackListVisible =>
-        !IsShowingSettings && ViewMode is not (ViewMode.Downloads or ViewMode.Home);
+        !IsShowingSettings && ViewMode is not (ViewMode.Downloads or ViewMode.Home)
+        && !(IsArtistView && !IsArtistSongsTab)          // 歌手页的「专辑」页签换成专辑卡片网格
+        && !(IsSearchView && SearchTabIndex is 2 or 3);  // 搜索页的「歌手/专辑」页签换成卡片网格
 
     /// <summary>按时段的小问候（清晨 / 午后 / 黄昏 / 深夜），显示在内容区标题右侧。</summary>
     [ObservableProperty]
@@ -475,6 +488,8 @@ public partial class MainViewModel : ObservableObject
             ViewMode.SearchResults => IsSearching
                 ? "正在搜索…"
                 : "输入关键词开始搜索\n或从左侧选择不同音源",
+            ViewMode.Artist => IsArtistLoading ? "正在查找这位歌手的歌曲…" : "没有找到这位歌手的歌曲\n换个关键词或音源试试",
+            ViewMode.Album => IsAlbumLoading ? "正在查找这个专辑的歌曲…" : "没有找到这个专辑的歌曲\n换个关键词或音源试试",
             ViewMode.Favorites => "还没有收藏歌曲\n播放时点 ♡ 即可加入喜欢",
             ViewMode.Recent => "还没有播放记录\n播放歌曲后将自动记录在此",
             ViewMode.Playlist => "这个歌单是空的\n右键歌曲选择「加入歌单」或批量导入",
@@ -505,6 +520,8 @@ public partial class MainViewModel : ObservableObject
         ViewMode.Radio => (System.Collections.IList)RadioTracks,
         ViewMode.Downloads => (System.Collections.IList)System.Array.Empty<Track>(), // 下载页有自己的列表
         ViewMode.BilibiliParts => (System.Collections.IList)BilibiliPartTracks,
+        ViewMode.Artist => (System.Collections.IList)ArtistSongs,
+        ViewMode.Album => (System.Collections.IList)AlbumTracks,
         _ => Library.Tracks
     };
 
@@ -716,8 +733,20 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsDownloadView));
         OnPropertyChanged(nameof(IsHomeView));
         OnPropertyChanged(nameof(IsBilibiliPartsView));
+        OnPropertyChanged(nameof(IsArtistView));
+        OnPropertyChanged(nameof(IsAlbumView));
+        OnPropertyChanged(nameof(IsDetailHeaderVisible));
         OnPropertyChanged(nameof(IsSearchSectionVisible));
         OnPropertyChanged(nameof(IsTrackListVisible));
+        // 搜索分类页签 / 歌手页页签这些派生可见性也要一起通知，否则切页时页签不刷新
+        OnPropertyChanged(nameof(IsSearchTabsVisible));
+        OnPropertyChanged(nameof(IsSearchMixedTab));
+        OnPropertyChanged(nameof(IsSearchSongsTab));
+        OnPropertyChanged(nameof(IsSearchArtistsTab));
+        OnPropertyChanged(nameof(IsSearchAlbumsTab));
+        OnPropertyChanged(nameof(IsSearchGroupPanelVisible));
+        OnPropertyChanged(nameof(IsArtistSongsTab));
+        OnPropertyChanged(nameof(IsArtistAlbumsTab));
         RefreshEmptyState();
 
         // 进主页时重建卡片：用最新数据（收藏数、歌单封面、最近播放…）
@@ -1378,12 +1407,19 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task SearchForText(string? keyword) => await SearchForTextAsync(keyword);
 
-    /// <summary>以指定关键词搜索（供歌词页点击歌手/专辑跳转使用）。</summary>
-    public async Task SearchForTextAsync(string? text)
+    /// <summary>
+    /// 以指定关键词搜索（供歌词页点击歌手/专辑跳转使用）。
+    /// </summary>
+    /// <param name="targetView">
+    /// 搜索完成后要去的页面：默认 <see cref="ViewMode.SearchResults"/>；
+    /// 传 <see cref="ViewMode.Artist"/> / <see cref="ViewMode.Album"/> 时用同一套搜索结果
+    /// 渲染歌手页 / 专辑页（取数能力复用现有搜索，不新增接口）。
+    /// </param>
+    public async Task SearchForTextAsync(string? text, ViewMode? targetView = null)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         SearchText = text;
-        await SearchAsync();
+        await SearchAsync(targetView);
     }
 
     /// <summary>打开 B 站合集（专辑），展示合集内所有视频。</summary>
@@ -1728,7 +1764,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>执行搜索：本地直接匹配；网易云/QQ音乐/B站 在线源自动翻页取足一批（默认 50 条），
     /// 列表底部提供“加载更多”继续分页追加。</summary>
     [RelayCommand]
-    private async Task SearchAsync()
+    private async Task SearchAsync(ViewMode? targetView = null)
     {
         var keyword = SearchText?.Trim();
         if (string.IsNullOrEmpty(keyword))
@@ -1761,7 +1797,18 @@ public partial class MainViewModel : ObservableObject
         SearchResults.Clear();
         IsSearchMoreVisible = false;
         SearchStatus = "";
-        SetViewMode(ViewMode.SearchResults);
+        if (targetView is { } target)
+        {
+            // 歌手页 / 专辑页：切页本身已经入过返回栈了（ShowArtistPageAsync 里那次），
+            // 这里只为搜索取数同步视图，不能再压一条，否则返回要按两次才回得去
+            _suppressNavRecord = true;
+            try { SetViewMode(target); }
+            finally { _suppressNavRecord = false; }
+        }
+        else
+        {
+            SetViewMode(ViewMode.SearchResults);
+        }
         IsSearching = true;
 
         try
@@ -1858,7 +1905,15 @@ public partial class MainViewModel : ObservableObject
         }
         finally
         {
-            if (session == _searchSession) IsSearching = false;
+            if (session == _searchSession)
+            {
+                IsSearching = false;
+                // 搜索结果到位后按当前页面重建派生内容：搜索页的歌手/专辑分组，
+                // 或歌手页 / 专辑页自身的列表与卡片
+                RefreshSearchGroups();
+                if (targetView == ViewMode.Artist) RefreshArtistPage();
+                if (targetView == ViewMode.Album) RefreshAlbumPage();
+            }
         }
     }
 
@@ -1878,6 +1933,7 @@ public partial class MainViewModel : ObservableObject
             if (session != _searchSession) return;
             SyncSearchShown(_searchShownCount + SearchBatchSize);
             UpdateSearchStatusText();
+            RefreshDetailPagesAfterLoadMore();
         }
         catch (Exception ex)
         {
@@ -1960,10 +2016,10 @@ public partial class MainViewModel : ObservableObject
         _searchShownCount = want;
     }
 
-    /// <summary>刷新“加载更多”按钮可见性（仅在线分页进行中/未取尽时显示）。</summary>
+    /// <summary>刷新“加载更多”按钮可见性（搜索结果 / 歌手页 / 专辑页都可能还有下一页）。</summary>
     private void UpdateSearchMoreState() =>
-        IsSearchMoreVisible = ViewMode == ViewMode.SearchResults && !_searchEnded &&
-                              SearchResults.Count > 0 && _searchProvider is not null;
+        IsSearchMoreVisible = ViewMode is ViewMode.SearchResults or ViewMode.Artist or ViewMode.Album
+                              && !_searchEnded && SearchResults.Count > 0 && _searchProvider is not null;
 
     /// <summary>按当前展示条数刷新状态栏文案。</summary>
     private void UpdateSearchStatusText()
