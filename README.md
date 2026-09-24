@@ -1,9 +1,9 @@
 # AnMusic 🎵
 
 一款基于 WPF 的桌面音乐播放器：本地曲库 + 网易云 / QQ音乐 / B站在线搜索播放，
-支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.8**。
+支持 MusicFree 兼容 `.js` 音源插件扩展。当前版本 **v3.3.9**。
 
-![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.8-orange)
+![.NET](https://img.shields.io/badge/.NET-10.0-blueviolet) ![WPF](https://img.shields.io/badge/UI-WPF-blue) ![NAudio](https://img.shields.io/badge/Audio-NAudio%203.1-green) ![version](https://img.shields.io/badge/version-3.3.9-orange)
 
 ## 功能特性
 
@@ -18,7 +18,8 @@
 - **歌手页 / 专辑页**：列表里点歌手名或专辑名即进入；歌手页有大头像、单曲/专辑数、`歌曲`/`专辑` 两个页签，
   专辑页有封面、专辑信息与曲目列表，均可一键「播放全部」，返回键原路退回
 - 搜索结果分页展示：每批 **50 条**，点击**「加载更多」**继续翻页，跨页自动去重
-- **音源插件（MusicFree 兼容）**：把 `.js` 插件放进插件目录即接入（内置 axios、crypto-js、dayjs、jsencrypt 等宿主库，支持插件清单自动下载）
+- **音源插件（MusicFree 兼容）**：把 `.js` 插件放进插件目录即接入（内置 axios、crypto-js、dayjs、
+  jsencrypt、**node crypto 兼容层**等宿主库，支持插件清单自动下载）
 - 排行榜（热歌/新歌等榜单）、个性电台（按“我喜欢”自动推荐续播）、听歌排行
 - 进度条**点击即精确跳转**（点哪播哪、线性映射无偏差），按住可拖动微调
 - 四态播放模式：**顺序 → 列表循环 → 单曲循环 → 随机**

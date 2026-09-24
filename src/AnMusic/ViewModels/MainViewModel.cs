@@ -747,6 +747,8 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSearchGroupPanelVisible));
         OnPropertyChanged(nameof(IsArtistSongsTab));
         OnPropertyChanged(nameof(IsArtistAlbumsTab));
+        OnPropertyChanged(nameof(SearchGroupRowHeight));
+        OnPropertyChanged(nameof(SearchGroupMaxHeight));
         RefreshEmptyState();
 
         // 进主页时重建卡片：用最新数据（收藏数、歌单封面、最近播放…）

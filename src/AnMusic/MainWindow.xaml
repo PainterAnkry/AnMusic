@@ -1573,11 +1573,9 @@
                      卡片区不自己滚动：滚轮事件转给下方曲目列表（见 code-behind），
                      否则鼠标停在专辑卡上时滚不动，看不到下面的单曲列表。 -->
                 <Border Grid.Row="3" x:Name="SearchGroupPanel" Background="Transparent"
-                        Visibility="{Binding IsSearchGroupPanelVisible, Converter={StaticResource BoolToVis}}"
-                        PreviewMouseWheel="SearchGroupPanel_PreviewMouseWheel">
-                    <!-- 限高 220：卡片再多也不会把下方曲目列表挤没；
-                         滚轮在卡片区滚到尽头会自动接力给列表（见 code-behind） -->
-                    <ScrollViewer x:Name="SearchGroupScroll" MaxHeight="220"
+                        Visibility="{Binding IsSearchGroupPanelVisible, Converter={StaticResource BoolToVis}}">
+                    <!-- 聚合卡片区：自身可滚（滚轮只滚指针所在区域），限高 240 保证下方列表/页面稳定 -->
+                    <ScrollViewer x:Name="SearchGroupScroll" MaxHeight="240"
                                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="16,14,16,6">
                         <!-- ① 综合页签：歌手卡（取最匹配的一位） -->
@@ -1662,12 +1660,12 @@
                             </ItemsControl>
                         </StackPanel>
 
-                        <!-- ③ 歌手页签：歌手卡片网格 -->
+                        <!-- ③ 歌手页签：歌手卡片网格（8 列小卡，一屏能放下更多） -->
                         <StackPanel Visibility="{Binding IsSearchArtistsTab, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="歌手" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
                             <ItemsControl ItemsSource="{Binding SearchArtists}">
                                 <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
+                                    <ItemsPanelTemplate><UniformGrid Columns="8"/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -1676,8 +1674,8 @@
                                                 Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
                                                 ToolTip="查看歌手">
                                             <StackPanel HorizontalAlignment="Left">
-                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
-                                                    <Grid Width="150" Height="150">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Left">
+                                                    <Grid Width="84" Height="84">
                                                         <Ellipse Fill="{DynamicResource BgControl}"/>
                                                         <TextBlock Text="🎤" FontSize="30" Foreground="{DynamicResource FgMuted}"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -1690,9 +1688,11 @@
                                                     </Grid>
                                                 </Viewbox>
                                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
-                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="11.5" Margin="2,6,2,0" Width="84"
+                                                           TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="10" Margin="2,2,2,0" Width="84"
+                                                           TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </Button>
                                     </DataTemplate>
@@ -1700,12 +1700,12 @@
                             </ItemsControl>
                         </StackPanel>
 
-                        <!-- ④ 专辑页签：专辑卡片网格 -->
+                        <!-- ④ 专辑页签：专辑卡片网格（8 列小卡） -->
                         <StackPanel Visibility="{Binding IsSearchAlbumsTab, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="专辑" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
                             <ItemsControl ItemsSource="{Binding SearchAlbums}">
                                 <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
+                                    <ItemsPanelTemplate><UniformGrid Columns="8"/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -1714,10 +1714,10 @@
                                                 Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
                                                 ToolTip="查看专辑">
                                             <StackPanel HorizontalAlignment="Left">
-                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
-                                                    <Grid Width="150" Height="150">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Left">
+                                                    <Grid Width="84" Height="84">
                                                         <Rectangle RadiusX="8" RadiusY="8" Fill="{DynamicResource BgControl}"/>
-                                                        <TextBlock Text="💿" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                        <TextBlock Text="💿" FontSize="20" Foreground="{DynamicResource FgMuted}"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                         <Rectangle RadiusX="8" RadiusY="8">
                                                             <Rectangle.Fill>
@@ -1728,9 +1728,11 @@
                                                     </Grid>
                                                 </Viewbox>
                                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
-                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="11.5" Margin="2,6,2,0" Width="84"
+                                                           TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="10" Margin="2,2,2,0" Width="84"
+                                                           TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </Button>
                                     </DataTemplate>
@@ -1738,12 +1740,12 @@
                             </ItemsControl>
                         </StackPanel>
 
-                        <!-- ⑤ 歌手页「专辑」页签：该歌手的专辑卡片网格 -->
+                        <!-- ⑤ 歌手页「专辑」页签：该歌手的专辑卡片网格（8 列小卡） -->
                         <StackPanel Visibility="{Binding IsArtistAlbumsTab, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="专辑" Style="{StaticResource HomeSectionTitle}" Margin="0,0,0,10"/>
                             <ItemsControl ItemsSource="{Binding ArtistAlbums}">
                                 <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><UniformGrid Columns="6"/></ItemsPanelTemplate>
+                                    <ItemsPanelTemplate><UniformGrid Columns="8"/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -1752,10 +1754,10 @@
                                                 Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
                                                 ToolTip="查看专辑">
                                             <StackPanel HorizontalAlignment="Left">
-                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
-                                                    <Grid Width="150" Height="150">
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Left">
+                                                    <Grid Width="84" Height="84">
                                                         <Rectangle RadiusX="8" RadiusY="8" Fill="{DynamicResource BgControl}"/>
-                                                        <TextBlock Text="💿" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                        <TextBlock Text="💿" FontSize="20" Foreground="{DynamicResource FgMuted}"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                         <Rectangle RadiusX="8" RadiusY="8">
                                                             <Rectangle.Fill>
@@ -1766,9 +1768,11 @@
                                                     </Grid>
                                                 </Viewbox>
                                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
-                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="11.5" Margin="2,6,2,0" Width="84"
+                                                           TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="10" Margin="2,2,2,0" Width="84"
+                                                           TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </Button>
                                     </DataTemplate>

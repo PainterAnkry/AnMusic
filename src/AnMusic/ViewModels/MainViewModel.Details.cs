@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Input;
 using AnMusic.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -51,6 +52,22 @@ public partial class MainViewModel
     public bool IsSearchGroupPanelVisible =>
         (IsSearchView && SearchTabIndex is not 1) || (IsArtistView && IsArtistAlbumsTab);
 
+    /// <summary>
+    /// 聚合面板所在网格行的高度。
+    /// </summary>
+    /// <remarks>
+    /// 综合页下面还有曲目列表，行用 Auto（配合限高）给列表留位置；
+    /// 纯卡片页签（搜索页的歌手/专辑、歌手页的专辑）下面没有列表，
+    /// 行占满剩余空间 —— 否则卡片多了会被限高截断（用户反馈"专辑页面显示不全"）。
+    /// </remarks>
+    public GridLength SearchGroupRowHeight =>
+        IsSearchGroupPanelVisible && !IsSearchMixedTab
+            ? new GridLength(1, GridUnitType.Star)
+            : GridLength.Auto;
+
+    /// <summary>卡片区最大高度：综合页限高给列表让位，纯卡片页签不限高（占满 + 自身滚动）。</summary>
+    public double SearchGroupMaxHeight => IsSearchMixedTab ? 240 : double.PositiveInfinity;
+
     /// <summary>搜索分类页签名（综合/单曲/歌手/专辑）。</summary>
     public string[] SearchTabNames { get; } = ["综合", "单曲", "歌手", "专辑"];
 
@@ -90,6 +107,8 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(IsSearchTabsVisible));
         OnPropertyChanged(nameof(IsSearchGroupPanelVisible));
         OnPropertyChanged(nameof(IsTrackListVisible));
+        OnPropertyChanged(nameof(SearchGroupRowHeight));
+        OnPropertyChanged(nameof(SearchGroupMaxHeight));
     }
 
     partial void OnIsBilibiliResultsChanged(bool value) => NotifySearchTabs();
@@ -215,6 +234,8 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(IsArtistAlbumsTab));
         OnPropertyChanged(nameof(IsSearchGroupPanelVisible));
         OnPropertyChanged(nameof(IsTrackListVisible));
+        OnPropertyChanged(nameof(SearchGroupRowHeight));
+        OnPropertyChanged(nameof(SearchGroupMaxHeight));
     }
 
     /// <summary>打开歌手页（卡片点击 / 列表点歌手名 / 歌词页点歌手名都走这里）。</summary>

@@ -501,6 +501,9 @@ public sealed class JsPluginProvider : IOnlineMusicProvider
         ["big-integer"] = "AnMusic.Assets.Plugins.big-integer.min.js",
         ["jsencrypt"] = "AnMusic.Assets.Plugins.jsencrypt.min.js",
         ["he"] = "AnMusic.Assets.Plugins.he.min.js",
+        // node 内置模块 crypto 的兼容层：网易云等插件取详情/封面要用它签名，
+        // 以前没有这个模块，表现为"搜索有结果、封面和详情大量缺失"
+        ["crypto"] = "AnMusic.Assets.Plugins.crypto-shim.js",
     };
 
     /// <summary>库源码缓存（多个插件共用一份字符串，避免重复读资源）。</summary>
