@@ -11,7 +11,8 @@
     python make-icon.py path/to/x.png   # 指定源图
 
 处理细节：
-* 源图自带透明留白（约 3%），先裁到不透明外接框再补 1% 透明边，
+* 整幅不透明的品牌图（蓝底白字）会做成 **圆角方形**（半径 22%），铺满画布不缩边；
+* 带透明留白的图先裁到不透明外接框再补 1% 透明边，
   这样任务栏/标题栏里的小尺寸图标不会显得又小又空；
 * 各尺寸统一用 LANCZOS 降采样，避免小尺寸出现锯齿；
 * 非正方形源图会补成正方形（居中），保证图标不被拉伸变形。
@@ -19,7 +20,7 @@
 import sys
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 SIZES = [256, 128, 64, 48, 32, 24, 16]
 
@@ -29,10 +30,39 @@ DEFAULT_SOURCE = Path(__file__).resolve().parents[3] / "AnMusic.png"
 # 裁掉透明边后保留的透明留白（占边长比例）
 PADDING_RATIO = 0.01
 
+# 不透明整块图（品牌底色铺满）的圆角半径占边长比例：
+# Windows 11 磁贴约 22%，取这个值在各尺寸下都像"圆角方块"而不是切成圆形
+TILE_RADIUS_RATIO = 0.22
+
+
+def round_corners(im: Image.Image) -> Image.Image:
+    """把整块方形图裁成圆角方形（4 倍超采样，边缘更平滑）。"""
+    side = im.width
+    radius = round(side * TILE_RADIUS_RATIO)
+    scale = 4
+    mask = Image.new("L", (side * scale, side * scale), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [0, 0, side * scale - 1, side * scale - 1], radius=radius * scale, fill=255
+    )
+    mask = mask.resize((side, side), Image.LANCZOS)
+
+    out = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    out.paste(im, (0, 0), mask)
+    return out
+
 
 def load_square(source: Path) -> Image.Image:
     """读入源图并整理成"正方形、内容饱满"的 RGBA 画布。"""
     im = Image.open(source).convert("RGBA")
+
+    # 0) 整幅不透明 = 品牌底色铺满的图标：做成圆角方形并铺满画布（不再缩边留白）
+    if im.getchannel("A").getextrema()[0] > 240:
+        side = max(im.size)
+        if im.size != (side, side):
+            square = Image.new("RGBA", (side, side), im.getpixel((0, 0)))
+            square.paste(im, ((side - im.width) // 2, (side - im.height) // 2))
+            im = square
+        return round_corners(im)
 
     # 1) 裁掉整片透明留白：阈值取 8 以忽略抗锯齿边缘的零星像素
     solid = im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()

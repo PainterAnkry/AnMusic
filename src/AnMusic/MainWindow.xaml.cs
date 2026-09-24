@@ -804,18 +804,32 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 搜索结果「综合」页的歌手/专辑卡片区收到滚轮 → 转给下方曲目列表。
+    /// 搜索结果「综合」页的歌手/专辑卡片区收到滚轮：卡片区自己滚，滚到尽头把滚轮接力给下方曲目列表。
     /// </summary>
     /// <remarks>
-    /// 卡片区本身不滚动，如果不转发，鼠标停在专辑卡上时整页滚不动
-    /// （用户反馈："卡在专辑模块，看不到最下面的单曲列表"）。
+    /// 卡片区如果不转发，鼠标停在专辑卡上时整页滚不动
+    /// （用户反馈："卡在专辑模块，看不到最下面的单曲列表"）；
+    /// 只在尽头接力，滚到一半不会突然跳去滚列表。
     /// </remarks>
     private void SearchGroupPanel_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (FindScrollViewer(TrackList) is not { } sv) return;
+        if (FindScrollViewer(sender as DependencyObject) is { } panelScroll && CanStillScroll(panelScroll, e.Delta))
+        {
+            e.Handled = true;
+            panelScroll.ScrollToVerticalOffset(panelScroll.VerticalOffset - e.Delta);
+            return;
+        }
+
+        if (FindScrollViewer(TrackList) is not { } listScroll) return;
         e.Handled = true;
-        sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta);
+        listScroll.ScrollToVerticalOffset(listScroll.VerticalOffset - e.Delta);
     }
+
+    /// <summary>滚轮往上（delta&gt;0）时还有上方内容 / 往下时还有下方内容。</summary>
+    private static bool CanStillScroll(ScrollViewer sv, int delta)
+        => delta > 0
+            ? sv.VerticalOffset > 0.5
+            : sv.VerticalOffset < sv.ScrollableHeight - 0.5;
 
     /// <summary>在可视树里找某个控件内部的 ScrollViewer（ListView 自带一个）。</summary>
     private static ScrollViewer? FindScrollViewer(DependencyObject? root)

@@ -1489,7 +1489,7 @@
                 <!-- 搜索结果分类：综合 / 单曲 / 歌手 / 专辑 -->
                 <Border Grid.Row="1" Background="{DynamicResource BgPanel}" Padding="16,0"
                         Visibility="{Binding IsSearchTabsVisible, Converter={StaticResource BoolToVis}}">
-                    <ListBox ItemsSource="{Binding SearchTabNames}"
+                    <ListBox x:Name="SearchTabList" ItemsSource="{Binding SearchTabNames}"
                              SelectedIndex="{Binding SearchTabIndex, Mode=TwoWay}"
                              Background="Transparent" BorderThickness="0" Margin="0,4,0,6">
                         <ListBox.ItemsPanel>
@@ -1572,9 +1572,13 @@
                 <!-- 搜索分类/歌手页的聚合内容：歌手卡 + 专辑卡（正方形圆角封面，与主页一致）。
                      卡片区不自己滚动：滚轮事件转给下方曲目列表（见 code-behind），
                      否则鼠标停在专辑卡上时滚不动，看不到下面的单曲列表。 -->
-                <Border Grid.Row="3" Background="Transparent"
+                <Border Grid.Row="3" x:Name="SearchGroupPanel" Background="Transparent"
                         Visibility="{Binding IsSearchGroupPanelVisible, Converter={StaticResource BoolToVis}}"
                         PreviewMouseWheel="SearchGroupPanel_PreviewMouseWheel">
+                    <!-- 限高 220：卡片再多也不会把下方曲目列表挤没；
+                         滚轮在卡片区滚到尽头会自动接力给列表（见 code-behind） -->
+                    <ScrollViewer x:Name="SearchGroupScroll" MaxHeight="220"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="16,14,16,6">
                         <!-- ① 综合页签：歌手卡（取最匹配的一位） -->
                         <StackPanel Visibility="{Binding IsSearchMixedTab, Converter={StaticResource BoolToVis}}">
@@ -1617,10 +1621,10 @@
                             </ItemsControl>
                         </StackPanel>
 
-                        <!-- ② 综合页签：专辑卡一行（列多一点，卡片小一点，给下方列表留空间） -->
+                        <!-- ② 综合页签：专辑卡一行（只放 6 张、固定小尺寸，给下方列表留空间） -->
                         <StackPanel Visibility="{Binding IsSearchMixedTab, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="专辑" Style="{StaticResource HomeSectionTitle}" Margin="0,6,0,10"/>
-                            <ItemsControl ItemsSource="{Binding SearchAlbums}">
+                            <ItemsControl ItemsSource="{Binding SearchTopAlbums}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate><UniformGrid Columns="8"/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
@@ -1631,10 +1635,11 @@
                                                 Command="{Binding Command}" CommandParameter="{Binding CommandParameter}"
                                                 ToolTip="查看专辑">
                                             <StackPanel HorizontalAlignment="Left">
-                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch">
-                                                    <Grid Width="150" Height="150">
+                                                <!-- 固定 104：不随列宽放大，列表才有高度（滚轮也能滚到单曲列表） -->
+                                                <Viewbox Stretch="Uniform" HorizontalAlignment="Left">
+                                                    <Grid Width="104" Height="104">
                                                         <Rectangle RadiusX="8" RadiusY="8" Fill="{DynamicResource BgControl}"/>
-                                                        <TextBlock Text="💿" FontSize="26" Foreground="{DynamicResource FgMuted}"
+                                                        <TextBlock Text="💿" FontSize="22" Foreground="{DynamicResource FgMuted}"
                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                         <Rectangle RadiusX="8" RadiusY="8">
                                                             <Rectangle.Fill>
@@ -1645,9 +1650,11 @@
                                                     </Grid>
                                                 </Viewbox>
                                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource FgNormal}"
-                                                           FontSize="12" Margin="2,7,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="11.5" Margin="2,6,2,0" Width="104"
+                                                           TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding Description}" Foreground="{DynamicResource FgMuted}"
-                                                           FontSize="10.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+                                                           FontSize="10" Margin="2,2,2,0" Width="104"
+                                                           TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                         </Button>
                                     </DataTemplate>
@@ -1769,6 +1776,7 @@
                             </ItemsControl>
                         </StackPanel>
                     </StackPanel>
+                    </ScrollViewer>
                 </Border>
 
                 <Grid Grid.Row="4" x:Name="ContentArea">
@@ -2230,19 +2238,20 @@
                             </ListView.ItemTemplate>
                         </ListView>
                     </Grid>
-                </Grid>
 
-                <!-- 搜索分页：结果超过一批时显示“加载更多”（网易云/QQ音乐/B站）。
-                     放在列表下方的独立一行，避免浮在曲目行上面。 -->
-                <Border Grid.Row="1" Padding="0,8,0,10"
-                        Background="{DynamicResource BgMainAlpha}"
-                        Visibility="{Binding IsSearchMoreVisible, Converter={StaticResource BoolToVis}}">
-                    <Button Command="{Binding LoadMoreSearchResultsCommand}"
-                            Content="{Binding SearchMoreText}"
-                            Style="{StaticResource BtnStyle}" Padding="30,7" Cursor="Hand"
-                            HorizontalAlignment="Center"
-                            ToolTip="继续加载更多搜索结果"/>
-                </Border>
+                    <!-- 搜索分页：结果超过一批时显示「加载更多」（网易云/QQ音乐/B站）。
+                         必须在 ContentArea 内部（列表下方独立一行）：
+                         放到外层会盖住顶部分类页签，导致页签点不动。 -->
+                    <Border Grid.Row="1" x:Name="SearchMoreBar" Padding="0,8,0,12"
+                            Background="{DynamicResource BgMainAlpha}"
+                            Visibility="{Binding IsSearchMoreVisible, Converter={StaticResource BoolToVis}}">
+                        <Button Command="{Binding LoadMoreSearchResultsCommand}"
+                                Content="{Binding SearchMoreText}"
+                                Style="{StaticResource BtnStyle}" Padding="30,7" Cursor="Hand"
+                                HorizontalAlignment="Center"
+                                ToolTip="继续加载更多搜索结果"/>
+                    </Border>
+                </Grid>
 
             </Grid>
 

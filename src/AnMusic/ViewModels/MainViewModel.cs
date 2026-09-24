@@ -1793,6 +1793,9 @@ public partial class MainViewModel : ObservableObject
         _searchProvider = null;
         _searchPool.Clear();
         _seenSearchIds.Clear();
+        // 新搜索（不是歌手页/专辑页那种取数）回到「综合」页签：换了关键词还停在上次的分类会很怪
+        if (targetView is null && SearchTabIndex != 0) SearchTabIndex = 0;
+
         _searchShownCount = 0;
         SearchResults.Clear();
         IsSearchMoreVisible = false;

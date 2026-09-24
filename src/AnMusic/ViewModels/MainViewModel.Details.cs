@@ -63,6 +63,9 @@ public partial class MainViewModel
     /// <summary>综合页签顶部只放最匹配的一位歌手（其余在「歌手」页签里看）。</summary>
     public ObservableCollection<HomeCard> SearchTopArtists { get; } = [];
 
+    /// <summary>综合页签的专辑卡只放一行（6 张），给下方曲目列表留出空间。</summary>
+    public ObservableCollection<HomeCard> SearchTopAlbums { get; } = [];
+
     /// <summary>搜索结果里的专辑卡片。</summary>
     public ObservableCollection<HomeCard> SearchAlbums { get; } = [];
 
@@ -152,6 +155,21 @@ public partial class MainViewModel
                 CommandParameter = top.CommandParameter,
             });
         }
+
+        // 综合页的专辑卡只保留一行（6 张）：卡片区太高会把下面的曲目列表挤没
+        SearchTopAlbums.Clear();
+        foreach (var album in SearchAlbums.Take(6))
+        {
+            SearchTopAlbums.Add(new HomeCard
+            {
+                Icon = album.Icon,
+                Title = album.Title,
+                Description = album.Description,
+                CoverTrack = album.CoverTrack,
+                Command = album.Command,
+                CommandParameter = album.CommandParameter,
+            });
+        }
     }
 
     // ────────── 歌手页 ──────────
@@ -179,8 +197,11 @@ public partial class MainViewModel
 
     public ObservableCollection<HomeCard> ArtistAlbums { get; } = [];
 
-    public bool IsArtistSongsTab => ArtistTabIndex == 0;
-    public bool IsArtistAlbumsTab => ArtistTabIndex == 1;
+    /// <summary>歌手页「歌曲」页签（必须同时是歌手页：否则去过歌手页后搜索页也会渲染这一块）。</summary>
+    public bool IsArtistSongsTab => IsArtistView && ArtistTabIndex == 0;
+
+    /// <summary>歌手页「专辑」页签（同样必须限定在歌手页内）。</summary>
+    public bool IsArtistAlbumsTab => IsArtistView && ArtistTabIndex == 1;
 
     [RelayCommand]
     private void SelectArtistTab(int index) => ArtistTabIndex = index;

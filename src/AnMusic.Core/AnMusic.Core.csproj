@@ -9,7 +9,7 @@
     <AssemblyName>AnMusic.Core</AssemblyName>
     <Product>AnMusic</Product>
     <Company>PainterAnkry</Company>
-    <Version>3.3.7</Version>
+    <Version>3.3.8</Version>
   </PropertyGroup>
 
   <!-- 插件宿主内置 JS 库（require('crypto-js') 等宿主模块），随 Core 一起发布到各端 -->
